@@ -1,0 +1,26 @@
+---
+acquisition:
+  sample_rate_hz: 5000.0
+  chunk_size: 250
+  board_num: 0
+  force_channel: 0
+  position_channel: 1
+
+thresholds:
+  force_max_n: 4500.0
+  position_max_mm: 95.0
+
+scaling:
+  force_volt_max: 10.0
+  force_newton_max: 5000.0
+  position_volt_max: 10.0
+  position_mm_max: 100.0
+
+gpio:
+  trigger_pin: 17
+  out_ok: 5
+  out_nok: 6
+  out_alarm: 13
+
+storage:
+  data_dir: "./data"

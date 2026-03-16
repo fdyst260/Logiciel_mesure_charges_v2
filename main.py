@@ -5,11 +5,11 @@ from __future__ import annotations
 import queue
 import threading
 
-from acquisition import AcquisitionError, acquisition_loop
-from analysis import CycleManager, DisplayMode
+from core.acquisition import AcquisitionError, acquisition_loop
+from core.analysis import CycleManager, DisplayMode
 from config import PM_DEFINITIONS, QUEUE_MAXSIZE
-from models import EvaluationTool, EvaluationType, Point2D
-from processing import DataProcessor
+from core.models import EvaluationTool, EvaluationType, Point2D
+from core.processing import DataProcessor
 
 
 def build_default_tools() -> list[EvaluationTool]:

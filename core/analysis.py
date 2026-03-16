@@ -12,7 +12,7 @@ from config import (
     GPIO_OUT_OK,
     POSITION_THRESHOLD_MM,
 )
-from models import EvalStatus, EvaluationResult, EvaluationTool, Point2D
+from core.models import EvalStatus, EvaluationResult, EvaluationTool, Point2D
 
 
 class DisplayMode(str, Enum):
