@@ -190,12 +190,14 @@ def acquisition_loop(
                     "Bloc d'acquisition incoherent: nombre impair d'echantillons entrelaces."
                 )
 
-            calibrated_block: list[tuple[float, float]] = []
+            t_start = time.perf_counter()
+            calibrated_block: list[tuple[float, float, float]] = []
             for i in range(0, len(raw), 2):
+                t = t_start + (i // 2) / SAMPLE_RATE_HZ
                 v_force = float(raw[i])
                 v_pos = float(raw[i + 1])
                 force_n, pos_mm = calibrator.calibrate_pair(v_force, v_pos)
-                calibrated_block.append((force_n, pos_mm))
+                calibrated_block.append((t, force_n, pos_mm))
 
             try:
                 data_queue.put(calibrated_block, timeout=0.2)
