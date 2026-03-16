@@ -17,7 +17,7 @@ import csv
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QRect, QTimer, Slot
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QKeySequence
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -30,7 +30,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QShortcut,
     QSizePolicy,
     QStackedWidget,
     QTableWidget,
