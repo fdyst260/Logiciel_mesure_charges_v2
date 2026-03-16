@@ -7,7 +7,7 @@ import threading
 from collections.abc import Callable
 
 from analysis import CycleManager
-from config import PM_DEFINITIONS, volts_to_force, volts_to_position
+from config import PM_DEFINITIONS
 from storage import save_cycle_csv
 
 
@@ -46,9 +46,7 @@ class DataProcessor(threading.Thread):
                 self._data_queue.task_done()
                 break
 
-            for t, v_force, v_pos in block:
-                force_n = volts_to_force(v_force)
-                pos_mm = volts_to_position(v_pos)
+            for t, force_n, pos_mm in block:
                 state = self._cycle_manager.add_sample(t=t, force_n=force_n, pos_mm=pos_mm)
 
                 self._points_for_csv.append((t, force_n, pos_mm))
