@@ -19,6 +19,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QRect, QTimer, Slot
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -53,14 +54,14 @@ from core.models import EvaluationTool, EvaluationType
 # ---------------------------------------------------------------------------
 COLORS: dict[str, str] = {
     # Arrière-plan fenêtre selon état
-    "bg_idle":        "#2C2C2A",
-    "bg_acquiring":   "#0C447C",
-    "bg_ok":          "#085041",
-    "bg_nok":         "#791F1F",
+    "bg_idle":        "#1a1a1a",
+    "bg_acquiring":   "#0a1628",
+    "bg_ok":          "#051a12",
+    "bg_nok":         "#1a0505",
     # Graphique
-    "bg_graph":       "#1A1A18",
-    "grid":           "#444441",
-    "axis_text":      "#AAAAAA",
+    "bg_graph":       "#111111",
+    "grid":           "#2a2a2a",
+    "axis_text":      "#666666",
     "curve_live":     "#378ADD",
     "curve_ok":       "#1D9E75",
     "curve_nok":      "#E24B4A",
@@ -70,16 +71,16 @@ COLORS: dict[str, str] = {
     "tool_unibox":    "#EF9F27",
     "tool_envelope":  "#1D9E75",
     # Badges résultat
-    "result_ok":      "#0F6E56",
-    "result_nok":     "#A32D2D",
-    "result_idle":    "#3A3A38",
+    "result_ok":      "#085041",
+    "result_nok":     "#791F1F",
+    "result_idle":    "#2a2a2a",
     # UI générale
-    "text_primary":   "#E8E8E6",
-    "text_secondary": "#AAAAAA",
-    "btn_nav":        "#3A3A38",
+    "text_primary":   "#e0e0e0",
+    "text_secondary": "#888888",
+    "btn_nav":        "#2a2a2a",
     "btn_settings":   "#854F0B",
-    "panel_bg":       "#222220",
-    "separator":      "#444441",
+    "panel_bg":       "#1a1a1a",
+    "separator":      "#333333",
     "progress_ok":    "#1D9E75",
     "progress_warn":  "#E24B4A",
 }
@@ -87,6 +88,161 @@ COLORS: dict[str, str] = {
 _PIN_CODE = "1234"
 _MAX_PIN_ATTEMPTS = 3
 _LOCKOUT_SECONDS = 30
+
+# ---------------------------------------------------------------------------
+# Feuille de style globale QSS
+# ---------------------------------------------------------------------------
+STYLESHEET = """
+QMainWindow, QWidget#central {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+QLabel#result_label {
+    font-size: 48px;
+    font-weight: bold;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+QLabel#counters_label {
+    font-size: 16px;
+    color: #b0b0b0;
+    padding: 4px 8px;
+    border-top: 1px solid #333;
+    border-bottom: 1px solid #333;
+}
+
+QLabel#live_label {
+    font-size: 13px;
+    color: #888;
+    margin-top: 8px;
+}
+QLabel#live_value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #e0e0e0;
+}
+
+QProgressBar {
+    border: none;
+    border-radius: 4px;
+    background-color: #2a2a2a;
+    max-height: 10px;
+}
+QProgressBar::chunk {
+    border-radius: 4px;
+    background-color: #1D9E75;
+}
+QProgressBar[alarm="true"]::chunk {
+    background-color: #E24B4A;
+}
+
+QLabel#pm_title {
+    font-size: 15px;
+    font-weight: bold;
+    color: #ffffff;
+    padding: 6px;
+    background-color: #2a2a2a;
+    border-radius: 6px;
+}
+QLabel#pm_peak {
+    font-size: 13px;
+    color: #888;
+}
+QLabel#pm_peak_value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #378ADD;
+}
+
+QPushButton#btn_settings {
+    background-color: #854F0B;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 55px;
+}
+QPushButton#btn_settings:pressed {
+    background-color: #6B3F09;
+}
+
+QPushButton#nav_btn {
+    background-color: #2a2a2a;
+    color: #cccccc;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #3a3a3a;
+    min-height: 52px;
+    padding: 0 12px;
+}
+QPushButton#nav_btn:checked, QPushButton#nav_btn:pressed {
+    background-color: #185FA5;
+    color: #ffffff;
+    border-color: #378ADD;
+}
+QPushButton#nav_btn_green {
+    background-color: #085041;
+    color: #9FE1CB;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #0F6E56;
+    min-height: 52px;
+    padding: 0 12px;
+}
+QPushButton#nav_btn_red {
+    background-color: #3d1515;
+    color: #F7C1C1;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #791F1F;
+    min-height: 52px;
+    padding: 0 12px;
+}
+
+QFrame#separator {
+    background-color: #333;
+    max-height: 1px;
+}
+"""
+
+# ---------------------------------------------------------------------------
+# Style du dialogue PIN
+# ---------------------------------------------------------------------------
+PINSTYLE = """
+QDialog {
+    background-color: #1e1e1e;
+    border-radius: 12px;
+}
+QLabel {
+    color: #e0e0e0;
+    font-size: 16px;
+}
+QLineEdit {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    border: 2px solid #444;
+    border-radius: 8px;
+    font-size: 28px;
+    padding: 8px;
+    letter-spacing: 12px;
+}
+QLineEdit:focus {
+    border-color: #378ADD;
+}
+QPushButton {
+    background-color: #378ADD;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: bold;
+}
+QPushButton:pressed { background-color: #185FA5; }
+"""
 
 
 # ===========================================================================
@@ -149,12 +305,12 @@ class GraphWidget(QWidget):
         self.update()
 
     # ------------------------------------------------------------------
-    # Géométrie
+    # Géométrie — marges : gauche 50px, haut 10px, droite 10px, bas 30px
     # ------------------------------------------------------------------
 
     def _plot_rect(self) -> QRect:
         """Rectangle de tracé (hors marges axes)."""
-        return QRect(55, 10, self.width() - 70, self.height() - 42)
+        return QRect(50, 10, self.width() - 60, self.height() - 40)
 
     def _get_ranges(self) -> tuple[float, float]:
         """Retourne (x_max, y_max) selon le mode."""
@@ -185,7 +341,16 @@ class GraphWidget(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Fond graphique
         painter.fillRect(self.rect(), QColor(COLORS["bg_graph"]))
+
+        # Bordure du widget : 1px #333333, coins arrondis 8px
+        border_pen = QPen(QColor("#333333"))
+        border_pen.setWidth(1)
+        painter.setPen(border_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 8, 8)
 
         rect = self._plot_rect()
         self._draw_grid(painter, rect)
@@ -216,7 +381,7 @@ class GraphWidget(QWidget):
         painter.end()
 
     def _draw_grid(self, painter: QPainter, rect: QRect) -> None:
-        pen = QPen(QColor(COLORS["grid"]))
+        pen = QPen(QColor(COLORS["grid"]))  # #2a2a2a — grille subtile
         pen.setWidth(1)
         painter.setPen(pen)
         for i in range(self._GRID_DIVS + 1):
@@ -235,7 +400,7 @@ class GraphWidget(QWidget):
         if len(points) < 2:
             return
         pen = QPen(color)
-        pen.setWidth(2)
+        pen.setWidthF(2.5)  # épaisseur légèrement plus visible
         painter.setPen(pen)
         prev: tuple[int, int] | None = None
         for t, force_n, pos_mm in points:
@@ -292,8 +457,8 @@ class GraphWidget(QWidget):
                 painter.drawLine(px1, py1, px2, py2)
 
     def _draw_axes(self, painter: QPainter, rect: QRect) -> None:
-        painter.setPen(QColor(COLORS["axis_text"]))
-        painter.setFont(QFont("monospace", 8))
+        painter.setPen(QColor(COLORS["axis_text"]))  # #666666
+        painter.setFont(QFont("monospace", 11))
         x_range, y_range = self._get_ranges()
         x_unit = "mm" if self._display_mode == DisplayMode.FORCE_POSITION else "s"
         y_unit = "mm" if self._display_mode == DisplayMode.POSITION_TIME else "N"
@@ -328,7 +493,8 @@ class PinDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Accès réglages")
         self.setModal(True)
-        self.setFixedSize(340, 220)
+        self.setFixedSize(360, 240)
+        self.setStyleSheet(PINSTYLE)
 
         self._attempts = 0
         self._locked = False
@@ -339,37 +505,33 @@ class PinDialog(QDialog):
         self._lockout_timer.timeout.connect(self._on_lockout_tick)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         self._label = QLabel("Entrez le code PIN (4 chiffres) :")
-        self._label.setStyleSheet(f"color: {COLORS['text_primary']}; font-size: 14px;")
         layout.addWidget(self._label)
 
         self._pin_edit = QLineEdit()
         self._pin_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._pin_edit.setMaxLength(4)
         self._pin_edit.setPlaceholderText("••••")
-        self._pin_edit.setMinimumHeight(52)
-        self._pin_edit.setStyleSheet("font-size: 22px; letter-spacing: 6px;")
+        self._pin_edit.setMinimumHeight(56)
+        self._pin_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._pin_edit.returnPressed.connect(self._validate)
         layout.addWidget(self._pin_edit)
 
         self._error_label = QLabel("")
-        self._error_label.setStyleSheet(f"color: {COLORS['curve_nok']}; font-size: 12px;")
+        self._error_label.setStyleSheet("color: #E24B4A; font-size: 12px;")
         layout.addWidget(self._error_label)
 
         btn_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        btn_box.button(QDialogButtonBox.StandardButton.Ok).setMinimumHeight(52)
-        btn_box.button(QDialogButtonBox.StandardButton.Cancel).setMinimumHeight(52)
+        btn_box.button(QDialogButtonBox.StandardButton.Ok).setMinimumHeight(48)
+        btn_box.button(QDialogButtonBox.StandardButton.Cancel).setMinimumHeight(48)
         btn_box.accepted.connect(self._validate)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
-
-        self.setStyleSheet(
-            f"background-color: {COLORS['panel_bg']}; color: {COLORS['text_primary']};"
-        )
 
     def _validate(self) -> None:
         if self._locked:
@@ -414,7 +576,7 @@ class PinDialog(QDialog):
 # ===========================================================================
 
 class MainWindow(QMainWindow):
-    """Fenêtre principale IHM riveteuse (1280×720, plein écran, tactile)."""
+    """Fenêtre principale IHM riveteuse (1280×720, paysage, tactile)."""
 
     def __init__(
         self,
@@ -446,6 +608,9 @@ class MainWindow(QMainWindow):
         # Historique de production (cycle#, fmax, xmax, résultat, heure)
         self._production_log: list[tuple[int, float, float, str, str]] = []
 
+        # Feuille de style globale (appliquée une fois, jamais écrasée)
+        self.setStyleSheet(STYLESHEET)
+
         self._build_ui()
         self._apply_state_style("idle")
 
@@ -460,7 +625,9 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.close)
 
         if fullscreen:
-            self.showFullScreen()
+            # setFixedSize + showMaximized : compatible X11/VNC
+            self.setFixedSize(1280, 720)
+            self.showMaximized()
         else:
             self.resize(1280, 720)
             self.show()
@@ -474,12 +641,12 @@ class MainWindow(QMainWindow):
         central.setObjectName("central")
         self.setCentralWidget(central)
 
-        # Disposition principale : zone gauche+centre | panneau droit fixe
+        # Disposition principale : zone gauche+centre | panneau droit fixe 240px
         main_h = QHBoxLayout(central)
         main_h.setSpacing(0)
         main_h.setContentsMargins(0, 0, 0, 0)
 
-        # ------ Colonne gauche + centre ------
+        # ------ Colonne gauche + centre (graphique 780px + statut 260px + nav 70px) ------
         left_center = QWidget()
         lc_v = QVBoxLayout(left_center)
         lc_v.setSpacing(0)
@@ -491,85 +658,92 @@ class MainWindow(QMainWindow):
         content_h.setSpacing(0)
         content_h.setContentsMargins(0, 0, 0, 0)
 
-        # Graphique principal (QStackedWidget pour alterner avec la table)
+        # Graphique (QStackedWidget pour alterner avec la table données)
         self._stack = QStackedWidget()
         self._graph = GraphWidget()
         self._graph.set_tools(self._tools)
         self._data_table = self._build_data_table()
-        self._stack.addWidget(self._graph)      # index 0 : courbe
-        self._stack.addWidget(self._data_table) # index 1 : données production
-        content_h.addWidget(self._stack, stretch=7)
+        self._stack.addWidget(self._graph)       # index 0 : courbe
+        self._stack.addWidget(self._data_table)  # index 1 : données production
+        content_h.addWidget(self._stack, stretch=1)  # prend l'espace restant (~780px)
 
-        # Panneau central (résultat + valeurs live)
-        content_h.addWidget(self._build_center_panel(), stretch=3)
+        # Panneau central : largeur fixe 260px
+        center = self._build_center_panel()
+        center.setFixedWidth(260)
+        content_h.addWidget(center)
 
         lc_v.addWidget(content_row, stretch=1)
         lc_v.addWidget(self._build_nav_bar())
 
         main_h.addWidget(left_center, stretch=1)
 
-        # ------ Panneau droit (PM + réglages) ------
+        # ------ Panneau droit PM + réglages : largeur fixe 240px ------
         right = self._build_right_panel()
-        right.setFixedWidth(230)
+        right.setFixedWidth(240)
         main_h.addWidget(right)
 
     def _build_center_panel(self) -> QWidget:
         panel = QWidget()
-        panel.setStyleSheet(f"background-color: {COLORS['panel_bg']};")
+        panel.setStyleSheet(f"background-color: {COLORS['panel_bg']}; border-left: 1px solid {COLORS['separator']};")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
 
-        # Badge résultat (OK / NOK / EN ATTENTE)
+        # Badge résultat — 110px de haut, objectName pour le CSS
         self._result_badge = QLabel("EN ATTENTE")
+        self._result_badge.setObjectName("result_label")
         self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._result_badge.setMinimumHeight(90)
+        self._result_badge.setFixedHeight(110)
         self._result_badge.setWordWrap(True)
         self._result_badge.setStyleSheet(
             f"background-color: {COLORS['result_idle']}; color: {COLORS['text_primary']}; "
-            "border-radius: 8px; font-size: 28px; font-weight: bold;"
+            "border-radius: 12px; font-size: 28px; font-weight: bold;"
         )
         layout.addWidget(self._result_badge)
 
-        layout.addWidget(self._make_separator())
-
-        # Compteurs ✓ / ✗ / Σ
+        # Compteurs ✓ / ✗ / Σ — 45px de haut
         self._counter_label = QLabel("✓ 0   ✗ 0   Σ 0")
+        self._counter_label.setObjectName("counters_label")
         self._counter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._counter_label.setFont(QFont("monospace", 14))
-        self._counter_label.setStyleSheet(f"color: {COLORS['text_primary']};")
+        self._counter_label.setFixedHeight(45)
         layout.addWidget(self._counter_label)
 
         layout.addWidget(self._make_separator())
 
         # Force live
-        layout.addWidget(self._make_sub_label("Force"))
+        lbl_force = QLabel("Force")
+        lbl_force.setObjectName("live_label")
+        layout.addWidget(lbl_force)
+
         self._force_value = QLabel("0 N")
+        self._force_value.setObjectName("live_value")
         self._force_value.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._force_value.setFont(QFont("monospace", 16))
-        self._force_value.setStyleSheet(f"color: {COLORS['text_primary']};")
         layout.addWidget(self._force_value)
+
         self._force_bar = QProgressBar()
         self._force_bar.setRange(0, int(FORCE_NEWTON_MAX))
         self._force_bar.setValue(0)
         self._force_bar.setTextVisible(False)
-        self._force_bar.setFixedHeight(16)
+        self._force_bar.setProperty("alarm", "false")
         layout.addWidget(self._force_bar)
 
         layout.addWidget(self._make_separator())
 
         # Position live
-        layout.addWidget(self._make_sub_label("Position"))
+        lbl_pos = QLabel("Position")
+        lbl_pos.setObjectName("live_label")
+        layout.addWidget(lbl_pos)
+
         self._pos_value = QLabel("0.0 mm")
+        self._pos_value.setObjectName("live_value")
         self._pos_value.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._pos_value.setFont(QFont("monospace", 16))
-        self._pos_value.setStyleSheet(f"color: {COLORS['text_primary']};")
         layout.addWidget(self._pos_value)
+
         self._pos_bar = QProgressBar()
         self._pos_bar.setRange(0, int(POSITION_MM_MAX))
         self._pos_bar.setValue(0)
         self._pos_bar.setTextVisible(False)
-        self._pos_bar.setFixedHeight(16)
+        self._pos_bar.setProperty("alarm", "false")
         layout.addWidget(self._pos_bar)
 
         layout.addStretch()
@@ -582,48 +756,50 @@ class MainWindow(QMainWindow):
             f"border-left: 1px solid {COLORS['separator']};"
         )
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 12, 10, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 14, 12, 14)
+        layout.setSpacing(8)
 
         # Nom du PM actif
         pm = PM_DEFINITIONS.get(self._pm_id)
         pm_text = f"PM-{self._pm_id:02d}\n{pm.name if pm else '—'}"
         pm_label = QLabel(pm_text)
+        pm_label.setObjectName("pm_title")
         pm_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pm_label.setFont(QFont("sans-serif", 12, QFont.Weight.Bold))
-        pm_label.setStyleSheet(f"color: {COLORS['text_primary']};")
         pm_label.setWordWrap(True)
         layout.addWidget(pm_label)
 
         layout.addWidget(self._make_separator())
 
         # Fmax
-        layout.addWidget(self._make_sub_label("Fmax"))
+        lbl_fmax = QLabel("Fmax")
+        lbl_fmax.setObjectName("pm_peak")
+        lbl_fmax.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_fmax)
+
         self._fmax_label = QLabel("0 N")
+        self._fmax_label.setObjectName("pm_peak_value")
         self._fmax_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._fmax_label.setFont(QFont("monospace", 18))
-        self._fmax_label.setStyleSheet(f"color: {COLORS['text_primary']};")
         layout.addWidget(self._fmax_label)
 
         layout.addWidget(self._make_separator())
 
         # Xmax
-        layout.addWidget(self._make_sub_label("Xmax"))
+        lbl_xmax = QLabel("Xmax")
+        lbl_xmax.setObjectName("pm_peak")
+        lbl_xmax.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_xmax)
+
         self._xmax_label = QLabel("0.0 mm")
+        self._xmax_label.setObjectName("pm_peak_value")
         self._xmax_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._xmax_label.setFont(QFont("monospace", 18))
-        self._xmax_label.setStyleSheet(f"color: {COLORS['text_primary']};")
         layout.addWidget(self._xmax_label)
 
         layout.addStretch()
 
         # Bouton réglages (PIN requis)
         self._settings_btn = QPushButton("⚙  RÉGLAGES  🔒")
-        self._settings_btn.setMinimumHeight(60)
-        self._settings_btn.setFont(QFont("sans-serif", 11, QFont.Weight.Bold))
-        self._settings_btn.setStyleSheet(
-            f"background-color: {COLORS['btn_settings']}; color: white; border-radius: 6px;"
-        )
+        self._settings_btn.setObjectName("btn_settings")
+        self._settings_btn.setMinimumHeight(55)
         self._settings_btn.clicked.connect(self._on_settings_clicked)
         layout.addWidget(self._settings_btn)
 
@@ -637,25 +813,32 @@ class MainWindow(QMainWindow):
             f"border-top: 1px solid {COLORS['separator']};"
         )
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(8, 5, 8, 5)
+        layout.setContentsMargins(8, 9, 8, 9)
         layout.setSpacing(6)
 
-        for label, callback in [
-            ("📈  Courbe",           self._show_current_curve),
-            ("🕐  Historique",       self._show_history),
-            ("📊  Données",          self._show_data_table),
-            ("💾  Export CSV",       self._export_csv),
-            ("↺  RAZ compteurs",    self._reset_counters),
-        ]:
+        # Groupe exclusif pour les boutons de vue
+        btn_group = QButtonGroup(bar)
+        btn_group.setExclusive(True)
+
+        btn_specs = [
+            ("📈  Courbe",        "nav_btn",       self._show_current_curve, True),
+            ("🕐  Historique",    "nav_btn",        self._show_history,       False),
+            ("📊  Données",       "nav_btn",        self._show_data_table,    False),
+            ("💾  Export CSV",    "nav_btn_green",  self._export_csv,         False),
+            ("🔄  RAZ compteurs", "nav_btn_red",    self._reset_counters,     False),
+        ]
+
+        for label, obj_name, callback, checked in btn_specs:
             btn = QPushButton(label)
-            btn.setMinimumHeight(60)
-            btn.setFont(QFont("sans-serif", 10))
-            btn.setStyleSheet(
-                f"background-color: {COLORS['btn_nav']}; color: {COLORS['text_primary']}; "
-                "border-radius: 6px;"
-            )
+            btn.setObjectName(obj_name)
+            btn.setMinimumHeight(52)
             btn.clicked.connect(callback)
-            layout.addWidget(btn)
+            # Les 3 premiers boutons sont checkables (sélection de vue)
+            if obj_name == "nav_btn":
+                btn.setCheckable(True)
+                btn.setChecked(checked)
+                btn_group.addButton(btn)
+            layout.addWidget(btn, stretch=1)
 
         return bar
 
@@ -678,32 +861,27 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _make_separator() -> QFrame:
         sep = QFrame()
+        sep.setObjectName("separator")
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background-color: {COLORS['separator']};")
         return sep
 
-    @staticmethod
-    def _make_sub_label(text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setFont(QFont("sans-serif", 9))
-        lbl.setStyleSheet(f"color: {COLORS['text_secondary']};")
-        return lbl
-
     # ------------------------------------------------------------------
-    # Style fenêtre selon état
+    # Fond de fenêtre dynamique selon état du cycle
     # ------------------------------------------------------------------
 
     def _apply_state_style(self, state: str) -> None:
-        """Change la couleur de fond selon l'état du cycle."""
+        """Change la couleur de fond selon l'état — sans écraser le STYLESHEET global."""
         color_map = {
-            "idle":      COLORS["bg_idle"],
-            "acquiring": COLORS["bg_acquiring"],
-            "ok":        COLORS["bg_ok"],
-            "nok":       COLORS["bg_nok"],
+            "idle":      "#1a1a1a",
+            "acquiring": "#0a1628",
+            "ok":        "#051a12",
+            "nok":       "#1a0505",
         }
-        bg = color_map.get(state, COLORS["bg_idle"])
-        self.setStyleSheet(f"QMainWindow, #central {{ background-color: {bg}; }}")
+        bg = color_map.get(state, "#1a1a1a")
+        # On cible uniquement le widget central pour ne pas écraser STYLESHEET
+        self.centralWidget().setStyleSheet(f"background-color: {bg};")
 
     # ------------------------------------------------------------------
     # Slots de données
@@ -730,7 +908,7 @@ class MainWindow(QMainWindow):
             self._result_badge.setText("OK  ✓")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['result_ok']}; color: white; "
-                "border-radius: 8px; font-size: 28px; font-weight: bold;"
+                "border-radius: 12px; font-size: 28px; font-weight: bold;"
             )
             self._apply_state_style("ok")
         else:
@@ -738,7 +916,7 @@ class MainWindow(QMainWindow):
             self._result_badge.setText("NOK  ✗")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['result_nok']}; color: white; "
-                "border-radius: 8px; font-size: 28px; font-weight: bold;"
+                "border-radius: 12px; font-size: 28px; font-weight: bold;"
             )
             self._apply_state_style("nok")
 
@@ -767,7 +945,7 @@ class MainWindow(QMainWindow):
         self._result_badge.setText("EN COURS...")
         self._result_badge.setStyleSheet(
             f"background-color: {COLORS['result_idle']}; color: {COLORS['text_primary']}; "
-            "border-radius: 8px; font-size: 22px; font-weight: bold;"
+            "border-radius: 12px; font-size: 22px; font-weight: bold;"
         )
         self._apply_state_style("acquiring")
 
@@ -784,19 +962,21 @@ class MainWindow(QMainWindow):
     def _update_live_values(self, force_n: float, pos_mm: float) -> None:
         self._force_value.setText(f"{force_n:.0f} N")
         self._force_bar.setValue(int(min(force_n, FORCE_NEWTON_MAX)))
-        bar_style = (
-            f"QProgressBar::chunk {{ background-color: "
-            f"{COLORS['progress_warn'] if force_n >= FORCE_THRESHOLD_N else COLORS['progress_ok']}; }}"
-        )
-        self._force_bar.setStyleSheet(bar_style)
+        # Alarme force : setProperty + unpolish/polish pour forcer le rechargement CSS
+        alarm_f = "true" if force_n >= FORCE_THRESHOLD_N else "false"
+        if self._force_bar.property("alarm") != alarm_f:
+            self._force_bar.setProperty("alarm", alarm_f)
+            self._force_bar.style().unpolish(self._force_bar)
+            self._force_bar.style().polish(self._force_bar)
 
         self._pos_value.setText(f"{pos_mm:.1f} mm")
         self._pos_bar.setValue(int(min(pos_mm, POSITION_MM_MAX)))
-        bar_style = (
-            f"QProgressBar::chunk {{ background-color: "
-            f"{COLORS['progress_warn'] if pos_mm >= POSITION_THRESHOLD_MM else COLORS['progress_ok']}; }}"
-        )
-        self._pos_bar.setStyleSheet(bar_style)
+        # Alarme position
+        alarm_p = "true" if pos_mm >= POSITION_THRESHOLD_MM else "false"
+        if self._pos_bar.property("alarm") != alarm_p:
+            self._pos_bar.setProperty("alarm", alarm_p)
+            self._pos_bar.style().unpolish(self._pos_bar)
+            self._pos_bar.style().polish(self._pos_bar)
 
         self._fmax_label.setText(f"{self._cycle_fmax:.0f} N")
         self._xmax_label.setText(f"{self._cycle_xmax:.1f} mm")
