@@ -1,0 +1,84 @@
+"""Configuration centralisee du projet d'acquisition bi-canal."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+# Carte MCC 118
+BOARD_NUM = 0
+
+# Acquisition bi-canal
+FORCE_CHANNEL = 0       # CH0: Force 0-10V
+POSITION_CHANNEL = 1    # CH1: Position 0-10V
+CHANNELS = (FORCE_CHANNEL, POSITION_CHANNEL)
+
+# Frequence d'echantillonnage par canal
+SAMPLE_RATE_HZ = 5000.0
+
+# Taille de bloc de lecture (50 ms a 5 kHz)
+CHUNK_SIZE = 250
+READ_TIMEOUT_SEC = 0.2
+QUEUE_MAXSIZE = 200
+
+# Trigger externe (signal GO sur GPIO de la Pi)
+GO_TRIGGER_GPIO = 17
+GO_TRIGGER_ACTIVE_HIGH = True
+GO_POLL_INTERVAL_SEC = 0.001
+
+# Echelles de conversion
+FORCE_VOLT_MAX = 10.0
+FORCE_NEWTON_MAX = 5000.0
+POSITION_VOLT_MAX = 10.0
+POSITION_MM_MAX = 100.0
+
+# Seuils d'alarme (temps reel)
+FORCE_THRESHOLD_N = 4500.0
+POSITION_THRESHOLD_MM = 95.0
+
+# Dossier d'export CSV
+DATA_DIR = "./data"
+
+# Sorties GPIO (Pi 5)
+GPIO_OUT_OK = 5
+GPIO_OUT_NOK = 6
+GPIO_OUT_ALARM = 13
+
+
+@dataclass(frozen=True)
+class ProgramMeasure:
+    """Definition d'un Programme de Mesure (PM)."""
+
+    pm_id: int
+    name: str
+    description: str
+    view_mode: str
+
+
+PM_DEFINITIONS: dict[int, ProgramMeasure] = {
+    1: ProgramMeasure(1, "PM01_STANDARD", "Rivetage standard", "FORCE_POSITION"),
+    2: ProgramMeasure(2, "PM02_SOUPLE", "Assemblage souple", "FORCE_POSITION"),
+    3: ProgramMeasure(3, "PM03_RIGIDE", "Assemblage rigide", "FORCE_POSITION"),
+    4: ProgramMeasure(4, "PM04_COURT", "Cycle court", "FORCE_TIME"),
+    5: ProgramMeasure(5, "PM05_LONG", "Cycle long", "FORCE_TIME"),
+    6: ProgramMeasure(6, "PM06_PRECIS", "Positionnement precis", "POSITION_TIME"),
+    7: ProgramMeasure(7, "PM07_HAUTE_FORCE", "Force elevee", "FORCE_POSITION"),
+    8: ProgramMeasure(8, "PM08_FAIBLE_FORCE", "Force reduite", "FORCE_POSITION"),
+    9: ProgramMeasure(9, "PM09_VALIDATION", "Validation process", "FORCE_POSITION"),
+    10: ProgramMeasure(10, "PM10_PROTO", "Prototype", "FORCE_POSITION"),
+    11: ProgramMeasure(11, "PM11_TEST_A", "Test qualification A", "FORCE_TIME"),
+    12: ProgramMeasure(12, "PM12_TEST_B", "Test qualification B", "POSITION_TIME"),
+    13: ProgramMeasure(13, "PM13_SERIE_A", "Production serie A", "FORCE_POSITION"),
+    14: ProgramMeasure(14, "PM14_SERIE_B", "Production serie B", "FORCE_POSITION"),
+    15: ProgramMeasure(15, "PM15_MAINT", "Maintenance / diagnostic", "FORCE_TIME"),
+    16: ProgramMeasure(16, "PM16_CUSTOM", "Recette personnalisee", "FORCE_POSITION"),
+}
+
+
+def volts_to_force(voltage: float) -> float:
+    """Convertit une tension CH0 (0-10V) en Newton."""
+    return (voltage / FORCE_VOLT_MAX) * FORCE_NEWTON_MAX
+
+
+def volts_to_position(voltage: float) -> float:
+    """Convertit une tension CH1 (0-10V) en mm."""
+    return (voltage / POSITION_VOLT_MAX) * POSITION_MM_MAX
