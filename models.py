@@ -61,6 +61,12 @@ class EvaluationTool:
     _entry_side_seen: str | None = field(default=None, init=False)
     _exit_validated: bool = field(default=False, init=False)
 
+    def reset(self) -> None:
+        """Remet a zero l'etat interne UNI_BOX entre deux cycles consecutifs."""
+        self._entered = False
+        self._entry_side_seen = None
+        self._exit_validated = False
+
     def evaluate(self, x: float, y: float, previous: Point2D | None = None) -> EvaluationResult:
         if self.tool_type == EvaluationType.NO_PASS:
             return self._eval_no_pass(x, y)
