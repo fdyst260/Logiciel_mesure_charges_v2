@@ -85,7 +85,7 @@ def build_default_tools() -> list[EvaluationTool]:
 # Fonction principale
 # ---------------------------------------------------------------------------
 
-def main(use_simulator: bool = False, inject_fault: bool = False) -> None:
+def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bool = True) -> None:
     app = QApplication(sys.argv)
 
     # 1. Pont AVANT les threads (doit vivre dans le thread Qt)
@@ -93,7 +93,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False) -> None:
 
     # 2. Fenetre principale + connexion des signaux (QueuedConnection auto)
     tools = build_default_tools()
-    window = MainWindow(pm_id=1, tools=tools)
+    window = MainWindow(pm_id=1, tools=tools, fullscreen=fullscreen)
     bridge.new_point.connect(window.on_new_point)
     bridge.cycle_finished.connect(window.on_cycle_finished)
 
@@ -160,5 +160,10 @@ if __name__ == "__main__":
         action="store_true",
         help="Injecter un defaut dans le simulateur (force 5200 N -> NOK)",
     )
+    parser.add_argument(
+        "--windowed",
+        action="store_true",
+        help="Lancer en mode fenetre (sans plein ecran)",
+    )
     args = parser.parse_args()
-    main(use_simulator=args.sim, inject_fault=args.fault)
+    main(use_simulator=args.sim, inject_fault=args.fault, fullscreen=not args.windowed)

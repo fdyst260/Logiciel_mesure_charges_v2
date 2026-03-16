@@ -420,6 +420,7 @@ class MainWindow(QMainWindow):
         self,
         pm_id: int = 1,
         tools: list[EvaluationTool] | None = None,
+        fullscreen: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -458,7 +459,11 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         shortcut.activated.connect(self.close)
 
-        self.showFullScreen()
+        if fullscreen:
+            self.showFullScreen()
+        else:
+            self.resize(1280, 720)
+            self.show()
 
     # ------------------------------------------------------------------
     # Construction de l'interface
