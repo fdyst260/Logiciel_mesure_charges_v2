@@ -99,7 +99,8 @@ class CycleManager:
         alarm_position = pos_mm >= self.position_threshold_mm
         alarm_threshold = alarm_force or alarm_position
 
-        x, y = self._xy(sample)
+        _xy_sample = self._xy(sample)
+        x, y = _xy_sample.x, _xy_sample.y
         previous_xy = self._xy(prev) if prev else None
 
         tool_results: list[EvaluationResult] = []
