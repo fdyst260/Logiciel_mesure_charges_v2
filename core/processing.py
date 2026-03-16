@@ -19,6 +19,7 @@ class DataProcessor(threading.Thread):
         cycle_manager: CycleManager,
         pm_id: int,
         point_callback: Callable[[float, float, float], None] | None = None,
+        cycle_callback: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(name="DataProcessor", daemon=True)
         self._data_queue = data_queue
@@ -26,6 +27,7 @@ class DataProcessor(threading.Thread):
         self._cycle_manager = cycle_manager
         self._pm_id = pm_id
         self._point_callback = point_callback
+        self._cycle_callback = cycle_callback
         self._points_for_csv: list[tuple[float, float, float]] = []
         self.saved_csv_path: str | None = None
 
@@ -60,6 +62,8 @@ class DataProcessor(threading.Thread):
             self._data_queue.task_done()
 
         final_result = self._cycle_manager.finalize_cycle().value
+        if self._cycle_callback:
+            self._cycle_callback(final_result)
         csv_path = save_cycle_csv(
             pm_id=self._pm_id,
             result=final_result,
