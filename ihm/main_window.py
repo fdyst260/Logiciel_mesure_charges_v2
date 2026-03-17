@@ -50,39 +50,41 @@ from core.analysis import DisplayMode
 from core.models import EvaluationTool, EvaluationType
 
 # ---------------------------------------------------------------------------
-# Constantes de couleur — thème industriel sombre
+# Constantes de couleur — thème industriel clair/sombre
 # ---------------------------------------------------------------------------
 COLORS: dict[str, str] = {
     # Arrière-plan fenêtre selon état
-    "bg_idle":        "#1a1a1a",
-    "bg_acquiring":   "#0a1628",
-    "bg_ok":          "#051a12",
-    "bg_nok":         "#1a0505",
-    # Graphique
-    "bg_graph":       "#111111",
-    "grid":           "#2a2a2a",
-    "axis_text":      "#666666",
-    "curve_live":     "#378ADD",
-    "curve_ok":       "#1D9E75",
-    "curve_nok":      "#E24B4A",
-    "curve_history":  "#5F5E5A",
+    "bg_idle":        "#e8ecf0",
+    "bg_acquiring":   "#dce6f0",
+    "bg_ok":          "#d4eddf",
+    "bg_nok":         "#f5d5d5",
+    # Graphique (fond clair moderne)
+    "bg_graph":       "#f0f4f8",
+    "graph_title_bg": "#4a90d9",
+    "graph_title_fg": "#ffffff",
+    "grid":           "#c8d4e0",
+    "axis_text":      "#556677",
+    "curve_live":     "#2e7d32",
+    "curve_ok":       "#2e7d32",
+    "curve_nok":      "#d32f2f",
+    "curve_history":  "#90a4ae",
     # Outils d'évaluation
-    "tool_no_pass":   "#A32D2D",
-    "tool_unibox":    "#EF9F27",
-    "tool_envelope":  "#1D9E75",
+    "tool_no_pass":   "#d32f2f",
+    "tool_unibox":    "#2e7d32",
+    "tool_envelope":  "#1565c0",
     # Badges résultat
-    "result_ok":      "#085041",
-    "result_nok":     "#791F1F",
-    "result_idle":    "#2a2a2a",
+    "result_ok":      "#2e7d32",
+    "result_nok":     "#d32f2f",
+    "result_idle":    "#78909c",
     # UI générale
-    "text_primary":   "#e0e0e0",
-    "text_secondary": "#888888",
-    "btn_nav":        "#2a2a2a",
-    "btn_settings":   "#854F0B",
-    "panel_bg":       "#1a1a1a",
-    "separator":      "#333333",
-    "progress_ok":    "#1D9E75",
-    "progress_warn":  "#E24B4A",
+    "text_primary":   "#263238",
+    "text_secondary": "#607d8b",
+    "btn_nav":        "#eceff1",
+    "btn_settings":   "#5c6bc0",
+    "panel_bg":       "#f5f7fa",
+    "separator":      "#cfd8dc",
+    "progress_ok":    "#2e7d32",
+    "progress_warn":  "#d32f2f",
 }
 
 _PIN_CODE = "1234"
@@ -94,49 +96,58 @@ _LOCKOUT_SECONDS = 30
 # ---------------------------------------------------------------------------
 STYLESHEET = """
 QMainWindow, QWidget#central {
-    background-color: #1a1a1a;
-    color: #e0e0e0;
+    background-color: #e8ecf0;
+    color: #263238;
     font-family: 'Segoe UI', Arial, sans-serif;
 }
 
 QLabel#result_label {
-    font-size: 48px;
+    font-size: 36px;
     font-weight: bold;
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 10px;
 }
 
-QLabel#counters_label {
-    font-size: 16px;
-    color: #b0b0b0;
+QLabel#counter_row {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 2px 8px;
+    background-color: #ffffff;
+    border: 1px solid #cfd8dc;
+}
+
+QLabel#datetime_label {
+    font-size: 13px;
+    color: #455a64;
     padding: 4px 8px;
-    border-top: 1px solid #333;
-    border-bottom: 1px solid #333;
+    background-color: #ffffff;
+    border: 1px solid #cfd8dc;
+    border-radius: 4px;
 }
 
 QLabel#live_label {
     font-size: 13px;
-    color: #888;
+    color: #607d8b;
     margin-top: 8px;
 }
 QLabel#live_value {
     font-size: 22px;
     font-weight: bold;
-    color: #e0e0e0;
+    color: #263238;
 }
 
 QProgressBar {
     border: none;
     border-radius: 4px;
-    background-color: #2a2a2a;
+    background-color: #cfd8dc;
     max-height: 10px;
 }
 QProgressBar::chunk {
     border-radius: 4px;
-    background-color: #1D9E75;
+    background-color: #2e7d32;
 }
 QProgressBar[alarm="true"]::chunk {
-    background-color: #E24B4A;
+    background-color: #d32f2f;
 }
 
 QLabel#pm_title {
@@ -144,67 +155,82 @@ QLabel#pm_title {
     font-weight: bold;
     color: #ffffff;
     padding: 6px;
-    background-color: #2a2a2a;
+    background-color: #5c6bc0;
     border-radius: 6px;
 }
 QLabel#pm_peak {
     font-size: 13px;
-    color: #888;
+    color: #607d8b;
 }
 QLabel#pm_peak_value {
     font-size: 20px;
     font-weight: bold;
-    color: #378ADD;
+    color: #1565c0;
 }
 
 QPushButton#btn_settings {
-    background-color: #854F0B;
+    background-color: #5c6bc0;
     color: #ffffff;
     font-size: 14px;
     font-weight: bold;
     border-radius: 8px;
-    padding: 12px;
-    min-height: 55px;
+    padding: 10px;
+    min-height: 48px;
+    border: none;
 }
 QPushButton#btn_settings:pressed {
-    background-color: #6B3F09;
+    background-color: #3949ab;
+}
+
+QPushButton#btn_service {
+    background-color: #78909c;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 10px;
+    min-height: 48px;
+    border: none;
+}
+QPushButton#btn_service:pressed {
+    background-color: #546e7a;
 }
 
 QPushButton#nav_btn {
-    background-color: #2a2a2a;
-    color: #cccccc;
+    background-color: #eceff1;
+    color: #455a64;
     font-size: 13px;
     border-radius: 6px;
-    border: 1px solid #3a3a3a;
+    border: 1px solid #b0bec5;
     min-height: 52px;
     padding: 0 12px;
 }
 QPushButton#nav_btn:checked, QPushButton#nav_btn:pressed {
-    background-color: #185FA5;
+    background-color: #4a90d9;
     color: #ffffff;
-    border-color: #378ADD;
+    border-color: #3578c4;
 }
 QPushButton#nav_btn_green {
-    background-color: #085041;
-    color: #9FE1CB;
+    background-color: #e8f5e9;
+    color: #2e7d32;
     font-size: 13px;
     border-radius: 6px;
-    border: 1px solid #0F6E56;
+    border: 1px solid #a5d6a7;
     min-height: 52px;
     padding: 0 12px;
 }
 QPushButton#nav_btn_red {
-    background-color: #3d1515;
-    color: #F7C1C1;
+    background-color: #ffebee;
+    color: #c62828;
     font-size: 13px;
     border-radius: 6px;
-    border: 1px solid #791F1F;
+    border: 1px solid #ef9a9a;
     min-height: 52px;
     padding: 0 12px;
 }
 
 QFrame#separator {
-    background-color: #333;
+    background-color: #cfd8dc;
     max-height: 1px;
 }
 """
@@ -214,34 +240,34 @@ QFrame#separator {
 # ---------------------------------------------------------------------------
 PINSTYLE = """
 QDialog {
-    background-color: #1e1e1e;
+    background-color: #f5f7fa;
     border-radius: 12px;
 }
 QLabel {
-    color: #e0e0e0;
+    color: #263238;
     font-size: 16px;
 }
 QLineEdit {
-    background-color: #2a2a2a;
-    color: #ffffff;
-    border: 2px solid #444;
+    background-color: #ffffff;
+    color: #263238;
+    border: 2px solid #b0bec5;
     border-radius: 8px;
     font-size: 28px;
     padding: 8px;
     letter-spacing: 12px;
 }
 QLineEdit:focus {
-    border-color: #378ADD;
+    border-color: #4a90d9;
 }
 QPushButton {
-    background-color: #378ADD;
+    background-color: #4a90d9;
     color: white;
     border-radius: 8px;
     padding: 10px 24px;
     font-size: 14px;
     font-weight: bold;
 }
-QPushButton:pressed { background-color: #185FA5; }
+QPushButton:pressed { background-color: #3578c4; }
 """
 
 
@@ -253,6 +279,7 @@ class GraphWidget(QWidget):
     """Tracé temps réel de la courbe Force=f(Position) ou f(t) par QPainter."""
 
     _GRID_DIVS = 5
+    _TITLE_HEIGHT = 32
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -268,6 +295,7 @@ class GraphWidget(QWidget):
         self._history_mode: bool = False
         self._tools: list[EvaluationTool] = []
         self._current_result: str | None = None  # résultat cycle terminé
+        self._title: str = "Production: Courbe actuelle"
 
     # ------------------------------------------------------------------
     # API publique
@@ -284,6 +312,7 @@ class GraphWidget(QWidget):
 
     def set_history_mode(self, enabled: bool) -> None:
         self._history_mode = enabled
+        self._title = "Production: Historique" if enabled else "Production: Courbe actuelle"
         self.update()
 
     def add_points(self, points: list[tuple[float, float, float]]) -> None:
@@ -309,8 +338,9 @@ class GraphWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _plot_rect(self) -> QRect:
-        """Rectangle de tracé (hors marges axes)."""
-        return QRect(50, 10, self.width() - 60, self.height() - 40)
+        """Rectangle de tracé (hors marges axes et barre titre)."""
+        top = self._TITLE_HEIGHT + 10
+        return QRect(55, top, self.width() - 70, self.height() - top - 35)
 
     def _get_ranges(self) -> tuple[float, float]:
         """Retourne (x_max, y_max) selon le mode."""
@@ -342,32 +372,48 @@ class GraphWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Fond graphique
+        w, h = self.width(), self.height()
+
+        # Fond graphique clair
         painter.fillRect(self.rect(), QColor(COLORS["bg_graph"]))
 
-        # Bordure du widget : 1px #333333, coins arrondis 8px
-        border_pen = QPen(QColor("#333333"))
+        # Bordure arrondie
+        border_pen = QPen(QColor("#b0bec5"))
         border_pen.setWidth(1)
         painter.setPen(border_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 8, 8)
 
+        # Barre de titre
+        title_rect = QRect(1, 1, w - 2, self._TITLE_HEIGHT)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(COLORS["graph_title_bg"]))
+        painter.drawRoundedRect(QRect(1, 1, w - 2, self._TITLE_HEIGHT + 8), 8, 8)
+        painter.fillRect(QRect(1, self._TITLE_HEIGHT - 4, w - 2, 12), QColor(COLORS["graph_title_bg"]))
+
+        painter.setPen(QColor(COLORS["graph_title_fg"]))
+        painter.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        painter.drawText(title_rect, Qt.AlignmentFlag.AlignCenter, self._title)
+
         rect = self._plot_rect()
+
+        # Fond zone de tracé blanc
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#ffffff"))
+        painter.drawRect(rect)
+
         self._draw_grid(painter, rect)
         self._draw_tool_overlays(painter, rect)
 
         if self._history_mode:
-            # Toutes les courbes sauf la dernière en gris
             history_list = list(self._history)
             for pts, _res in history_list[:-1]:
                 self._draw_curve(painter, pts, QColor(COLORS["curve_history"]), rect)
-            # Dernière courbe en couleur
             if history_list:
                 pts, res = history_list[-1]
                 c = COLORS["curve_ok"] if res == "PASS" else COLORS["curve_nok"]
                 self._draw_curve(painter, pts, QColor(c), rect)
         else:
-            # Courbe courante
             if self._current_points:
                 if self._current_result == "PASS":
                     color = QColor(COLORS["curve_ok"])
@@ -381,10 +427,11 @@ class GraphWidget(QWidget):
         painter.end()
 
     def _draw_grid(self, painter: QPainter, rect: QRect) -> None:
-        pen = QPen(QColor(COLORS["grid"]))  # #2a2a2a — grille subtile
+        pen = QPen(QColor(COLORS["grid"]))
         pen.setWidth(1)
+        pen.setStyle(Qt.PenStyle.DotLine)
         painter.setPen(pen)
-        for i in range(self._GRID_DIVS + 1):
+        for i in range(1, self._GRID_DIVS):
             x = rect.left() + int(i * rect.width() / self._GRID_DIVS)
             painter.drawLine(x, rect.top(), x, rect.bottom())
             y = rect.top() + int(i * rect.height() / self._GRID_DIVS)
@@ -457,29 +504,34 @@ class GraphWidget(QWidget):
                 painter.drawLine(px1, py1, px2, py2)
 
     def _draw_axes(self, painter: QPainter, rect: QRect) -> None:
-        painter.setPen(QColor(COLORS["axis_text"]))  # #666666
-        painter.setFont(QFont("monospace", 11))
         x_range, y_range = self._get_ranges()
         x_unit = "mm" if self._display_mode == DisplayMode.FORCE_POSITION else "s"
         y_unit = "mm" if self._display_mode == DisplayMode.POSITION_TIME else "N"
 
+        # Axes lines
+        axis_pen = QPen(QColor("#78909c"))
+        axis_pen.setWidth(2)
+        painter.setPen(axis_pen)
+        painter.drawLine(rect.left(), rect.top(), rect.left(), rect.bottom())
+        painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
+
+        # Labels
+        painter.setPen(QColor(COLORS["axis_text"]))
+        painter.setFont(QFont("Segoe UI", 10))
+
         for i in range(self._GRID_DIVS + 1):
-            # Labels X (bas)
             val_x = i * x_range / self._GRID_DIVS
             px = rect.left() + int(i * rect.width() / self._GRID_DIVS)
-            painter.drawText(px - 12, rect.bottom() + 20, f"{val_x:.0f}")
-            # Labels Y (gauche)
+            painter.drawText(px - 12, rect.bottom() + 18, f"{val_x:.0f}")
+
             val_y = i * y_range / self._GRID_DIVS
             py = rect.bottom() - int(i * rect.height() / self._GRID_DIVS)
-            painter.drawText(2, py + 4, f"{val_y:.0f}")
+            label = f"{val_y:.0f}{y_unit}" if i == self._GRID_DIVS else f"{val_y:.0f}"
+            painter.drawText(2, py + 4, label)
 
-        # Unités axes
-        painter.drawText(rect.left() + rect.width() // 2 - 8, rect.bottom() + 34, x_unit)
-        painter.save()
-        painter.translate(10, rect.top() + rect.height() // 2 + 8)
-        painter.rotate(-90)
-        painter.drawText(0, 0, y_unit)
-        painter.restore()
+        # Unit label on X axis
+        painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        painter.drawText(rect.right() - 20, rect.bottom() + 18, x_unit)
 
 
 # ===========================================================================
@@ -689,27 +741,6 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
 
-        # Badge résultat — 110px de haut, objectName pour le CSS
-        self._result_badge = QLabel("EN ATTENTE")
-        self._result_badge.setObjectName("result_label")
-        self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._result_badge.setFixedHeight(110)
-        self._result_badge.setWordWrap(True)
-        self._result_badge.setStyleSheet(
-            f"background-color: {COLORS['result_idle']}; color: {COLORS['text_primary']}; "
-            "border-radius: 12px; font-size: 28px; font-weight: bold;"
-        )
-        layout.addWidget(self._result_badge)
-
-        # Compteurs ✓ / ✗ / Σ — 45px de haut
-        self._counter_label = QLabel("✓ 0   ✗ 0   Σ 0")
-        self._counter_label.setObjectName("counters_label")
-        self._counter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._counter_label.setFixedHeight(45)
-        layout.addWidget(self._counter_label)
-
-        layout.addWidget(self._make_separator())
-
         # Force live
         lbl_force = QLabel("Force")
         lbl_force.setObjectName("live_label")
@@ -756,52 +787,115 @@ class MainWindow(QMainWindow):
             f"border-left: 1px solid {COLORS['separator']};"
         )
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 14, 12, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
 
-        # Nom du PM actif
+        # Badge résultat OK/NOK — gros et visible comme sur la photo
+        self._result_badge = QLabel("EN ATTENTE")
+        self._result_badge.setObjectName("result_label")
+        self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._result_badge.setFixedHeight(70)
+        self._result_badge.setWordWrap(True)
+        self._result_badge.setStyleSheet(
+            f"background-color: {COLORS['result_idle']}; color: #ffffff; "
+            "border-radius: 8px; font-size: 32px; font-weight: bold;"
+        )
+        layout.addWidget(self._result_badge)
+
+        # Compteurs (✓ / ✗ / Σ) en tableau structuré
+        counters_frame = QWidget()
+        counters_frame.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid #cfd8dc; border-radius: 6px;"
+        )
+        cl = QVBoxLayout(counters_frame)
+        cl.setContentsMargins(8, 4, 8, 4)
+        cl.setSpacing(0)
+
+        self._ok_count_label = QLabel("✓          0")
+        self._ok_count_label.setObjectName("counter_row")
+        self._ok_count_label.setStyleSheet("color: #2e7d32; font-size: 18px; font-weight: bold; border: none;")
+        cl.addWidget(self._ok_count_label)
+
+        self._nok_count_label = QLabel("✗          0")
+        self._nok_count_label.setObjectName("counter_row")
+        self._nok_count_label.setStyleSheet("color: #d32f2f; font-size: 18px; font-weight: bold; border: none;")
+        cl.addWidget(self._nok_count_label)
+
+        self._total_count_label = QLabel("Σ          0")
+        self._total_count_label.setObjectName("counter_row")
+        self._total_count_label.setStyleSheet("color: #263238; font-size: 18px; font-weight: bold; border: none;")
+        cl.addWidget(self._total_count_label)
+
+        layout.addWidget(counters_frame)
+
+        # Date / Heure
+        self._datetime_label = QLabel(datetime.now().strftime("%d/%m/%y\n%H:%M:%S"))
+        self._datetime_label.setObjectName("datetime_label")
+        self._datetime_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._datetime_label)
+
+        # Timer pour mettre à jour la date/heure
+        self._dt_timer = QTimer(self)
+        self._dt_timer.setInterval(1000)
+        self._dt_timer.timeout.connect(self._update_datetime)
+        self._dt_timer.start()
+
+        layout.addWidget(self._make_separator())
+
+        # PM actif
         pm = PM_DEFINITIONS.get(self._pm_id)
-        pm_text = f"PM-{self._pm_id:02d}\n{pm.name if pm else '—'}"
+        pm_text = f"PM-{self._pm_id:02d}"
         pm_label = QLabel(pm_text)
         pm_label.setObjectName("pm_title")
         pm_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pm_label.setWordWrap(True)
         layout.addWidget(pm_label)
 
         layout.addWidget(self._make_separator())
 
-        # Fmax
+        # Fmax / Xmax en ligne compacte
+        peaks_frame = QWidget()
+        peaks_frame.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid #cfd8dc; border-radius: 6px;"
+        )
+        pl = QVBoxLayout(peaks_frame)
+        pl.setContentsMargins(8, 4, 8, 4)
+        pl.setSpacing(2)
+
+        fmax_row = QHBoxLayout()
         lbl_fmax = QLabel("Fmax")
         lbl_fmax.setObjectName("pm_peak")
-        lbl_fmax.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl_fmax)
-
         self._fmax_label = QLabel("0 N")
         self._fmax_label.setObjectName("pm_peak_value")
-        self._fmax_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._fmax_label)
+        self._fmax_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        fmax_row.addWidget(lbl_fmax)
+        fmax_row.addWidget(self._fmax_label)
+        pl.addLayout(fmax_row)
 
-        layout.addWidget(self._make_separator())
-
-        # Xmax
+        xmax_row = QHBoxLayout()
         lbl_xmax = QLabel("Xmax")
         lbl_xmax.setObjectName("pm_peak")
-        lbl_xmax.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl_xmax)
-
         self._xmax_label = QLabel("0.0 mm")
         self._xmax_label.setObjectName("pm_peak_value")
-        self._xmax_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._xmax_label)
+        self._xmax_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        xmax_row.addWidget(lbl_xmax)
+        xmax_row.addWidget(self._xmax_label)
+        pl.addLayout(xmax_row)
+
+        layout.addWidget(peaks_frame)
 
         layout.addStretch()
 
-        # Bouton réglages (PIN requis)
-        self._settings_btn = QPushButton("⚙  RÉGLAGES  🔒")
+        # Bouton Réglages
+        self._settings_btn = QPushButton("Réglage")
         self._settings_btn.setObjectName("btn_settings")
-        self._settings_btn.setMinimumHeight(55)
         self._settings_btn.clicked.connect(self._on_settings_clicked)
         layout.addWidget(self._settings_btn)
+
+        # Bouton Service
+        service_btn = QPushButton("Service")
+        service_btn.setObjectName("btn_service")
+        service_btn.clicked.connect(lambda: QMessageBox.information(self, "Service", "Mode service non disponible."))
+        layout.addWidget(service_btn)
 
         return panel
 
@@ -846,9 +940,10 @@ class MainWindow(QMainWindow):
         table = QTableWidget(0, 5)
         table.setHorizontalHeaderLabels(["Cycle", "Fmax (N)", "Xmax (mm)", "Résultat", "Heure"])
         table.setStyleSheet(
-            f"background-color: {COLORS['bg_graph']}; color: {COLORS['text_primary']}; "
-            f"gridline-color: {COLORS['separator']};"
+            "background-color: #ffffff; color: #263238; "
+            "gridline-color: #cfd8dc; alternate-background-color: #f5f7fa;"
         )
+        table.setAlternatingRowColors(True)
         table.horizontalHeader().setDefaultSectionSize(130)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -874,10 +969,10 @@ class MainWindow(QMainWindow):
     def _apply_state_style(self, state: str) -> None:
         """Change la couleur de fond selon l'état — sans écraser le STYLESHEET global."""
         color_map = {
-            "idle":      "#1a1a1a",
-            "acquiring": "#0a1628",
-            "ok":        "#051a12",
-            "nok":       "#1a0505",
+            "idle":      "#e8ecf0",
+            "acquiring": "#dce6f0",
+            "ok":        "#d4eddf",
+            "nok":       "#f5d5d5",
         }
         bg = color_map.get(state, "#1a1a1a")
         # On cible uniquement le widget central pour ne pas écraser STYLESHEET
@@ -905,24 +1000,22 @@ class MainWindow(QMainWindow):
         """Reçoit le résultat final du cycle (PASS ou NOK)."""
         if result == "PASS":
             self._count_ok += 1
-            self._result_badge.setText("OK  ✓")
+            self._result_badge.setText("OK")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['result_ok']}; color: white; "
-                "border-radius: 12px; font-size: 28px; font-weight: bold;"
+                "border-radius: 8px; font-size: 32px; font-weight: bold;"
             )
             self._apply_state_style("ok")
         else:
             self._count_nok += 1
-            self._result_badge.setText("NOK  ✗")
+            self._result_badge.setText("NOK")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['result_nok']}; color: white; "
-                "border-radius: 12px; font-size: 28px; font-weight: bold;"
+                "border-radius: 8px; font-size: 32px; font-weight: bold;"
             )
             self._apply_state_style("nok")
 
-        self._counter_label.setText(
-            f"✓ {self._count_ok}   ✗ {self._count_nok}   Σ {self._count_ok + self._count_nok}"
-        )
+        self._update_counters()
         self._fmax_label.setText(f"{self._cycle_fmax:.0f} N")
         self._xmax_label.setText(f"{self._cycle_xmax:.1f} mm")
 
@@ -942,10 +1035,10 @@ class MainWindow(QMainWindow):
         self._last_force = 0.0
         self._last_pos = 0.0
         self._graph.start_new_cycle()
-        self._result_badge.setText("EN COURS...")
+        self._result_badge.setText("...")
         self._result_badge.setStyleSheet(
-            f"background-color: {COLORS['result_idle']}; color: {COLORS['text_primary']}; "
-            "border-radius: 12px; font-size: 22px; font-weight: bold;"
+            f"background-color: {COLORS['result_idle']}; color: #ffffff; "
+            "border-radius: 8px; font-size: 28px; font-weight: bold;"
         )
         self._apply_state_style("acquiring")
 
@@ -1014,6 +1107,15 @@ class MainWindow(QMainWindow):
             writer.writerows(self._production_log)
         QMessageBox.information(self, "Export", f"Données exportées :\n{path}")
 
+    def _update_counters(self) -> None:
+        total = self._count_ok + self._count_nok
+        self._ok_count_label.setText(f"✓          {self._count_ok}")
+        self._nok_count_label.setText(f"✗          {self._count_nok}")
+        self._total_count_label.setText(f"Σ          {total}")
+
+    def _update_datetime(self) -> None:
+        self._datetime_label.setText(datetime.now().strftime("%d/%m/%y\n%H:%M:%S"))
+
     def _reset_counters(self) -> None:
         reply = QMessageBox.question(
             self,
@@ -1024,7 +1126,7 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             self._count_ok = 0
             self._count_nok = 0
-            self._counter_label.setText("✓ 0   ✗ 0   Σ 0")
+            self._update_counters()
 
     def _on_settings_clicked(self) -> None:
         dlg = PinDialog(self)
