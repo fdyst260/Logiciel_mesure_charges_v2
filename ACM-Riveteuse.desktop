@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ACM Riveteuse
+Comment=Système acquisition riveteuse
+Exec=/home/acmfrance/Documents/logiciel_mesure/code/run.sh
+Icon=/home/acmfrance/Documents/logiciel_mesure/code/assets/icon.png
+Terminal=false
+Categories=Industry;
