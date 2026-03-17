@@ -74,6 +74,29 @@ PM_DEFINITIONS: dict[int, ProgramMeasure] = {
 }
 
 
+def load_pm_from_yaml() -> None:
+    """Charge les PM depuis config.yaml si la section 'programmes' existe."""
+    import yaml
+    from pathlib import Path
+
+    cfg_path = Path(__file__).parent / "config.yaml"
+    if not cfg_path.exists():
+        return
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        return
+    for pm_id, pm_data in cfg.get("programmes", {}).items():
+        if pm_id in PM_DEFINITIONS:
+            PM_DEFINITIONS[pm_id] = ProgramMeasure(
+                pm_id=pm_id,
+                name=pm_data.get("name", PM_DEFINITIONS[pm_id].name),
+                description=pm_data.get("description", ""),
+                view_mode=pm_data.get("view_mode", "FORCE_POSITION"),
+            )
+
+
 def volts_to_force(voltage: float) -> float:
     """Convertit une tension CH0 (0-10V) en Newton."""
     return (voltage / FORCE_VOLT_MAX) * FORCE_NEWTON_MAX

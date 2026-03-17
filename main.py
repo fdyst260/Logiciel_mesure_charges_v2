@@ -15,7 +15,7 @@ import threading
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
-from config import PM_DEFINITIONS, QUEUE_MAXSIZE
+from config import PM_DEFINITIONS, QUEUE_MAXSIZE, load_pm_from_yaml
 from core.acquisition import AcquisitionError, acquisition_loop
 from core.analysis import CycleManager, DisplayMode
 from core.models import EvaluationTool, EvaluationType, Point2D
@@ -51,6 +51,52 @@ class AcquisitionBridge(QObject):
 # ---------------------------------------------------------------------------
 # Outils d'evaluation par defaut
 # ---------------------------------------------------------------------------
+
+def build_tools_from_yaml(pm_id: int) -> list[EvaluationTool]:
+    """Charge les outils d'évaluation depuis config.yaml pour un PM donné.
+    Retourne les outils par défaut si le PM n'est pas configuré."""
+    import yaml
+    from pathlib import Path
+
+    cfg_path = Path(__file__).parent / "config.yaml"
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        tools_data = cfg.get("programmes", {}).get(pm_id, {}).get("tools", {})
+    except Exception:
+        return build_default_tools()
+
+    tools: list[EvaluationTool] = []
+
+    np_d = tools_data.get("no_pass", {})
+    if np_d.get("enabled", False):
+        tools.append(EvaluationTool(
+            name="no_pass",
+            tool_type=EvaluationType.NO_PASS,
+            x_min=np_d["x_min"], x_max=np_d["x_max"], y_limit=np_d["y_limit"],
+        ))
+
+    ub_d = tools_data.get("uni_box", {})
+    if ub_d.get("enabled", False):
+        tools.append(EvaluationTool(
+            name="uni_box",
+            tool_type=EvaluationType.UNI_BOX,
+            box_x_min=ub_d["box_x_min"], box_x_max=ub_d["box_x_max"],
+            box_y_min=ub_d["box_y_min"], box_y_max=ub_d["box_y_max"],
+            entry_side=ub_d["entry_side"], exit_side=ub_d["exit_side"],
+        ))
+
+    env_d = tools_data.get("envelope", {})
+    if env_d.get("enabled", False):
+        tools.append(EvaluationTool(
+            name="envelope",
+            tool_type=EvaluationType.ENVELOPE,
+            lower_curve=[Point2D(p[0], p[1]) for p in env_d["lower_curve"]],
+            upper_curve=[Point2D(p[0], p[1]) for p in env_d["upper_curve"]],
+        ))
+
+    return tools if tools else build_default_tools()
+
 
 def build_default_tools() -> list[EvaluationTool]:
     """Jeu d'outils d'evaluation type pour Force=f(Position)."""
@@ -88,11 +134,14 @@ def build_default_tools() -> list[EvaluationTool]:
 def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bool = True) -> None:
     app = QApplication(sys.argv)
 
+    # Charger les PM personnalisés depuis config.yaml
+    load_pm_from_yaml()
+
     # 1. Pont AVANT les threads (doit vivre dans le thread Qt)
     bridge = AcquisitionBridge()
 
     # 2. Fenetre principale + connexion des signaux (QueuedConnection auto)
-    tools = build_default_tools()
+    tools = build_tools_from_yaml(pm_id=1)
     window = MainWindow(pm_id=1, tools=tools, fullscreen=fullscreen)
     bridge.new_point.connect(window.on_new_point)
     bridge.cycle_finished.connect(window.on_cycle_finished)
