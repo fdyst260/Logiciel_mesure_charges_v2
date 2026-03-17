@@ -99,16 +99,18 @@ QMainWindow, QWidget#central {
 }
 QLabel {
     background-color: transparent;
+    font-size: 15px;
+    font-weight: 500;
 }
 QLabel#result_label {
-    font-size: 52px;
+    font-size: 58px;
     font-weight: bold;
     border-radius: 10px;
     padding: 8px;
 }
-QLabel#counter_ok   { color: #1D9E75; font-size: 18px; font-weight: bold; }
-QLabel#counter_nok  { color: #E24B4A; font-size: 18px; font-weight: bold; }
-QLabel#counter_tot  { color: #e0e0e0; font-size: 18px; font-weight: bold; }
+QLabel#counter_ok   { color: #1D9E75; font-size: 22px; font-weight: bold; }
+QLabel#counter_nok  { color: #E24B4A; font-size: 22px; font-weight: bold; }
+QLabel#counter_tot  { color: #e0e0e0; font-size: 22px; font-weight: bold; }
 QLabel#datetime_label {
     font-size: 12px;
     color: #888;
@@ -119,14 +121,14 @@ QLabel#pm_section_title {
     color: #378ADD;
 }
 QLabel#pm_btn_label {
-    font-size: 14px;
+    font-size: 17px;
     font-weight: bold;
     color: #e0e0e0;
 }
-QLabel#live_label   { font-size: 12px; color: #888; }
-QLabel#live_value   { font-size: 18px; font-weight: bold; color: #e0e0e0; }
-QLabel#peak_label   { font-size: 12px; color: #888; }
-QLabel#peak_value   { font-size: 18px; font-weight: bold; color: #378ADD; }
+QLabel#live_label   { font-size: 15px; font-weight: 600; color: #888; }
+QLabel#live_value   { font-size: 26px; font-weight: bold; color: #e0e0e0; }
+QLabel#peak_label   { font-size: 15px; font-weight: 600; color: #888; }
+QLabel#peak_value   { font-size: 22px; font-weight: bold; color: #378ADD; }
 
 QProgressBar {
     border: none;
@@ -156,7 +158,7 @@ QPushButton#btn_pm:pressed { background-color: #185FA5; }
 QPushButton#btn_settings {
     background-color: #854F0B;
     color: #ffffff;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: bold;
     border-radius: 8px;
     border: none;
@@ -167,7 +169,8 @@ QPushButton#btn_settings:pressed { background-color: #6B3F09; }
 QPushButton#nav_btn {
     background-color: #252525;
     color: #cccccc;
-    font-size: 13px;
+    font-size: 15px;
+    font-weight: 600;
     border-radius: 8px;
     border: 1px solid #383838;
     min-height: 58px;
@@ -180,7 +183,8 @@ QPushButton#nav_btn:checked, QPushButton#nav_btn:pressed {
 QPushButton#nav_btn_green {
     background-color: #085041;
     color: #9FE1CB;
-    font-size: 13px;
+    font-size: 15px;
+    font-weight: 600;
     border-radius: 8px;
     border: 1px solid #0F6E56;
     min-height: 58px;
@@ -188,7 +192,8 @@ QPushButton#nav_btn_green {
 QPushButton#nav_btn_red {
     background-color: #3d1515;
     color: #F7C1C1;
-    font-size: 13px;
+    font-size: 15px;
+    font-weight: 600;
     border-radius: 8px;
     border: 1px solid #791F1F;
     min-height: 58px;
@@ -446,7 +451,9 @@ class GraphWidget(QWidget):
         x_unit = "mm" if self._display_mode == DisplayMode.FORCE_POSITION else "s"
         y_unit = "mm" if self._display_mode == DisplayMode.POSITION_TIME else "N"
 
-        painter.setFont(QFont("monospace", 9))
+        _axis_font = QFont("monospace", 11)
+        _axis_font.setBold(True)
+        painter.setFont(_axis_font)
         painter.setPen(QColor(COLORS["axis_text"]))
 
         # 6 valeurs (GRID_DIVS + 1)
