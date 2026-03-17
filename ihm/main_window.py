@@ -19,6 +19,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QRect, QTimer, Slot
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QDialog,
     QDialogButtonBox,
@@ -602,13 +603,25 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         shortcut.activated.connect(self.close)
 
-        if fullscreen:
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-            self.resize(1280, 720)
-            self.showFullScreen()
-        else:
-            self.resize(1280, 720)
-            self.show()
+        self._setup_window()
+
+    # ------------------------------------------------------------------
+    # Setup fenêtre
+    # ------------------------------------------------------------------
+
+    def _setup_window(self) -> None:
+        """Adapte la taille à la résolution réelle de l'écran."""
+        screen = QApplication.primaryScreen()
+        screen_size = screen.size()
+        screen_w = screen_size.width()
+        screen_h = screen_size.height()
+
+        print(f"[IHM] Résolution détectée : {screen_w}×{screen_h}")
+
+        # Plein écran sans barre de titre
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setGeometry(0, 0, screen_w, screen_h)
+        self.showFullScreen()
 
     # ------------------------------------------------------------------
     # Construction de l'interface
