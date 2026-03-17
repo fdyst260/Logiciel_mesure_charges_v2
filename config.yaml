@@ -13,8 +13,12 @@ thresholds:
 scaling:
   force_volt_max: 10.0
   force_newton_max: 5000.0
+  force_unit: "N"
+  force_name: "Capteur piézoélectrique"
   position_volt_max: 10.0
   position_mm_max: 100.0
+  position_unit: "mm"
+  position_name: "Capteur déplacement"
 
 gpio:
   trigger_pin: 17
