@@ -38,39 +38,49 @@ def fake_acquisition_loop(
     calibrator   : ignore (valeurs generees directement en unites physiques)
     inject_fault : si True, injecte un pic a 5200 N a position 55 mm (NOK)
     """
-    # Attente avant trigger simule (~1 seconde, interruptible)
-    print("[SIM] Attente trigger simule (1 s)...")
-    for _ in range(100):
-        if stop_event.is_set():
-            return
-        time.sleep(0.01)
-    print("[SIM] Trigger simule")
+    cycle_num = 0
 
-    t_start = time.perf_counter()
-    samples_sent = 0
+    while not stop_event.is_set():
+        cycle_num += 1
 
-    while samples_sent < _TOTAL_SAMPLES and not stop_event.is_set():
-        chunk_end = min(samples_sent + CHUNK_SIZE, _TOTAL_SAMPLES)
+        print(f"[SIM] Attente trigger simule cycle #{cycle_num}...")
+        for _ in range(100):
+            if stop_event.is_set():
+                return
+            time.sleep(0.01)
+        print(f"[SIM] Trigger simule cycle #{cycle_num}")
 
-        block: list[tuple[float, float, float]] = []
-        for i in range(samples_sent, chunk_end):
-            t = t_start + i / SAMPLE_RATE_HZ
-            # Position lineaire 0 -> 100 mm sur toute la duree du cycle
-            pos_mm = i * 100.0 / _TOTAL_SAMPLES
-            force_n = _compute_force(pos_mm, inject_fault)
-            block.append((t, force_n, pos_mm))
+        t_start = time.perf_counter()
+        samples_sent = 0
 
+        while samples_sent < _TOTAL_SAMPLES and not stop_event.is_set():
+            chunk_end = min(samples_sent + CHUNK_SIZE, _TOTAL_SAMPLES)
+            block: list[tuple[float, float, float]] = []
+            for i in range(samples_sent, chunk_end):
+                t = t_start + i / SAMPLE_RATE_HZ
+                pos_mm = i * 100.0 / _TOTAL_SAMPLES
+                force_n = _compute_force(pos_mm, inject_fault)
+                block.append((t, force_n, pos_mm))
+            try:
+                data_queue.put(block, timeout=0.2)
+            except queue.Full:
+                break
+            samples_sent = chunk_end
+            time.sleep(CHUNK_SIZE / SAMPLE_RATE_HZ)
+
+        print(f"[SIM] Cycle #{cycle_num} termine.")
+
+        # Sentinelle fin de cycle
         try:
-            data_queue.put(block, timeout=0.2)
+            data_queue.put(None, timeout=0.5)
         except queue.Full:
-            break
+            pass
 
-        samples_sent = chunk_end
-
-        # Cadence temps reel : pause proportionnelle a la taille du chunk
-        time.sleep(CHUNK_SIZE / SAMPLE_RATE_HZ)
-
-    print("[SIM] Cycle simule termine.")
+        # Pause inter-cycles ~2s
+        for _ in range(200):
+            if stop_event.is_set():
+                return
+            time.sleep(0.01)
 
 
 def _compute_force(pos_mm: float, inject_fault: bool) -> float:

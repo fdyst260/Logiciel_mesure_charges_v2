@@ -38,6 +38,7 @@ class AcquisitionBridge(QObject):
 
     new_point: Signal = Signal(float, float, float)  # t, force_n, pos_mm
     cycle_finished: Signal = Signal(str)             # "PASS" ou "NOK"
+    cycle_started: Signal = Signal()
 
     def emit_point(self, t: float, force_n: float, pos_mm: float) -> None:
         """Appele depuis le thread DataProcessor — thread-safe via Qt."""
@@ -46,6 +47,10 @@ class AcquisitionBridge(QObject):
     def emit_cycle_finished(self, result: str) -> None:
         """Appele depuis le thread DataProcessor — thread-safe via Qt."""
         self.cycle_finished.emit(result)
+
+    def emit_cycle_started(self) -> None:
+        """Appele depuis le thread DataProcessor — thread-safe via Qt."""
+        self.cycle_started.emit()
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +150,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
     window = MainWindow(pm_id=1, tools=tools, fullscreen=fullscreen)
     bridge.new_point.connect(window.on_new_point)
     bridge.cycle_finished.connect(window.on_cycle_finished)
+    bridge.cycle_started.connect(window.on_cycle_started)
 
     # 3. Infrastructure d'acquisition
     data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
@@ -162,11 +168,11 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         pm_id=pm_id,
         point_callback=bridge.emit_point,
         cycle_callback=bridge.emit_cycle_finished,
+        cycle_started_callback=bridge.emit_cycle_started,
     )
 
     # 4. Demarrage du thread DataProcessor
     processor.start()
-    window.on_cycle_started()
 
     # 5. Demarrage du thread d'acquisition (simulateur ou reel)
     acq_fn = fake_acquisition_loop if use_simulator else acquisition_loop
