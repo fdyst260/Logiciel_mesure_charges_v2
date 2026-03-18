@@ -8,6 +8,9 @@ Modes de lancement :
 
 from __future__ import annotations
 
+import os
+os.environ.setdefault("QT_IM_MODULE", "none")
+
 import queue
 import sys
 import threading

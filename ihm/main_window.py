@@ -551,6 +551,308 @@ class GraphWidget(QWidget):
 
 
 # ===========================================================================
+# NumpadDialog — pavé numérique tactile modal
+# ===========================================================================
+
+class NumpadDialog(QDialog):
+    """Pavé numérique tactile modal — retourne une valeur float ou str.
+
+    Usage :
+        dlg = NumpadDialog(title="Seuil force", unit="N", value="4200.0", parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            val = dlg.value()  # str
+    """
+
+    def __init__(
+        self,
+        title: str = "Saisie",
+        unit: str = "",
+        value: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setFixedSize(360, 460)
+        self.setStyleSheet("""
+            QDialog { background-color: #1e1e1e; }
+            QLabel#numpad_title {
+                color: #9e9e9e; font-size: 13px; font-weight: 600;
+            }
+            QLabel#numpad_unit {
+                color: #9e9e9e; font-size: 13px;
+            }
+            QLineEdit#numpad_display {
+                background-color: #2a2a2a;
+                color: #ffffff;
+                border: 2px solid #378ADD;
+                border-radius: 8px;
+                font-size: 28px;
+                font-weight: bold;
+                padding: 8px 12px;
+                min-height: 52px;
+            }
+            QPushButton#numpad_key {
+                background-color: #2a2a2a;
+                color: #e0e0e0;
+                font-size: 20px;
+                font-weight: bold;
+                border: 1px solid #444;
+                border-radius: 8px;
+                min-height: 56px;
+            }
+            QPushButton#numpad_key:pressed { background-color: #1565c0; }
+            QPushButton#numpad_backspace {
+                background-color: #2a2a2a;
+                color: #ef9a9a;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 8px;
+                min-height: 56px;
+            }
+            QPushButton#numpad_backspace:pressed { background-color: #3a1a1a; }
+            QPushButton#numpad_ok {
+                background-color: #1a3a1a;
+                color: #4caf50;
+                font-size: 18px;
+                font-weight: bold;
+                border: 2px solid #2d7a2d;
+                border-radius: 8px;
+                min-height: 56px;
+            }
+            QPushButton#numpad_ok:pressed { background-color: #2d7a2d; }
+            QPushButton#numpad_cancel {
+                background-color: #3a1a1a;
+                color: #ef9a9a;
+                font-size: 18px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 8px;
+                min-height: 56px;
+            }
+            QPushButton#numpad_cancel:pressed { background-color: #c62828; }
+        """)
+        self._build_ui(title, unit, value)
+
+    def _build_ui(self, title: str, unit: str, value: str) -> None:
+        from PySide6.QtWidgets import QGridLayout
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+
+        lbl_title = QLabel(title)
+        lbl_title.setObjectName("numpad_title")
+        layout.addWidget(lbl_title)
+
+        display_row = QHBoxLayout()
+        self._display = QLineEdit(value)
+        self._display.setObjectName("numpad_display")
+        self._display.setReadOnly(True)
+        self._display.setAlignment(Qt.AlignmentFlag.AlignRight)
+        display_row.addWidget(self._display)
+        if unit:
+            lbl_unit = QLabel(unit)
+            lbl_unit.setObjectName("numpad_unit")
+            lbl_unit.setFixedWidth(36)
+            display_row.addWidget(lbl_unit)
+        layout.addLayout(display_row)
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        keys = [
+            ("7", 0, 0), ("8", 0, 1), ("9", 0, 2),
+            ("4", 1, 0), ("5", 1, 1), ("6", 1, 2),
+            ("1", 2, 0), ("2", 2, 1), ("3", 2, 2),
+            ("0", 3, 0), (".", 3, 1),
+        ]
+        for label, row, col in keys:
+            btn = QPushButton(label)
+            btn.setObjectName("numpad_key")
+            btn.clicked.connect(lambda _, c=label: self._key_press(c))
+            grid.addWidget(btn, row, col)
+
+        btn_back = QPushButton("⌫")
+        btn_back.setObjectName("numpad_backspace")
+        btn_back.clicked.connect(self._backspace)
+        grid.addWidget(btn_back, 3, 2)
+
+        layout.addLayout(grid)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel.setObjectName("numpad_cancel")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("✓  OK")
+        btn_ok.setObjectName("numpad_ok")
+        btn_ok.clicked.connect(self.accept)
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        layout.addLayout(btn_row)
+
+    def _key_press(self, char: str) -> None:
+        current = self._display.text()
+        if char == "." and "." in current:
+            return
+        self._display.setText(current + char)
+
+    def _backspace(self) -> None:
+        self._display.setText(self._display.text()[:-1])
+
+    def value(self) -> str:
+        return self._display.text()
+
+
+# ===========================================================================
+# AlphaNumpadDialog — clavier alphanumérique tactile modal
+# ===========================================================================
+
+class AlphaNumpadDialog(QDialog):
+    """Clavier alphanumérique tactile modal pour saisir un nom (ex: nom PM).
+
+    Usage :
+        dlg = AlphaNumpadDialog(title="Nom du PM", value="GTD14", parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            name = dlg.value()
+    """
+
+    _ROWS = [
+        list("AZERTYUIOP"),
+        list("QSDFGHJKLM"),
+        list("WXCVBN_-. "),
+    ]
+
+    def __init__(
+        self,
+        title: str = "Saisie texte",
+        value: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setFixedSize(660, 400)
+        self.setStyleSheet("""
+            QDialog { background-color: #1e1e1e; }
+            QLabel { color: #9e9e9e; font-size: 13px; font-weight: 600; }
+            QLineEdit#alpha_display {
+                background-color: #2a2a2a;
+                color: #ffffff;
+                border: 2px solid #378ADD;
+                border-radius: 8px;
+                font-size: 22px;
+                font-weight: bold;
+                padding: 8px 12px;
+                min-height: 48px;
+            }
+            QPushButton#alpha_key {
+                background-color: #2a2a2a;
+                color: #e0e0e0;
+                font-size: 16px;
+                font-weight: bold;
+                border: 1px solid #444;
+                border-radius: 6px;
+                min-height: 48px;
+                min-width: 48px;
+            }
+            QPushButton#alpha_key:pressed { background-color: #1565c0; }
+            QPushButton#alpha_special {
+                background-color: #2a2a2a;
+                color: #ef9a9a;
+                font-size: 14px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 6px;
+                min-height: 48px;
+            }
+            QPushButton#alpha_special:pressed { background-color: #3a1a1a; }
+            QPushButton#alpha_ok {
+                background-color: #1a3a1a;
+                color: #4caf50;
+                font-size: 16px;
+                font-weight: bold;
+                border: 2px solid #2d7a2d;
+                border-radius: 6px;
+                min-height: 48px;
+            }
+            QPushButton#alpha_ok:pressed { background-color: #2d7a2d; }
+            QPushButton#alpha_cancel {
+                background-color: #3a1a1a;
+                color: #ef9a9a;
+                font-size: 16px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 6px;
+                min-height: 48px;
+            }
+        """)
+        self._build_ui(title, value)
+
+    def _build_ui(self, title: str, value: str) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
+
+        layout.addWidget(QLabel(title))
+
+        self._display = QLineEdit(value)
+        self._display.setObjectName("alpha_display")
+        self._display.setReadOnly(True)
+        layout.addWidget(self._display)
+
+        for row_chars in self._ROWS:
+            row = QHBoxLayout()
+            row.setSpacing(5)
+            for ch in row_chars:
+                label = "ESP" if ch == " " else ch
+                btn = QPushButton(label)
+                btn.setObjectName("alpha_key")
+                btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                btn.clicked.connect(lambda _, c=ch: self._key_press(c))
+                row.addWidget(btn)
+            layout.addLayout(row)
+
+        num_row = QHBoxLayout()
+        num_row.setSpacing(5)
+        for ch in "0123456789":
+            btn = QPushButton(ch)
+            btn.setObjectName("alpha_key")
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            btn.clicked.connect(lambda _, c=ch: self._key_press(c))
+            num_row.addWidget(btn)
+        btn_back = QPushButton("⌫")
+        btn_back.setObjectName("alpha_special")
+        btn_back.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        btn_back.clicked.connect(self._backspace)
+        num_row.addWidget(btn_back)
+        layout.addLayout(num_row)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel.setObjectName("alpha_cancel")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("✓  OK")
+        btn_ok.setObjectName("alpha_ok")
+        btn_ok.clicked.connect(self.accept)
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        layout.addLayout(btn_row)
+
+    def _key_press(self, char: str) -> None:
+        self._display.setText(self._display.text() + char)
+
+    def _backspace(self) -> None:
+        self._display.setText(self._display.text()[:-1])
+
+    def value(self) -> str:
+        return self._display.text()
+
+
+# ===========================================================================
 # PmSelectorDialog — sélecteur de Programme de Mesure
 # ===========================================================================
 
@@ -677,12 +979,13 @@ class PinDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Accès réglages")
         self.setModal(True)
-        self.setFixedSize(360, 250)
+        self.setFixedSize(360, 300)
         self.setStyleSheet(PINSTYLE)
 
         self._attempts = 0
         self._locked = False
         self._lockout_remaining = _LOCKOUT_SECONDS
+        self._pin_value: str = ""
         self._lockout_timer = QTimer(self)
         self._lockout_timer.setInterval(1000)
         self._lockout_timer.timeout.connect(self._on_lockout_tick)
@@ -695,13 +998,16 @@ class PinDialog(QDialog):
         layout.addWidget(self._label)
 
         self._pin_edit = QLineEdit()
-        self._pin_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self._pin_edit.setMaxLength(4)
+        self._pin_edit.setReadOnly(True)
         self._pin_edit.setPlaceholderText("••••")
         self._pin_edit.setMinimumHeight(56)
         self._pin_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._pin_edit.returnPressed.connect(self._validate)
         layout.addWidget(self._pin_edit)
+
+        btn_kbd = QPushButton("⌨   Saisir le code")
+        btn_kbd.setMinimumHeight(52)
+        btn_kbd.clicked.connect(self._open_numpad)
+        layout.addWidget(btn_kbd)
 
         self._error_label = QLabel("")
         self._error_label.setStyleSheet("color: #E24B4A; font-size: 12px;")
@@ -716,10 +1022,17 @@ class PinDialog(QDialog):
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
 
+    def _open_numpad(self) -> None:
+        dlg = NumpadDialog(title="Code PIN", unit="", value="", parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            val = dlg.value()
+            self._pin_value = val
+            self._pin_edit.setText("•" * len(val))
+
     def _validate(self) -> None:
         if self._locked:
             return
-        if self._pin_edit.text() == _PIN_CODE:
+        if self._pin_value == _PIN_CODE:
             self.accept()
         else:
             self._attempts += 1
@@ -728,12 +1041,12 @@ class PinDialog(QDialog):
                 self._error_label.setText(f"PIN incorrect — {remaining} tentative(s).")
             else:
                 self._start_lockout()
+            self._pin_value = ""
             self._pin_edit.clear()
 
     def _start_lockout(self) -> None:
         self._locked = True
         self._lockout_remaining = _LOCKOUT_SECONDS
-        self._pin_edit.setEnabled(False)
         self._lockout_timer.start()
         self._update_lockout_label()
 
@@ -743,7 +1056,6 @@ class PinDialog(QDialog):
             self._lockout_timer.stop()
             self._locked = False
             self._attempts = 0
-            self._pin_edit.setEnabled(True)
             self._error_label.setText("Vous pouvez réessayer.")
         else:
             self._update_lockout_label()
