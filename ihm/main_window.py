@@ -15,6 +15,9 @@ from __future__ import annotations
 import collections
 import csv
 from datetime import datetime
+from pathlib import Path
+
+import yaml
 
 from PySide6.QtCore import Qt, QRect, QTimer, Slot
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QKeySequence, QShortcut
@@ -54,34 +57,62 @@ from core.models import EvaluationTool, EvaluationType
 # Constantes de couleur — thème industriel sombre (maXYmos style)
 # ---------------------------------------------------------------------------
 COLORS: dict[str, str] = {
-    # Fond fenêtre selon état
-    "bg_idle":        "#111111",
-    "bg_acquiring":   "#0a1628",
-    "bg_ok":          "#051a12",
-    "bg_nok":         "#1a0505",
-    # Graphique
-    "bg_graph":       "#111111",
+    # États machine (IEC 60073)
+    "ok_bg":          "#1a3a1a",
+    "ok_border":      "#2d7a2d",
+    "ok_text":        "#4caf50",
+    "nok_bg":         "#3a1a1a",
+    "nok_border":     "#c62828",
+    "nok_text":       "#ef5350",
+    "running_bg":     "#1a2a3a",
+    "running_border": "#1565c0",
+    "idle_bg":        "#1e1e1e",
+    "idle_text":      "#9e9e9e",
+    # Fond fenêtre dynamique selon état
+    "win_idle":       "#121212",
+    "win_running":    "#0d1a26",
+    "win_ok":         "#0d1a0d",
+    "win_nok":        "#1a0d0d",
+    # Alarme seuil (jaune ambre IEC 60073)
+    "alarm":          "#f57f17",
+    "alarm_bg":       "#2a2a1a",
+    # Courbe
+    "curve_running":  "#1976D2",
+    "curve_ok":       "#388E3C",
+    "curve_nok":      "#D32F2F",
+    "curve_history":  "#616161",
+    # Outils graphique
+    "nopass_fill":    "#c62828",
+    "nopass_border":  "#ef5350",
+    "unibox_border":  "#f57f17",
+    "envelope_border":"#1565c0",
+    "envelope_fill":  "#1565c0",
+    # Interface générale
+    "bg_main":        "#121212",
+    "bg_panel":       "#1e1e1e",
+    "bg_button":      "#252525",
+    "text_primary":   "#e0e0e0",
+    "text_secondary": "#9e9e9e",
+    "border":         "#333333",
+    "settings_btn":   "#b45309",
+    "nav_active":     "#1565c0",
+    "export_btn":     "#1a3a1a",
+    "raz_btn":        "#3a1a1a",
+    # Aliases pour compatibilité avec l'existant
+    "bg_graph":       "#121212",
     "grid":           "#222222",
     "axis_text":      "#556677",
-    "curve_live":     "#1D9E75",
-    "curve_ok":       "#1D9E75",
-    "curve_nok":      "#E24B4A",
-    "curve_history":  "#445566",
-    # Outils d'évaluation
-    "tool_no_pass":   "#d32f2f",
-    "tool_unibox":    "#EF9F27",
+    "curve_live":     "#1976D2",
+    "tool_no_pass":   "#c62828",
+    "tool_unibox":    "#f57f17",
     "tool_envelope":  "#1565c0",
-    # Badges résultat
-    "result_ok":      "#085041",
-    "result_nok":     "#791F1F",
-    "result_idle":    "#2a2a2a",
-    # UI générale
-    "text_primary":   "#e0e0e0",
-    "text_secondary": "#888888",
-    "panel_bg":       "#181818",
+    "result_ok":      "#1a3a1a",
+    "result_nok":     "#3a1a1a",
+    "result_idle":    "#1e1e1e",
+    "panel_bg":       "#1e1e1e",
     "separator":      "#333333",
-    "progress_ok":    "#1D9E75",
-    "progress_warn":  "#E24B4A",
+    "progress_ok":    "#4caf50",
+    "progress_warn":  "#ef5350",
 }
 
 _PIN_CODE = "1234"
@@ -91,117 +122,106 @@ _LOCKOUT_SECONDS = 30
 # ---------------------------------------------------------------------------
 # Feuille de style globale QSS
 # ---------------------------------------------------------------------------
-STYLESHEET = """
-QMainWindow, QWidget#central {
-    background-color: #111111;
-    color: #e0e0e0;
+STYLESHEET = f"""
+QMainWindow, QWidget#central {{
+    background-color: {COLORS['bg_main']};
+    color: {COLORS['text_primary']};
     font-family: 'Segoe UI', Arial, sans-serif;
-}
-QLabel {
+}}
+QLabel {{
     background-color: transparent;
     font-size: 15px;
     font-weight: 500;
-}
-QLabel#result_label {
-    font-size: 58px;
+}}
+QLabel#result_label {{
+    font-size: 52px;
     font-weight: bold;
     border-radius: 10px;
-    padding: 8px;
-}
-QLabel#counter_ok   { color: #1D9E75; font-size: 22px; font-weight: bold; }
-QLabel#counter_nok  { color: #E24B4A; font-size: 22px; font-weight: bold; }
-QLabel#counter_tot  { color: #e0e0e0; font-size: 22px; font-weight: bold; }
-QLabel#datetime_label {
-    font-size: 12px;
-    color: #888;
-}
-QLabel#pm_section_title {
-    font-size: 13px;
-    font-weight: bold;
-    color: #378ADD;
-}
-QLabel#pm_btn_label {
-    font-size: 17px;
-    font-weight: bold;
-    color: #e0e0e0;
-}
-QLabel#live_label   { font-size: 15px; font-weight: 600; color: #888; }
-QLabel#live_value   { font-size: 26px; font-weight: bold; color: #e0e0e0; }
-QLabel#peak_label   { font-size: 15px; font-weight: 600; color: #888; }
-QLabel#peak_value   { font-size: 22px; font-weight: bold; color: #378ADD; }
+    padding: 10px;
+}}
+QLabel#counter_ok   {{ color: {COLORS['ok_text']}; font-size: 22px; font-weight: bold; }}
+QLabel#counter_nok  {{ color: {COLORS['nok_text']}; font-size: 22px; font-weight: bold; }}
+QLabel#counter_tot  {{ color: {COLORS['text_primary']}; font-size: 22px; font-weight: bold; }}
+QLabel#datetime_label {{ font-size: 12px; color: {COLORS['text_secondary']}; }}
+QLabel#pm_section_title {{ font-size: 13px; font-weight: bold; color: #378ADD; }}
+QLabel#pm_btn_label {{ font-size: 17px; font-weight: bold; color: {COLORS['text_primary']}; }}
+QLabel#live_label   {{ font-size: 15px; font-weight: 600; color: {COLORS['text_secondary']}; }}
+QLabel#live_value   {{ font-size: 26px; font-weight: bold; color: {COLORS['text_primary']}; }}
+QLabel#peak_label   {{ font-size: 15px; font-weight: 600; color: {COLORS['text_secondary']}; }}
+QLabel#peak_value   {{ font-size: 22px; font-weight: bold; color: #378ADD; }}
 
-QProgressBar {
+QProgressBar {{
     border: none;
-    border-radius: 3px;
+    border-radius: 4px;
     background-color: #2a2a2a;
-    max-height: 8px;
-}
-QProgressBar::chunk {
-    border-radius: 3px;
-    background-color: #1D9E75;
-}
-QProgressBar[alarm="true"]::chunk {
-    background-color: #E24B4A;
-}
+    max-height: 10px;
+}}
+QProgressBar::chunk {{
+    border-radius: 4px;
+    background-color: {COLORS['ok_text']};
+}}
+QProgressBar[alarm="true"]::chunk {{
+    background-color: {COLORS['alarm']};
+}}
 
-QPushButton#btn_pm {
-    background-color: #2a2a2a;
-    color: #e0e0e0;
+QPushButton#btn_pm {{
+    background-color: {COLORS['bg_button']};
+    color: {COLORS['text_primary']};
     font-size: 14px;
     font-weight: bold;
-    border: 1px solid #444;
+    border: 1px solid {COLORS['border']};
     border-radius: 6px;
     padding: 6px;
-}
-QPushButton#btn_pm:pressed { background-color: #185FA5; }
+}}
+QPushButton#btn_pm:pressed {{ background-color: {COLORS['nav_active']}; }}
 
-QPushButton#btn_settings {
-    background-color: #854F0B;
+QPushButton#btn_settings {{
+    background-color: {COLORS['settings_btn']};
     color: #ffffff;
     font-size: 16px;
     font-weight: bold;
     border-radius: 8px;
-    border: none;
+    border: 1px solid #d97706;
     min-height: 60px;
-}
-QPushButton#btn_settings:pressed { background-color: #6B3F09; }
+}}
+QPushButton#btn_settings:pressed {{ background-color: #92400e; }}
 
-QPushButton#nav_btn {
-    background-color: #252525;
-    color: #cccccc;
+QPushButton#nav_btn {{
+    background-color: {COLORS['bg_button']};
+    color: {COLORS['text_secondary']};
     font-size: 15px;
     font-weight: 600;
     border-radius: 8px;
-    border: 1px solid #383838;
+    border: 1px solid {COLORS['border']};
     min-height: 58px;
-}
-QPushButton#nav_btn:checked, QPushButton#nav_btn:pressed {
-    background-color: #185FA5;
+}}
+QPushButton#nav_btn:checked, QPushButton#nav_btn:pressed {{
+    background-color: {COLORS['nav_active']};
     color: #ffffff;
-    border-color: #378ADD;
-}
-QPushButton#nav_btn_green {
-    background-color: #085041;
-    color: #9FE1CB;
+    border-color: #42a5f5;
+}}
+QPushButton#nav_btn_green {{
+    background-color: {COLORS['export_btn']};
+    color: #81c784;
     font-size: 15px;
     font-weight: 600;
     border-radius: 8px;
-    border: 1px solid #0F6E56;
+    border: 1px solid {COLORS['ok_border']};
     min-height: 58px;
-}
-QPushButton#nav_btn_red {
-    background-color: #3d1515;
-    color: #F7C1C1;
+}}
+QPushButton#nav_btn_red {{
+    background-color: {COLORS['raz_btn']};
+    color: #ef9a9a;
     font-size: 15px;
     font-weight: 600;
     border-radius: 8px;
-    border: 1px solid #791F1F;
+    border: 1px solid {COLORS['nok_border']};
     min-height: 58px;
-}
-QFrame#separator {
-    background-color: #333333;
+}}
+QFrame#separator {{
+    background-color: {COLORS['border']};
     max-height: 1px;
-}
+}}
 """
 
 # ---------------------------------------------------------------------------
@@ -254,6 +274,7 @@ class GraphWidget(QWidget):
         self._display_mode: DisplayMode = DisplayMode.FORCE_POSITION
         self._history_mode: bool = False
         self._tools: list[EvaluationTool] = []
+        self._tools_config: dict = {}
         self._current_result: str | None = None
 
     # ------------------------------------------------------------------
@@ -262,6 +283,11 @@ class GraphWidget(QWidget):
 
     def set_tools(self, tools: list[EvaluationTool]) -> None:
         self._tools = tools
+        self.update()
+
+    def set_tools_config(self, tools_config: dict) -> None:
+        """Charge la configuration des outils depuis config.yaml (dict brut)."""
+        self._tools_config = tools_config
         self.update()
 
     def set_display_mode(self, mode: DisplayMode) -> None:
@@ -404,13 +430,66 @@ class GraphWidget(QWidget):
     def _draw_tool_overlays(self, painter: QPainter, rect: QRect) -> None:
         if self._display_mode != DisplayMode.FORCE_POSITION:
             return
-        for tool in self._tools:
-            if tool.tool_type == EvaluationType.NO_PASS:
-                self._draw_no_pass(painter, tool, rect)
-            elif tool.tool_type == EvaluationType.UNI_BOX:
-                self._draw_unibox(painter, tool, rect)
-            elif tool.tool_type == EvaluationType.ENVELOPE:
-                self._draw_envelope(painter, tool, rect)
+        # Priorité : config YAML si disponible, sinon EvaluationTool
+        if self._tools_config:
+            self._draw_overlays_from_config(painter, rect)
+        else:
+            for tool in self._tools:
+                if tool.tool_type == EvaluationType.NO_PASS:
+                    self._draw_no_pass(painter, tool, rect)
+                elif tool.tool_type == EvaluationType.UNI_BOX:
+                    self._draw_unibox(painter, tool, rect)
+                elif tool.tool_type == EvaluationType.ENVELOPE:
+                    self._draw_envelope(painter, tool, rect)
+
+    def _draw_overlays_from_config(self, painter: QPainter, rect: QRect) -> None:
+        """Dessine les outils depuis le dict config.yaml (couleurs IEC 60073)."""
+        _xr, yr = self._get_ranges()
+
+        np_d = self._tools_config.get("no_pass", {})
+        if np_d.get("enabled"):
+            x1, y1 = self._to_px(np_d["x_min"], yr, rect)
+            x2, y2 = self._to_px(np_d["x_max"], np_d["y_limit"], rect)
+            fill = QColor(198, 40, 40, 60)
+            painter.fillRect(x1, y1, x2 - x1, y2 - y1, fill)
+            painter.setPen(QPen(QColor(COLORS["nopass_border"]), 1.5, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(x1, y1, x2 - x1, y2 - y1)
+
+        ub_d = self._tools_config.get("uni_box", {})
+        if ub_d.get("enabled"):
+            x1, y1 = self._to_px(ub_d["box_x_min"], ub_d["box_y_max"], rect)
+            x2, y2 = self._to_px(ub_d["box_x_max"], ub_d["box_y_min"], rect)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(COLORS["unibox_border"]), 2, Qt.PenStyle.DashLine))
+            painter.drawRect(x1, y1, x2 - x1, y2 - y1)
+
+        env_d = self._tools_config.get("envelope", {})
+        if env_d.get("enabled"):
+            lower = env_d.get("lower_curve", [])
+            upper = env_d.get("upper_curve", [])
+            if len(lower) >= 2 and len(upper) >= 2:
+                from PySide6.QtGui import QPolygon
+                from PySide6.QtCore import QPoint
+                poly = QPolygon()
+                for x, y in lower:
+                    px, py = self._to_px(x, y, rect)
+                    poly.append(QPoint(px, py))
+                for x, y in reversed(upper):
+                    px, py = self._to_px(x, y, rect)
+                    poly.append(QPoint(px, py))
+                fill_env = QColor(21, 101, 192, 20)
+                painter.setBrush(fill_env)
+                painter.setPen(QPen(Qt.PenStyle.NoPen))
+                painter.drawPolygon(poly)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                pen_env = QPen(QColor(COLORS["envelope_border"]), 1.5, Qt.PenStyle.DashLine)
+                painter.setPen(pen_env)
+                for curve in (lower, upper):
+                    for i in range(len(curve) - 1):
+                        px1, py1 = self._to_px(curve[i][0], curve[i][1], rect)
+                        px2, py2 = self._to_px(curve[i + 1][0], curve[i + 1][1], rect)
+                        painter.drawLine(px1, py1, px2, py2)
 
     def _draw_no_pass(self, painter: QPainter, tool: EvaluationTool, rect: QRect) -> None:
         if None in (tool.x_min, tool.x_max, tool.y_limit):
@@ -596,9 +675,21 @@ class MainWindow(QMainWindow):
         # Log production
         self._production_log: list[tuple[int, float, float, str, str]] = []
 
+        # Flag premier point du cycle courant
+        self._cycle_started: bool = False
+
         self.setStyleSheet(STYLESHEET)
         self._build_ui()
         self._apply_state_style("idle")
+
+        # Charger les outils depuis config.yaml
+        try:
+            cfg_path = Path(__file__).parent.parent / "config.yaml"
+            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+            pm_tools = cfg.get("programmes", {}).get(self._pm_id, {}).get("tools", {})
+            self._graph.set_tools_config(pm_tools)
+        except Exception:
+            pass
 
         # Timer 30 FPS
         self._refresh_timer = QTimer(self)
@@ -701,13 +792,14 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
 
         # 1. Badge résultat — 140px
-        self._result_badge = QLabel("EN ATTENTE")
+        self._result_badge = QLabel("ATTENTE")
         self._result_badge.setObjectName("result_label")
         self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._result_badge.setFixedHeight(140)
         self._result_badge.setStyleSheet(
-            f"background-color: {COLORS['result_idle']}; color: #ffffff; "
-            "border-radius: 10px; font-size: 52px; font-weight: bold;"
+            f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
+            "border: 2px solid #333; border-radius: 10px; "
+            "font-size: 36px; font-weight: bold; padding: 10px;"
         )
         layout.addWidget(self._result_badge)
 
@@ -926,13 +1018,48 @@ class MainWindow(QMainWindow):
     def _apply_state_style(self, state: str) -> None:
         """Modifie le fond de la page production sans écraser STYLESHEET."""
         color_map = {
-            "idle":      "#111111",
-            "acquiring": "#0a1628",
-            "ok":        "#051a12",
-            "nok":       "#1a0505",
+            "idle":      COLORS["win_idle"],
+            "acquiring": COLORS["win_running"],
+            "ok":        COLORS["win_ok"],
+            "nok":       COLORS["win_nok"],
         }
-        bg = color_map.get(state, "#111111")
+        bg = color_map.get(state, COLORS["win_idle"])
         self.centralWidget().setStyleSheet(f"background-color: {bg};")
+
+    def _update_result_display(self, status: str) -> None:
+        """Met à jour badge résultat + fond fenêtre selon l'état."""
+        if status == "ok":
+            self._result_badge.setText("OK")
+            self._result_badge.setStyleSheet(
+                f"background-color: {COLORS['ok_bg']}; color: {COLORS['ok_text']}; "
+                f"border: 2px solid {COLORS['ok_border']}; border-radius: 10px; "
+                "font-size: 52px; font-weight: bold; padding: 10px;"
+            )
+            self._apply_state_style("ok")
+        elif status == "nok":
+            self._result_badge.setText("NOK")
+            self._result_badge.setStyleSheet(
+                f"background-color: {COLORS['nok_bg']}; color: {COLORS['nok_text']}; "
+                f"border: 2px solid {COLORS['nok_border']}; border-radius: 10px; "
+                "font-size: 52px; font-weight: bold; padding: 10px;"
+            )
+            self._apply_state_style("nok")
+        elif status == "running":
+            self._result_badge.setText("EN COURS")
+            self._result_badge.setStyleSheet(
+                f"background-color: {COLORS['running_bg']}; color: #42a5f5; "
+                f"border: 2px solid {COLORS['running_border']}; border-radius: 10px; "
+                "font-size: 36px; font-weight: bold; padding: 10px;"
+            )
+            self._apply_state_style("acquiring")
+        else:  # idle
+            self._result_badge.setText("ATTENTE")
+            self._result_badge.setStyleSheet(
+                f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
+                "border: 2px solid #333; border-radius: 10px; "
+                "font-size: 36px; font-weight: bold; padding: 10px;"
+            )
+            self._apply_state_style("idle")
 
     # ------------------------------------------------------------------
     # Slots de données (connectés depuis main.py via AcquisitionBridge)
@@ -940,7 +1067,10 @@ class MainWindow(QMainWindow):
 
     @Slot(float, float, float)
     def on_new_point(self, t: float, force_n: float, pos_mm: float) -> None:
-        """Accumule un point dans le buffer — pas de redesssin immédiat."""
+        """Accumule un point dans le buffer — pas de redessin immédiat."""
+        if not self._cycle_started:
+            self._cycle_started = True
+            self._update_result_display("running")
         self._point_buffer.append((t, force_n, pos_mm))
         self._last_force = force_n
         self._last_pos = pos_mm
@@ -952,22 +1082,13 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def on_cycle_finished(self, result: str) -> None:
         """Reçoit le résultat final du cycle (PASS ou NOK)."""
+        self._cycle_started = False
         if result == "PASS":
             self._count_ok += 1
-            self._result_badge.setText("OK")
-            self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['result_ok']}; color: white; "
-                "border-radius: 10px; font-size: 52px; font-weight: bold;"
-            )
-            self._apply_state_style("ok")
+            self._update_result_display("ok")
         else:
             self._count_nok += 1
-            self._result_badge.setText("NOK")
-            self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['result_nok']}; color: white; "
-                "border-radius: 10px; font-size: 52px; font-weight: bold;"
-            )
-            self._apply_state_style("nok")
+            self._update_result_display("nok")
 
         self._update_counters()
         self._fmax_label.setText(f"{self._cycle_fmax:.0f} N")
@@ -983,17 +1104,13 @@ class MainWindow(QMainWindow):
 
     def on_cycle_started(self) -> None:
         """Appelé quand un nouveau cycle commence."""
+        self._cycle_started = False
         self._cycle_fmax = 0.0
         self._cycle_xmax = 0.0
         self._last_force = 0.0
         self._last_pos = 0.0
         self._graph.start_new_cycle()
-        self._result_badge.setText("...")
-        self._result_badge.setStyleSheet(
-            f"background-color: {COLORS['result_idle']}; color: #ffffff; "
-            "border-radius: 10px; font-size: 40px; font-weight: bold;"
-        )
-        self._apply_state_style("acquiring")
+        self._update_result_display("idle")
 
     # ------------------------------------------------------------------
     # Timer 30 FPS
