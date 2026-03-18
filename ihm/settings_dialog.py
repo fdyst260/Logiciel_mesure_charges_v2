@@ -46,6 +46,104 @@ from config import PM_DEFINITIONS
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
+
+# ---------------------------------------------------------------------------
+# Helpers clavier virtuel (NumpadDialog / AlphaNumpadDialog)
+# ---------------------------------------------------------------------------
+
+def _make_numpad_btn(
+    value: str,
+    suffix: str = "",
+    title: str = "Saisie",
+    parent=None,
+) -> QPushButton:
+    """Crée un QPushButton qui ouvre NumpadDialog au clic."""
+    from ihm.main_window import NumpadDialog
+
+    btn = QPushButton(f"{value}{suffix}")
+    btn.setProperty("numpad_value", value)
+    btn.setProperty("numpad_suffix", suffix)
+    btn.setStyleSheet("""
+        QPushButton {
+            background-color: #2a2a2a;
+            color: #ffffff;
+            border: 1.5px solid #444;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 15px;
+            min-height: 42px;
+            text-align: right;
+        }
+        QPushButton:pressed { border-color: #378ADD; }
+    """)
+
+    def _open_numpad():
+        dlg = NumpadDialog(
+            title=title,
+            unit=suffix.strip(),
+            value=btn.property("numpad_value") or "",
+            parent=parent,
+        )
+        if dlg.exec():
+            v = dlg.value()
+            btn.setProperty("numpad_value", v)
+            btn.setText(f"{v}{suffix}")
+
+    btn.clicked.connect(_open_numpad)
+    return btn
+
+
+def _get_numpad_value(btn: QPushButton, default: float = 0.0) -> float:
+    """Lit la valeur float stockée dans un bouton numpad."""
+    try:
+        return float(btn.property("numpad_value") or default)
+    except (ValueError, TypeError):
+        return default
+
+
+def _make_alpha_btn(
+    value: str,
+    title: str = "Saisie texte",
+    parent=None,
+) -> QPushButton:
+    """Crée un QPushButton qui ouvre AlphaNumpadDialog au clic."""
+    from ihm.main_window import AlphaNumpadDialog
+
+    btn = QPushButton(value or "—")
+    btn.setProperty("alpha_value", value)
+    btn.setStyleSheet("""
+        QPushButton {
+            background-color: #2a2a2a;
+            color: #ffffff;
+            border: 1.5px solid #444;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 15px;
+            min-height: 42px;
+            text-align: left;
+        }
+        QPushButton:pressed { border-color: #378ADD; }
+    """)
+
+    def _open_alpha():
+        dlg = AlphaNumpadDialog(
+            title=title,
+            value=btn.property("alpha_value") or "",
+            parent=parent,
+        )
+        if dlg.exec():
+            v = dlg.value()
+            btn.setProperty("alpha_value", v)
+            btn.setText(v or "—")
+
+    btn.clicked.connect(_open_alpha)
+    return btn
+
+
+def _get_alpha_value(btn: QPushButton) -> str:
+    return btn.property("alpha_value") or ""
+
+
 # ---------------------------------------------------------------------------
 # Palette de couleurs — thème sombre identique à main_window
 # ---------------------------------------------------------------------------
@@ -473,11 +571,9 @@ class PMEditDialog(QDialog):
     def _build_tab_general(self) -> QWidget:
         w = QWidget()
         form = self._make_form(w)
-        self._gen_name = QLineEdit()
-        self._gen_name.setPlaceholderText("ex: PM01_STANDARD")
+        self._gen_name = _make_alpha_btn("", title="Nom du PM", parent=self)
         form.addRow("Nom du PM :", self._gen_name)
-        self._gen_desc = QLineEdit()
-        self._gen_desc.setPlaceholderText("ex: Rivetage standard")
+        self._gen_desc = _make_alpha_btn("", title="Description", parent=self)
         form.addRow("Description :", self._gen_desc)
         self._gen_mode = QComboBox()
         self._gen_mode.addItem("Force = f(Position)", "FORCE_POSITION")
@@ -489,6 +585,11 @@ class PMEditDialog(QDialog):
     # ---- Onglet 2 — NO-PASS -----------------------------------------------
 
     def _build_tab_no_pass(self) -> QWidget:
+        from PySide6.QtWidgets import QScrollArea
+        outer = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(20, 14, 20, 14)
@@ -504,23 +605,28 @@ class PMEditDialog(QDialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self._np_enabled = QCheckBox("Activer")
         form.addRow("Activer NO-PASS :", self._np_enabled)
-        self._np_x_min = QDoubleSpinBox()
-        self._np_x_min.setRange(0, 500); self._np_x_min.setDecimals(1); self._np_x_min.setSuffix(" mm")
+        self._np_x_min = _make_numpad_btn("0.0", suffix=" mm", title="Position min (X)", parent=self)
         form.addRow("Position min (X) :", self._np_x_min)
-        self._np_x_max = QDoubleSpinBox()
-        self._np_x_max.setRange(0, 500); self._np_x_max.setDecimals(1); self._np_x_max.setSuffix(" mm")
+        self._np_x_max = _make_numpad_btn("0.0", suffix=" mm", title="Position max (X)", parent=self)
         form.addRow("Position max (X) :", self._np_x_max)
-        self._np_y_limit = QDoubleSpinBox()
-        self._np_y_limit.setRange(0, 99999); self._np_y_limit.setDecimals(0); self._np_y_limit.setSuffix(" N")
+        self._np_y_limit = _make_numpad_btn("0", suffix=" N", title="Force limite (Y)", parent=self)
         form.addRow("Force limite (Y) :", self._np_y_limit)
         v.addWidget(fw)
-        v.addWidget(_NoPassPreview(self._np_x_min, self._np_x_max, self._np_y_limit))
         v.addStretch()
-        return w
+        scroll.setWidget(w)
+        out_v = QVBoxLayout(outer)
+        out_v.setContentsMargins(0, 0, 0, 0)
+        out_v.addWidget(scroll)
+        return outer
 
     # ---- Onglet 3 — UNI-BOX -----------------------------------------------
 
     def _build_tab_uni_box(self) -> QWidget:
+        from PySide6.QtWidgets import QScrollArea
+        outer = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(20, 14, 20, 14)
@@ -536,17 +642,13 @@ class PMEditDialog(QDialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self._ub_enabled = QCheckBox("Activer")
         form.addRow("Activer UNI-BOX :", self._ub_enabled)
-        self._ub_x_min = QDoubleSpinBox()
-        self._ub_x_min.setRange(0, 500); self._ub_x_min.setDecimals(1); self._ub_x_min.setSuffix(" mm")
+        self._ub_x_min = _make_numpad_btn("0.0", suffix=" mm", title="Position min boîte", parent=self)
         form.addRow("Position min boîte :", self._ub_x_min)
-        self._ub_x_max = QDoubleSpinBox()
-        self._ub_x_max.setRange(0, 500); self._ub_x_max.setDecimals(1); self._ub_x_max.setSuffix(" mm")
+        self._ub_x_max = _make_numpad_btn("0.0", suffix=" mm", title="Position max boîte", parent=self)
         form.addRow("Position max boîte :", self._ub_x_max)
-        self._ub_y_min = QDoubleSpinBox()
-        self._ub_y_min.setRange(0, 99999); self._ub_y_min.setDecimals(0); self._ub_y_min.setSuffix(" N")
+        self._ub_y_min = _make_numpad_btn("0", suffix=" N", title="Force min boîte", parent=self)
         form.addRow("Force min boîte :", self._ub_y_min)
-        self._ub_y_max = QDoubleSpinBox()
-        self._ub_y_max.setRange(0, 99999); self._ub_y_max.setDecimals(0); self._ub_y_max.setSuffix(" N")
+        self._ub_y_max = _make_numpad_btn("0", suffix=" N", title="Force max boîte", parent=self)
         form.addRow("Force max boîte :", self._ub_y_max)
         _SIDES = [("Gauche (left)", "left"), ("Droite (right)", "right"),
                   ("Bas (bottom)", "bottom"), ("Haut (top)", "top")]
@@ -558,12 +660,12 @@ class PMEditDialog(QDialog):
         form.addRow("Côté d'entrée :", self._ub_entry)
         form.addRow("Côté de sortie :", self._ub_exit)
         v.addWidget(fw)
-        v.addWidget(_UniBoxPreview(
-            self._ub_x_min, self._ub_x_max, self._ub_y_min, self._ub_y_max,
-            self._ub_entry, self._ub_exit,
-        ))
         v.addStretch()
-        return w
+        scroll.setWidget(w)
+        out_v = QVBoxLayout(outer)
+        out_v.setContentsMargins(0, 0, 0, 0)
+        out_v.addWidget(scroll)
+        return outer
 
     # ---- Onglet 4 — ENVELOPPE ---------------------------------------------
 
@@ -623,8 +725,10 @@ class PMEditDialog(QDialog):
     def _load_from_yaml(self) -> None:
         pm = PM_DEFINITIONS.get(self._pm_id)
         if pm:
-            self._gen_name.setText(pm.name)
-            self._gen_desc.setText(pm.description)
+            self._gen_name.setProperty("alpha_value", pm.name)
+            self._gen_name.setText(pm.name or "—")
+            self._gen_desc.setProperty("alpha_value", pm.description)
+            self._gen_desc.setText(pm.description or "—")
             idx = self._gen_mode.findData(pm.view_mode)
             if idx >= 0:
                 self._gen_mode.setCurrentIndex(idx)
@@ -637,16 +741,28 @@ class PMEditDialog(QDialog):
         np_d = tools.get("no_pass", {})
         if np_d:
             self._np_enabled.setChecked(bool(np_d.get("enabled", False)))
-            self._np_x_min.setValue(float(np_d.get("x_min", 0.0)))
-            self._np_x_max.setValue(float(np_d.get("x_max", 0.0)))
-            self._np_y_limit.setValue(float(np_d.get("y_limit", 0.0)))
+            for btn, key in [
+                (self._np_x_min, "x_min"),
+                (self._np_x_max, "x_max"),
+                (self._np_y_limit, "y_limit"),
+            ]:
+                v = str(np_d.get(key, 0.0))
+                suffix = btn.property("numpad_suffix") or ""
+                btn.setProperty("numpad_value", v)
+                btn.setText(f"{v}{suffix}")
         ub_d = tools.get("uni_box", {})
         if ub_d:
             self._ub_enabled.setChecked(bool(ub_d.get("enabled", False)))
-            self._ub_x_min.setValue(float(ub_d.get("box_x_min", 0.0)))
-            self._ub_x_max.setValue(float(ub_d.get("box_x_max", 0.0)))
-            self._ub_y_min.setValue(float(ub_d.get("box_y_min", 0.0)))
-            self._ub_y_max.setValue(float(ub_d.get("box_y_max", 0.0)))
+            for btn, key in [
+                (self._ub_x_min, "box_x_min"),
+                (self._ub_x_max, "box_x_max"),
+                (self._ub_y_min, "box_y_min"),
+                (self._ub_y_max, "box_y_max"),
+            ]:
+                v = str(ub_d.get(key, 0.0))
+                suffix = btn.property("numpad_suffix") or ""
+                btn.setProperty("numpad_value", v)
+                btn.setText(f"{v}{suffix}")
             for combo, key in [(self._ub_entry, "entry_side"), (self._ub_exit, "exit_side")]:
                 idx = combo.findData(ub_d.get(key, "left"))
                 if idx >= 0:
@@ -675,22 +791,22 @@ class PMEditDialog(QDialog):
             cfg = {}
         cfg.setdefault("programmes", {})
         cfg["programmes"][self._pm_id] = {
-            "name":        self._gen_name.text(),
-            "description": self._gen_desc.text(),
+            "name":        _get_alpha_value(self._gen_name),
+            "description": _get_alpha_value(self._gen_desc),
             "view_mode":   self._gen_mode.currentData(),
             "tools": {
                 "no_pass": {
                     "enabled": self._np_enabled.isChecked(),
-                    "x_min":   self._np_x_min.value(),
-                    "x_max":   self._np_x_max.value(),
-                    "y_limit": self._np_y_limit.value(),
+                    "x_min":   _get_numpad_value(self._np_x_min),
+                    "x_max":   _get_numpad_value(self._np_x_max),
+                    "y_limit": _get_numpad_value(self._np_y_limit),
                 },
                 "uni_box": {
                     "enabled":    self._ub_enabled.isChecked(),
-                    "box_x_min":  self._ub_x_min.value(),
-                    "box_x_max":  self._ub_x_max.value(),
-                    "box_y_min":  self._ub_y_min.value(),
-                    "box_y_max":  self._ub_y_max.value(),
+                    "box_x_min":  _get_numpad_value(self._ub_x_min),
+                    "box_x_max":  _get_numpad_value(self._ub_x_max),
+                    "box_y_min":  _get_numpad_value(self._ub_y_min),
+                    "box_y_max":  _get_numpad_value(self._ub_y_max),
                     "entry_side": self._ub_entry.currentData(),
                     "exit_side":  self._ub_exit.currentData(),
                 },
@@ -706,8 +822,8 @@ class PMEditDialog(QDialog):
         from config import ProgramMeasure
         PM_DEFINITIONS[self._pm_id] = ProgramMeasure(
             pm_id=self._pm_id,
-            name=self._gen_name.text(),
-            description=self._gen_desc.text(),
+            name=_get_alpha_value(self._gen_name),
+            description=_get_alpha_value(self._gen_desc),
             view_mode=self._gen_mode.currentData(),
         )
         QMessageBox.information(self, "PM sauvegardé", f"✓ PM-{self._pm_id:02d} sauvegardé.")
@@ -820,26 +936,20 @@ class VoieXDialog(QDialog):
         form.setSpacing(16)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("ex: Capteur déplacement")
+        self._name_edit = _make_alpha_btn("", title="Nom du capteur", parent=self)
         form.addRow("Nom du capteur :", self._name_edit)
 
         self._unit_combo = QComboBox()
         self._unit_combo.addItems(["mm", "cm", "°", "pulse"])
         form.addRow("Unité :", self._unit_combo)
 
-        self._min_spin = QDoubleSpinBox()
-        self._min_spin.setRange(-9999, 9999)
-        self._min_spin.setDecimals(2)
+        self._min_spin = _make_numpad_btn("0.0", suffix=" mm", title="Valeur minimum", parent=self)
         form.addRow("Valeur minimum :", self._min_spin)
 
-        self._max_spin = QDoubleSpinBox()
-        self._max_spin.setRange(0, 9999)
-        self._max_spin.setDecimals(2)
+        self._max_spin = _make_numpad_btn("100.0", suffix=" mm", title="Valeur maximum", parent=self)
         form.addRow("Valeur maximum :", self._max_spin)
 
-        self._channel_spin = QSpinBox()
-        self._channel_spin.setRange(0, 7)
+        self._channel_spin = _make_numpad_btn("1", suffix="", title="Canal MCC 118 (0-7)", parent=self)
         form.addRow("Canal MCC 118 :", self._channel_spin)
 
         root.addWidget(form_w, stretch=1)
@@ -875,13 +985,20 @@ class VoieXDialog(QDialog):
         scaling = cfg.get("scaling", {})
         acquisition = cfg.get("acquisition", {})
 
-        self._name_edit.setText(scaling.get("position_name", ""))
+        name = scaling.get("position_name", "")
+        self._name_edit.setProperty("alpha_value", name)
+        self._name_edit.setText(name or "—")
         idx = self._unit_combo.findText(scaling.get("position_unit", "mm"))
         if idx >= 0:
             self._unit_combo.setCurrentIndex(idx)
-        self._min_spin.setValue(0.0)
-        self._max_spin.setValue(float(scaling.get("position_mm_max", 100.0)))
-        self._channel_spin.setValue(int(acquisition.get("position_channel", 1)))
+        for btn, val in [
+            (self._min_spin, "0.0"),
+            (self._max_spin, str(scaling.get("position_mm_max", 100.0))),
+            (self._channel_spin, str(acquisition.get("position_channel", 1))),
+        ]:
+            suffix = btn.property("numpad_suffix") or ""
+            btn.setProperty("numpad_value", val)
+            btn.setText(f"{val}{suffix}")
 
     def _save(self) -> None:
         try:
@@ -892,10 +1009,10 @@ class VoieXDialog(QDialog):
 
         cfg.setdefault("scaling", {})
         cfg.setdefault("acquisition", {})
-        cfg["scaling"]["position_mm_max"] = self._max_spin.value()
+        cfg["scaling"]["position_mm_max"] = _get_numpad_value(self._max_spin)
         cfg["scaling"]["position_unit"] = self._unit_combo.currentText()
-        cfg["scaling"]["position_name"] = self._name_edit.text()
-        cfg["acquisition"]["position_channel"] = self._channel_spin.value()
+        cfg["scaling"]["position_name"] = _get_alpha_value(self._name_edit)
+        cfg["acquisition"]["position_channel"] = int(_get_numpad_value(self._channel_spin))
 
         with open(_CONFIG_PATH, "w") as f:
             yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
@@ -949,32 +1066,23 @@ class VoieYDialog(QDialog):
         form.setSpacing(16)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("ex: Capteur piézoélectrique")
+        self._name_edit = _make_alpha_btn("", title="Nom du capteur", parent=self)
         form.addRow("Nom du capteur :", self._name_edit)
 
         self._unit_combo = QComboBox()
         self._unit_combo.addItems(["N", "kN", "kg", "lbf"])
         form.addRow("Unité :", self._unit_combo)
 
-        self._min_spin = QDoubleSpinBox()
-        self._min_spin.setRange(-9999, 9999)
-        self._min_spin.setDecimals(2)
+        self._min_spin = _make_numpad_btn("0.0", suffix=" N", title="Valeur minimum", parent=self)
         form.addRow("Valeur minimum :", self._min_spin)
 
-        self._max_spin = QDoubleSpinBox()
-        self._max_spin.setRange(0, 9999)
-        self._max_spin.setDecimals(2)
+        self._max_spin = _make_numpad_btn("5000.0", suffix=" N", title="Valeur maximum", parent=self)
         form.addRow("Valeur maximum :", self._max_spin)
 
-        self._channel_spin = QSpinBox()
-        self._channel_spin.setRange(0, 7)
+        self._channel_spin = _make_numpad_btn("0", suffix="", title="Canal MCC 118 (0-7)", parent=self)
         form.addRow("Canal MCC 118 :", self._channel_spin)
 
-        self._alarm_spin = QDoubleSpinBox()
-        self._alarm_spin.setRange(0, 9999)
-        self._alarm_spin.setDecimals(2)
-        self._alarm_spin.setSuffix(" N")
+        self._alarm_spin = _make_numpad_btn("4500.0", suffix=" N", title="Seuil d'alarme", parent=self)
         form.addRow("Seuil d'alarme :", self._alarm_spin)
 
         root.addWidget(form_w, stretch=1)
@@ -1011,14 +1119,21 @@ class VoieYDialog(QDialog):
         acquisition = cfg.get("acquisition", {})
         thresholds = cfg.get("thresholds", {})
 
-        self._name_edit.setText(scaling.get("force_name", ""))
+        name = scaling.get("force_name", "")
+        self._name_edit.setProperty("alpha_value", name)
+        self._name_edit.setText(name or "—")
         idx = self._unit_combo.findText(scaling.get("force_unit", "N"))
         if idx >= 0:
             self._unit_combo.setCurrentIndex(idx)
-        self._min_spin.setValue(0.0)
-        self._max_spin.setValue(float(scaling.get("force_newton_max", 5000.0)))
-        self._channel_spin.setValue(int(acquisition.get("force_channel", 0)))
-        self._alarm_spin.setValue(float(thresholds.get("force_max_n", 4500.0)))
+        for btn, val in [
+            (self._min_spin, "0.0"),
+            (self._max_spin, str(scaling.get("force_newton_max", 5000.0))),
+            (self._channel_spin, str(acquisition.get("force_channel", 0))),
+            (self._alarm_spin, str(thresholds.get("force_max_n", 4500.0))),
+        ]:
+            suffix = btn.property("numpad_suffix") or ""
+            btn.setProperty("numpad_value", val)
+            btn.setText(f"{val}{suffix}")
 
     def _save(self) -> None:
         try:
@@ -1030,11 +1145,11 @@ class VoieYDialog(QDialog):
         cfg.setdefault("scaling", {})
         cfg.setdefault("acquisition", {})
         cfg.setdefault("thresholds", {})
-        cfg["scaling"]["force_newton_max"] = self._max_spin.value()
+        cfg["scaling"]["force_newton_max"] = _get_numpad_value(self._max_spin)
         cfg["scaling"]["force_unit"] = self._unit_combo.currentText()
-        cfg["scaling"]["force_name"] = self._name_edit.text()
-        cfg["acquisition"]["force_channel"] = self._channel_spin.value()
-        cfg["thresholds"]["force_max_n"] = self._alarm_spin.value()
+        cfg["scaling"]["force_name"] = _get_alpha_value(self._name_edit)
+        cfg["acquisition"]["force_channel"] = int(_get_numpad_value(self._channel_spin))
+        cfg["thresholds"]["force_max_n"] = _get_numpad_value(self._alarm_spin)
 
         with open(_CONFIG_PATH, "w") as f:
             yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
