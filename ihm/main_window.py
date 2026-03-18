@@ -551,6 +551,122 @@ class GraphWidget(QWidget):
 
 
 # ===========================================================================
+# PmSelectorDialog — sélecteur de Programme de Mesure
+# ===========================================================================
+
+_PM_SELECTOR_STYLE = f"""
+QDialog {{
+    background-color: {COLORS['panel_bg']};
+    color: {COLORS['text']};
+}}
+QLabel#title {{
+    font-size: 18px;
+    font-weight: bold;
+    color: {COLORS['text']};
+    padding: 4px 0 12px 0;
+}}
+QPushButton#pm_item {{
+    background-color: #2a2a2a;
+    color: {COLORS['text']};
+    border: 2px solid #444;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 8px;
+}}
+QPushButton#pm_item:hover {{
+    background-color: #383838;
+    border-color: #666;
+}}
+QPushButton#pm_item_active {{
+    background-color: {COLORS['ok_bg']};
+    color: {COLORS['ok_text']};
+    border: 2px solid {COLORS['ok_border']};
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 8px;
+}}
+QPushButton#pm_item_active:hover {{
+    background-color: #1f4a1f;
+}}
+QPushButton#btn_cancel {{
+    background-color: #333;
+    color: {COLORS['text']};
+    border: 1px solid #555;
+    border-radius: 6px;
+    font-size: 14px;
+    padding: 6px;
+}}
+QPushButton#btn_cancel:hover {{
+    background-color: #444;
+}}
+"""
+
+
+class PmSelectorDialog(QDialog):
+    """Sélecteur de Programme de Mesure — grille 2 colonnes."""
+
+    def __init__(self, current_pm_id: int, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Sélection du programme")
+        self.setModal(True)
+        self.setFixedSize(520, 400)
+        self.setStyleSheet(_PM_SELECTOR_STYLE)
+
+        self.selected_pm_id: int | None = None
+        self._current_pm_id = current_pm_id
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        from PySide6.QtWidgets import QGridLayout, QScrollArea
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
+
+        title = QLabel("Choisir un programme de mesure")
+        title.setObjectName("title")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        # Zone scrollable pour la grille de PM
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
+
+        grid_widget = QWidget()
+        grid_widget.setStyleSheet("background: transparent;")
+        grid = QGridLayout(grid_widget)
+        grid.setSpacing(12)
+        grid.setContentsMargins(0, 0, 0, 0)
+
+        pms = sorted(PM_DEFINITIONS.items())
+        for idx, (pm_id, pm_def) in enumerate(pms):
+            row, col = divmod(idx, 2)
+            is_active = (pm_id == self._current_pm_id)
+            btn = QPushButton(f"PM-{pm_id:02d}\n{pm_def.name}")
+            btn.setObjectName("pm_item_active" if is_active else "pm_item")
+            btn.setFixedHeight(80)
+            btn.clicked.connect(lambda checked=False, pid=pm_id: self._select(pid))
+            grid.addWidget(btn, row, col)
+
+        scroll.setWidget(grid_widget)
+        layout.addWidget(scroll, stretch=1)
+
+        cancel_btn = QPushButton("Annuler")
+        cancel_btn.setObjectName("btn_cancel")
+        cancel_btn.setFixedHeight(44)
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
+
+    def _select(self, pm_id: int) -> None:
+        self.selected_pm_id = pm_id
+        self.accept()
+
+
+# ===========================================================================
 # PinDialog — saisie PIN avec verrouillage
 # ===========================================================================
 
@@ -1197,8 +1313,37 @@ class MainWindow(QMainWindow):
             self._update_counters()
 
     def _on_pm_clicked(self) -> None:
-        """Ouvre un sélecteur de PM (liste des PM disponibles)."""
-        QMessageBox.information(self, "Sélection PM", "Sélection du programme — À implémenter.")
+        """Ouvre le sélecteur de PM."""
+        dlg = PmSelectorDialog(current_pm_id=self._pm_id, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        new_pm_id = dlg.selected_pm_id
+        if new_pm_id is None or new_pm_id == self._pm_id:
+            return
+        self._apply_pm(new_pm_id)
+
+    def _apply_pm(self, pm_id: int) -> None:
+        """Applique le nouveau PM : met à jour l'affichage et recharge les outils."""
+        self._pm_id = pm_id
+        pm = PM_DEFINITIONS.get(pm_id)
+        pm_name = pm.name if pm else f"PM-{pm_id:02d}"
+        self._pm_btn.setText(f"PM-{pm_id:02d}  ·  {pm_name}")
+
+        # Recharger les overlays visuels depuis config.yaml
+        try:
+            cfg_path = Path(__file__).parent.parent / "config.yaml"
+            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+            pm_tools = cfg.get("programmes", {}).get(pm_id, {}).get("tools", {})
+            self._graph.set_tools_config(pm_tools)
+        except Exception:
+            pass
+
+        # Réinitialiser l'affichage du cycle
+        self._cycle_fmax = 0.0
+        self._cycle_xmax = 0.0
+        self._fmax_label.setText("0 N")
+        self._xmax_label.setText("0.0 mm")
+        self._update_result_display("idle")
 
     def _on_settings_clicked(self) -> None:
         """Vérifie le PIN puis navigue vers la page Réglages."""
