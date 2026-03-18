@@ -152,7 +152,9 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
     bridge.cycle_finished.connect(window.on_cycle_finished)
     bridge.cycle_started.connect(window.on_cycle_started)
 
-    # 3. Infrastructure d'acquisition
+    window.set_sim_mode(use_simulator)
+
+    # 3. Infrastructure d'acquisition (variables mutables via nonlocal dans _restart_sim_cycle)
     data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
     stop_event = threading.Event()
     pm_id = 1
@@ -169,6 +171,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         point_callback=bridge.emit_point,
         cycle_callback=bridge.emit_cycle_finished,
         cycle_started_callback=bridge.emit_cycle_started,
+        sim_mode=use_simulator,
     )
 
     # 4. Demarrage du thread DataProcessor
@@ -186,10 +189,58 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
     )
     acq_thread.start()
 
-    # 6. Boucle evenements Qt (bloquant jusqu'a fermeture de la fenetre)
+    # 6. Callback relance cycle simulateur (bouton "NOUVEAU CYCLE")
+    def _restart_sim_cycle() -> None:
+        """Recrée un DataProcessor et un acq_thread pour un nouveau cycle sim."""
+        nonlocal data_queue, stop_event, processor, acq_thread
+
+        # Signaler l'arrêt des anciens threads (déjà terminés, mais par précaution)
+        stop_event.set()
+
+        # Nouveau stop_event et queue propres
+        stop_event = threading.Event()
+        data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
+
+        # Nouveau CycleManager (repart de zéro)
+        new_cycle_manager = CycleManager(
+            tools=build_tools_from_yaml(pm_id=window._pm_id),
+            mode=DisplayMode.FORCE_POSITION,
+        )
+
+        new_processor = DataProcessor(
+            data_queue=data_queue,
+            stop_event=stop_event,
+            cycle_manager=new_cycle_manager,
+            pm_id=window._pm_id,
+            point_callback=bridge.emit_point,
+            cycle_callback=bridge.emit_cycle_finished,
+            cycle_started_callback=bridge.emit_cycle_started,
+            sim_mode=True,
+        )
+        new_processor.start()
+
+        new_acq_thread = threading.Thread(
+            target=fake_acquisition_loop,
+            kwargs={
+                "data_queue": data_queue,
+                "stop_event": stop_event,
+                "inject_fault": inject_fault,
+            },
+            name="AcquisitionThread",
+            daemon=True,
+        )
+        new_acq_thread.start()
+
+        processor = new_processor
+        acq_thread = new_acq_thread
+
+    if use_simulator:
+        window.set_restart_callback(_restart_sim_cycle)
+
+    # 7. Boucle evenements Qt (bloquant jusqu'a fermeture de la fenetre)
     exit_code = app.exec()
 
-    # 7. Arret propre des threads d'acquisition
+    # 8. Arret propre des threads d'acquisition
     stop_event.set()
     try:
         data_queue.put_nowait(None)

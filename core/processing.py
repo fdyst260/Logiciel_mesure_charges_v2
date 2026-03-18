@@ -8,7 +8,6 @@ from collections.abc import Callable
 
 from core.analysis import CycleManager
 from config import PM_DEFINITIONS
-from core.storage import save_cycle_csv
 
 
 class DataProcessor(threading.Thread):
@@ -21,6 +20,7 @@ class DataProcessor(threading.Thread):
         point_callback: Callable[[float, float, float], None] | None = None,
         cycle_callback: Callable[[str], None] | None = None,
         cycle_started_callback: Callable[[], None] | None = None,
+        sim_mode: bool = False,
     ) -> None:
         super().__init__(name="DataProcessor", daemon=True)
         self._data_queue = data_queue
@@ -30,23 +30,15 @@ class DataProcessor(threading.Thread):
         self._point_callback = point_callback
         self._cycle_callback = cycle_callback
         self._cycle_started_callback = cycle_started_callback
+        self._sim_mode = sim_mode
         self._points_for_csv: list[tuple[float, float, float]] = []
         self.saved_csv_path: str | None = None
 
         if pm_id not in PM_DEFINITIONS:
             raise ValueError(f"PM inconnu: {pm_id}")
 
-    def _reset_cycle(self) -> None:
-        from core.models import EvalStatus
-        self._cycle_manager.points.clear()
-        self._cycle_manager.result = EvalStatus.RUNNING
-        self._cycle_manager.messages.clear()
-        for tool in self._cycle_manager.tools:
-            tool.reset()
-        self._points_for_csv = []
-
     def run(self) -> None:
-        first_point_in_cycle = True
+        first_point = True
 
         while not (self._stop_event.is_set() and self._data_queue.empty()):
             try:
@@ -59,23 +51,29 @@ class DataProcessor(threading.Thread):
                 final_result = self._cycle_manager.finalize_cycle().value
                 if self._cycle_callback:
                     self._cycle_callback(final_result)
-                save_cycle_csv(
-                    pm_id=self._pm_id,
-                    result=final_result,
-                    points=self._points_for_csv,
-                )
                 print(f"[PROCESSING] Resultat cycle: {final_result}")
-                self._reset_cycle()
-                first_point_in_cycle = True
-                continue
+                if not self._sim_mode:
+                    from core.storage import save_cycle_csv
+                    csv_path = save_cycle_csv(
+                        pm_id=self._pm_id,
+                        result=final_result,
+                        points=self._points_for_csv,
+                    )
+                    self.saved_csv_path = str(csv_path)
+                    print(f"[PROCESSING] CSV: {csv_path}")
+                else:
+                    print("[PROCESSING] Mode sim — CSV non sauvegarde.")
+                return  # Un seul cycle en mode sim ; en mode reel idem (1 cycle/thread)
 
-            if first_point_in_cycle:
+            if first_point:
                 if self._cycle_started_callback:
                     self._cycle_started_callback()
-                first_point_in_cycle = False
+                first_point = False
 
             for t, force_n, pos_mm in block:
-                state = self._cycle_manager.add_sample(t=t, force_n=force_n, pos_mm=pos_mm)
+                state = self._cycle_manager.add_sample(
+                    t=t, force_n=force_n, pos_mm=pos_mm
+                )
                 self._points_for_csv.append((t, force_n, pos_mm))
                 if self._point_callback:
                     self._point_callback(t, force_n, pos_mm)

@@ -557,17 +557,17 @@ class GraphWidget(QWidget):
 _PM_SELECTOR_STYLE = f"""
 QDialog {{
     background-color: {COLORS['panel_bg']};
-    color: {COLORS['text']};
+    color: {COLORS['text_primary']};
 }}
 QLabel#title {{
     font-size: 18px;
     font-weight: bold;
-    color: {COLORS['text']};
+    color: {COLORS['text_primary']};
     padding: 4px 0 12px 0;
 }}
 QPushButton#pm_item {{
     background-color: #2a2a2a;
-    color: {COLORS['text']};
+    color: {COLORS['text_primary']};
     border: 2px solid #444;
     border-radius: 8px;
     font-size: 15px;
@@ -592,7 +592,7 @@ QPushButton#pm_item_active:hover {{
 }}
 QPushButton#btn_cancel {{
     background-color: #333;
-    color: {COLORS['text']};
+    color: {COLORS['text_primary']};
     border: 1px solid #555;
     border-radius: 6px;
     font-size: 14px;
@@ -793,6 +793,11 @@ class MainWindow(QMainWindow):
 
         # Flag premier point du cycle courant
         self._cycle_started: bool = False
+
+        # Mode simulateur + callback relance
+        self._sim_mode: bool = False
+        self._restart_callback = None
+        self._restart_btn = None
 
         self.setStyleSheet(STYLESHEET)
         self._build_ui()
@@ -1218,6 +1223,49 @@ class MainWindow(QMainWindow):
         self._add_production_row(cycle_num, self._cycle_fmax, self._cycle_xmax, result, now)
         self._graph.finish_cycle(result)
 
+        if self._sim_mode:
+            self._show_restart_button()
+
+    def _show_restart_button(self) -> None:
+        """Affiche un bouton flottant 'NOUVEAU CYCLE' au centre du graphique."""
+        if self._restart_btn is not None:
+            self._restart_btn.show()
+            self._center_restart_btn()
+            return
+        self._restart_btn = QPushButton("▶   NOUVEAU CYCLE", self._graph)
+        self._restart_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1565c0;
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: bold;
+                border-radius: 10px;
+                border: 2px solid #42a5f5;
+                padding: 14px 30px;
+            }
+            QPushButton:pressed { background-color: #0d47a1; }
+        """)
+        self._restart_btn.adjustSize()
+        self._center_restart_btn()
+        self._restart_btn.clicked.connect(self._on_restart_clicked)
+        self._restart_btn.show()
+
+    def _center_restart_btn(self) -> None:
+        if self._restart_btn is None:
+            return
+        gw = self._graph
+        bw = self._restart_btn.width()
+        bh = self._restart_btn.height()
+        self._restart_btn.move((gw.width() - bw) // 2, (gw.height() - bh) // 2)
+
+    def _on_restart_clicked(self) -> None:
+        if self._restart_btn is not None:
+            self._restart_btn.hide()
+        self._graph.start_new_cycle()
+        self._update_result_display("idle")
+        if self._restart_callback:
+            self._restart_callback()
+
     def on_cycle_started(self) -> None:
         """Appelé quand un nouveau cycle commence."""
         self._cycle_started = False
@@ -1311,6 +1359,12 @@ class MainWindow(QMainWindow):
             self._count_ok = 0
             self._count_nok = 0
             self._update_counters()
+
+    def set_sim_mode(self, enabled: bool) -> None:
+        self._sim_mode = enabled
+
+    def set_restart_callback(self, callback) -> None:
+        self._restart_callback = callback
 
     def _on_pm_clicked(self) -> None:
         """Ouvre le sélecteur de PM."""
