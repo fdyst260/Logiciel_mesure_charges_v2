@@ -42,6 +42,7 @@ class AcquisitionBridge(QObject):
     new_point: Signal = Signal(float, float, float)  # t, force_n, pos_mm
     cycle_finished: Signal = Signal(str)             # "PASS" ou "NOK"
     cycle_started: Signal = Signal()
+    cycle_stop_requested: Signal = Signal()
 
     def emit_point(self, t: float, force_n: float, pos_mm: float) -> None:
         """Appele depuis le thread DataProcessor — thread-safe via Qt."""
@@ -54,6 +55,10 @@ class AcquisitionBridge(QObject):
     def emit_cycle_started(self) -> None:
         """Appele depuis le thread DataProcessor — thread-safe via Qt."""
         self.cycle_started.emit()
+
+    def emit_cycle_stop(self) -> None:
+        """Appele depuis le thread Modbus — thread-safe via Qt."""
+        self.cycle_stop_requested.emit()
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +162,68 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
     window.set_sim_mode(use_simulator)
 
+    # --- Modbus Controller (mode réel uniquement) ---
+    modbus_controller = None
+    if not use_simulator:
+        from core.modbus_controller import ModbusController
+        from pathlib import Path as _Path
+
+        def _on_modbus_cycle_start() -> None:
+            """Appelé depuis le thread Modbus — recrée processor + acq_thread."""
+            nonlocal data_queue, stop_event, processor, acq_thread
+
+            stop_event.set()
+            stop_event = threading.Event()
+            data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
+
+            new_cycle_manager = CycleManager(
+                tools=build_tools_from_yaml(pm_id=window._pm_id),
+                mode=DisplayMode.FORCE_POSITION,
+            )
+            new_processor = DataProcessor(
+                data_queue=data_queue,
+                stop_event=stop_event,
+                cycle_manager=new_cycle_manager,
+                pm_id=window._pm_id,
+                point_callback=bridge.emit_point,
+                cycle_callback=bridge.emit_cycle_finished,
+                cycle_started_callback=bridge.emit_cycle_started,
+                sim_mode=False,
+            )
+            new_processor.start()
+
+            new_acq_thread = threading.Thread(
+                target=acquisition_loop,
+                kwargs={"data_queue": data_queue, "stop_event": stop_event},
+                name="AcquisitionThread",
+                daemon=True,
+            )
+            new_acq_thread.start()
+
+            processor = new_processor
+            acq_thread = new_acq_thread
+            bridge.emit_cycle_started()
+
+        def _on_modbus_cycle_stop() -> None:
+            """Appelé depuis le thread Modbus — envoie sentinelle None."""
+            try:
+                data_queue.put_nowait(None)
+            except Exception:
+                pass
+
+        modbus_controller = ModbusController(
+            config_path=_Path(__file__).parent / "config.yaml",
+            on_cycle_start=_on_modbus_cycle_start,
+            on_cycle_stop=_on_modbus_cycle_stop,
+            stop_event=stop_event,
+        )
+        modbus_controller.set_status_callback(window.set_modbus_status)
+        modbus_controller.start()
+
+        bridge.cycle_finished.connect(
+            lambda result: modbus_controller.write_result(result)
+        )
+
     # 3. Infrastructure d'acquisition (variables mutables via nonlocal dans _restart_sim_cycle)
     data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
     stop_event = threading.Event()
@@ -251,6 +318,10 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         pass
     processor.join(timeout=4.0)
     acq_thread.join(timeout=2.0)
+
+    if modbus_controller:
+        modbus_controller._stop_event.set()
+        modbus_controller.join(timeout=3.0)
 
     sys.exit(exit_code)
 

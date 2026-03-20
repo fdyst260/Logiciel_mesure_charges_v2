@@ -1,3 +1,11 @@
+modbus:
+  enabled: true
+  host: "192.168.1.92"
+  poll_interval_ms: 50
+  port: 502
+  result_register: 0x10C9
+  trigger_register: 0x10C8
+
 acquisition:
   board_num: 0
   chunk_size: 250
@@ -30,7 +38,7 @@ programmes:
         enabled: true
         x_max: 80.0
         x_min: 20.0
-        y_limit: 1850.0
+        y_limit: 3850.0
       uni_box:
         box_x_max: 0.0
         box_x_min: 0.0

@@ -1362,7 +1362,15 @@ class MainWindow(QMainWindow):
         # 10. Stretch
         layout.addStretch()
 
-        # 11. Bouton RÉGLAGES — 60px
+        # 11. Indicateur Modbus
+        self._modbus_indicator = QLabel("⬤  Modbus : --")
+        self._modbus_indicator.setStyleSheet(
+            "color: #9e9e9e; font-size: 12px; padding: 4px;"
+        )
+        self._modbus_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._modbus_indicator)
+
+        # 12. Bouton RÉGLAGES — 60px
         self._settings_btn = QPushButton("⚙   RÉGLAGES")
         self._settings_btn.setObjectName("btn_settings")
         self._settings_btn.setMinimumHeight(60)
@@ -1677,6 +1685,18 @@ class MainWindow(QMainWindow):
 
     def set_restart_callback(self, callback) -> None:
         self._restart_callback = callback
+
+    def set_modbus_status(self, connected: bool) -> None:
+        if connected:
+            self._modbus_indicator.setText("⬤  Modbus : Connecté")
+            self._modbus_indicator.setStyleSheet(
+                "color: #4caf50; font-size: 12px; padding: 4px;"
+            )
+        else:
+            self._modbus_indicator.setText("⬤  Modbus : Déconnecté")
+            self._modbus_indicator.setStyleSheet(
+                "color: #ef5350; font-size: 12px; padding: 4px;"
+            )
 
     def _on_pm_clicked(self) -> None:
         """Ouvre le sélecteur de PM."""
