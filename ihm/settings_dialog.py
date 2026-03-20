@@ -489,20 +489,33 @@ class _EnvelopePreview(QWidget):
 # PMEditDialog — éditeur complet d'un Programme de Mesure
 # ===========================================================================
 
-class PMEditDialog(QDialog):
-    """Dialog 900×620 avec 4 onglets : Général / NO-PASS / UNI-BOX / ENVELOPPE."""
+class _PMEditPage(QWidget):
+    """Page 4 onglets : Général / NO-PASS / UNI-BOX / ENVELOPPE (intégrée dans _settings_stack)."""
 
-    def __init__(self, pm_id: int, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        stack: QStackedWidget,
+        on_after_save=None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._main_stack = stack
+        self._on_after_save_cb = on_after_save or (lambda pm_id: None)
+        self._pm_id = 1
+        self._pm_name = "PM-01"
+        self.setStyleSheet(_PM_EDIT_STYLE)
+        self._build_ui()
+
+    def load_pm(self, pm_id: int) -> None:
+        """Charge les données du PM pm_id et prépare la page avant navigation."""
         self._pm_id = pm_id
         pm = PM_DEFINITIONS.get(pm_id)
         self._pm_name = pm.name if pm else f"PM-{pm_id:02d}"
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setModal(True)
-        self.setFixedSize(900, 620)
-        self.setStyleSheet(_PM_EDIT_STYLE)
-        self._build_ui()
+        self._title_lbl.setText(f"📋  PM-{pm_id:02d} — {self._pm_name}")
         self._load_from_yaml()
+
+    def _cancel(self) -> None:
+        self._main_stack.setCurrentIndex(2)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -515,11 +528,11 @@ class PMEditDialog(QDialog):
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
         hh.setSpacing(12)
-        title = QLabel(f"📋  PM-{self._pm_id:02d} — {self._pm_name}")
-        title.setStyleSheet(
+        self._title_lbl = QLabel(f"📋  PM-{self._pm_id:02d} — {self._pm_name}")
+        self._title_lbl.setStyleSheet(
             "font-size: 17px; font-weight: bold; color: #e0e0e0; background: transparent;"
         )
-        hh.addWidget(title)
+        hh.addWidget(self._title_lbl)
         hh.addStretch()
         btn_save = QPushButton("✓  Sauvegarder")
         btn_save.setObjectName("btn_save")
@@ -527,7 +540,7 @@ class PMEditDialog(QDialog):
         hh.addWidget(btn_save)
         btn_cancel = QPushButton("✗  Annuler")
         btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self.reject)
+        btn_cancel.clicked.connect(self._cancel)
         hh.addWidget(btn_cancel)
         root.addWidget(header)
         # Onglets
@@ -838,7 +851,8 @@ class PMEditDialog(QDialog):
             view_mode=self._gen_mode.currentData(),
         )
         QMessageBox.information(self, "PM sauvegardé", f"✓ PM-{self._pm_id:02d} sauvegardé.")
-        self.accept()
+        self._main_stack.setCurrentIndex(2)
+        self._on_after_save_cb(self._pm_id)
 
 
 # ===========================================================================
@@ -1012,21 +1026,26 @@ def _make_choice_btn(
 # VoieXDialog — configuration Voie X (Position)
 # ===========================================================================
 
-class VoieXDialog(QDialog):
-    """Dialog 2 pages — configuration Voie X (Position).
+class _VoieXPage(QWidget):
+    """Page 2 pages — configuration Voie X (intégrée dans _settings_stack).
 
     Page 0 : Déclaration capteur (nom, type, unité, canal, décimales)
     Page 1 : Mise à l'échelle 2 points (table affichage / signal%)
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setModal(True)
-        self.setFixedSize(560, 500)
+        self._main_stack = stack
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
+
+    def showEvent(self, event) -> None:
+        self._load_config()
+        super().showEvent(event)
+
+    def _cancel(self) -> None:
+        self._main_stack.setCurrentIndex(1)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1150,7 +1169,7 @@ class VoieXDialog(QDialog):
         h.setSpacing(16)
         btn_cancel = QPushButton("✗  Annuler")
         btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self.reject)
+        btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
         h.addStretch()
         btn_next = QPushButton("Suivant  →")
@@ -1253,28 +1272,33 @@ class VoieXDialog(QDialog):
             self, "Voie X",
             "✓ Configuration Voie X sauvegardée.\nRedémarrez pour appliquer.",
         )
-        self.accept()
+        self._main_stack.setCurrentIndex(1)
 
 
 # ===========================================================================
 # VoieYDialog — configuration Voie Y (Force)
 # ===========================================================================
 
-class VoieYDialog(QDialog):
-    """Dialog 2 pages — configuration Voie Y (Force piézoélectrique).
+class _VoieYPage(QWidget):
+    """Page 2 pages — configuration Voie Y (intégrée dans _settings_stack).
 
     Page 0 : Déclaration capteur (nom, unité, force max, canal, décimales)
     Page 1 : Sensibilité piézo (méthode, sensibilité, alarme, Avancé ▼)
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setModal(True)
-        self.setFixedSize(560, 540)
+        self._main_stack = stack
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
+
+    def showEvent(self, event) -> None:
+        self._load_config()
+        super().showEvent(event)
+
+    def _cancel(self) -> None:
+        self._main_stack.setCurrentIndex(1)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1429,7 +1453,7 @@ class VoieYDialog(QDialog):
         h.setSpacing(16)
         btn_cancel = QPushButton("✗  Annuler")
         btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self.reject)
+        btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
         h.addStretch()
         btn_next = QPushButton("Suivant  →")
@@ -1538,7 +1562,7 @@ class VoieYDialog(QDialog):
             self, "Voie Y",
             "✓ Configuration Voie Y sauvegardée.\nRedémarrez pour appliquer.",
         )
-        self.accept()
+        self._main_stack.setCurrentIndex(1)
 
 
 # ===========================================================================
@@ -1546,11 +1570,12 @@ class VoieYDialog(QDialog):
 # ===========================================================================
 
 # ===========================================================================
-# ControleCycleDialog — configuration du contrôle de cycle (4 pages)
+# _ControleCyclePage — configuration du contrôle de cycle (4 pages)
 # ===========================================================================
 
-class ControleCycleDialog(QDialog):
-    """Dialog 4 pages — Mode mesure, Conditions, Parties aller/retour, Traçage."""
+class _ControleCyclePage(QWidget):
+    """Page 4 pages — Mode mesure, Conditions, Parties aller/retour, Traçage
+    (intégrée dans _settings_stack)."""
 
     _TITLES = [
         "Contrôle cycle — Mode mesure",
@@ -1559,20 +1584,19 @@ class ControleCycleDialog(QDialog):
         "Contrôle cycle — Traçage de la courbe",
     ]
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setModal(True)
-        self.setFixedSize(560, 560)
+        self._main_stack = stack
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
 
-    def closeEvent(self, event) -> None:
-        """Ferme tous les sous-dialogs enfants encore ouverts avant de quitter."""
-        for child in self.findChildren(QDialog):
-            child.reject()
-        super().closeEvent(event)
+    def showEvent(self, event) -> None:
+        self._load_config()
+        super().showEvent(event)
+
+    def _cancel(self) -> None:
+        self._main_stack.setCurrentIndex(1)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1625,7 +1649,7 @@ class ControleCycleDialog(QDialog):
 
         btn_cancel = QPushButton("✗  Annuler")
         btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self.reject)
+        btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
         h.addStretch()
 
@@ -1927,7 +1951,7 @@ class ControleCycleDialog(QDialog):
             self, "Contrôle cycle",
             "✓ Configuration sauvegardée.\nRedémarrez pour appliquer.",
         )
-        self.accept()
+        self._main_stack.setCurrentIndex(1)
 
 
 # ===========================================================================
@@ -1956,6 +1980,17 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._build_page1_general())     # 1
         self._settings_stack.addWidget(self._build_page2_pm_list())     # 2
         self._settings_stack.addWidget(self._build_page3_pm_manager())  # 3
+
+        self._cycle_page = _ControleCyclePage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._cycle_page)                # 4
+        self._voie_x_page = _VoieXPage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._voie_x_page)               # 5
+        self._voie_y_page = _VoieYPage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._voie_y_page)               # 6
+        self._pm_edit_page = _PMEditPage(
+            self._settings_stack, self._on_pm_saved, self
+        )
+        self._settings_stack.addWidget(self._pm_edit_page)              # 7
 
         root.addWidget(self._settings_stack)
 
@@ -2078,11 +2113,17 @@ class SettingsPage(QWidget):
             btn.setFixedSize(180, 120)
             btn.setStyleSheet(_BTN_STYLE)
             if action == "voie_x":
-                btn.clicked.connect(lambda checked=False: VoieXDialog(self).exec())
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(5)
+                )
             elif action == "voie_y":
-                btn.clicked.connect(lambda checked=False: VoieYDialog(self).exec())
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(6)
+                )
             elif action == "cycle":
-                btn.clicked.connect(lambda checked=False: ControleCycleDialog(self).exec())
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(4)
+                )
             else:
                 btn.clicked.connect(
                     lambda checked=False, t=label: QMessageBox.information(
@@ -2116,9 +2157,14 @@ class SettingsPage(QWidget):
     def _on_pm_double_click(self, item) -> None:
         row = self._pm_list.row(item)
         pm_id = row + 1
-        dlg = PMEditDialog(pm_id, self)
-        dlg.exec()
-        item.setText(f"PM-{pm_id:02d}   ·   {PM_DEFINITIONS[pm_id].name}")
+        self._pm_edit_page.load_pm(pm_id)
+        self._settings_stack.setCurrentIndex(7)
+
+    def _on_pm_saved(self, pm_id: int) -> None:
+        row = pm_id - 1
+        item = self._pm_list.item(row)
+        if item:
+            item.setText(f"PM-{pm_id:02d}   ·   {PM_DEFINITIONS[pm_id].name}")
 
     # ------------------------------------------------------------------
     # Page 3 — Gestionnaire PM
