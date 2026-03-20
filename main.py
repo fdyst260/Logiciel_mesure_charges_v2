@@ -18,10 +18,17 @@ import threading
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
-from config import PM_DEFINITIONS, QUEUE_MAXSIZE, load_pm_from_yaml
+from config import (
+    ACQ_THREAD_TIMEOUT,
+    MODBUS_THREAD_TIMEOUT,
+    PM_DEFINITIONS,
+    QUEUE_MAXSIZE,
+    THREAD_JOIN_TIMEOUT,
+    build_tools_from_yaml,
+    load_pm_from_yaml,
+)
 from core.acquisition import AcquisitionError, acquisition_loop
 from core.analysis import CycleManager, DisplayMode
-from core.models import EvaluationTool, EvaluationType, Point2D
 from core.processing import DataProcessor
 from ihm.main_window import MainWindow
 from simulator.fake_acquisition import fake_acquisition_loop
@@ -62,150 +69,93 @@ class AcquisitionBridge(QObject):
 
 
 # ---------------------------------------------------------------------------
-# Outils d'evaluation par defaut
-# ---------------------------------------------------------------------------
-
-def build_tools_from_yaml(pm_id: int) -> list[EvaluationTool]:
-    """Charge les outils d'évaluation depuis config.yaml pour un PM donné.
-    Retourne les outils par défaut si le PM n'est pas configuré."""
-    import yaml
-    from pathlib import Path
-
-    cfg_path = Path(__file__).parent / "config.yaml"
-    try:
-        with open(cfg_path, encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-        tools_data = cfg.get("programmes", {}).get(pm_id, {}).get("tools", {})
-    except Exception:
-        return build_default_tools()
-
-    tools: list[EvaluationTool] = []
-
-    np_d = tools_data.get("no_pass", {})
-    if np_d.get("enabled", False):
-        tools.append(EvaluationTool(
-            name="no_pass",
-            tool_type=EvaluationType.NO_PASS,
-            x_min=np_d["x_min"], x_max=np_d["x_max"], y_limit=np_d["y_limit"],
-        ))
-
-    ub_d = tools_data.get("uni_box", {})
-    if ub_d.get("enabled", False):
-        tools.append(EvaluationTool(
-            name="uni_box",
-            tool_type=EvaluationType.UNI_BOX,
-            box_x_min=ub_d["box_x_min"], box_x_max=ub_d["box_x_max"],
-            box_y_min=ub_d["box_y_min"], box_y_max=ub_d["box_y_max"],
-            entry_side=ub_d["entry_side"], exit_side=ub_d["exit_side"],
-        ))
-
-    env_d = tools_data.get("envelope", {})
-    if env_d.get("enabled", False):
-        tools.append(EvaluationTool(
-            name="envelope",
-            tool_type=EvaluationType.ENVELOPE,
-            lower_curve=[Point2D(p[0], p[1]) for p in env_d["lower_curve"]],
-            upper_curve=[Point2D(p[0], p[1]) for p in env_d["upper_curve"]],
-        ))
-
-    return tools if tools else build_default_tools()
-
-
-def build_default_tools() -> list[EvaluationTool]:
-    """Jeu d'outils d'evaluation type pour Force=f(Position)."""
-    return [
-        EvaluationTool(
-            name="no_pass_overload",
-            tool_type=EvaluationType.NO_PASS,
-            x_min=20.0,
-            x_max=80.0,
-            y_limit=4200.0,
-        ),
-        EvaluationTool(
-            name="uni_box_fitting",
-            tool_type=EvaluationType.UNI_BOX,
-            box_x_min=10.0,
-            box_x_max=40.0,
-            box_y_min=500.0,
-            box_y_max=2500.0,
-            entry_side="left",
-            exit_side="right",
-        ),
-        EvaluationTool(
-            name="envelope_signature",
-            tool_type=EvaluationType.ENVELOPE,
-            lower_curve=[Point2D(0.0, 0.0), Point2D(100.0, 3000.0)],
-            upper_curve=[Point2D(0.0, 500.0), Point2D(100.0, 5000.0)],
-        ),
-    ]
-
-
-# ---------------------------------------------------------------------------
 # Fonction principale
 # ---------------------------------------------------------------------------
 
 def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bool = True) -> None:
     app = QApplication(sys.argv)
-
-    # Charger les PM personnalisés depuis config.yaml
     load_pm_from_yaml()
 
     # 1. Pont AVANT les threads (doit vivre dans le thread Qt)
     bridge = AcquisitionBridge()
 
-    # 2. Fenetre principale + connexion des signaux (QueuedConnection auto)
+    # 2. Fenêtre principale
     tools = build_tools_from_yaml(pm_id=1)
     window = MainWindow(pm_id=1, tools=tools, fullscreen=fullscreen)
     bridge.new_point.connect(window.on_new_point)
     bridge.cycle_finished.connect(window.on_cycle_finished)
     bridge.cycle_started.connect(window.on_cycle_started)
-
     window.set_sim_mode(use_simulator)
 
-    # --- Modbus Controller (mode réel uniquement) ---
+    # 3. Infrastructure d'acquisition initiale
+    data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
+    stop_event = threading.Event()
+
+    cycle_manager = CycleManager(tools=tools, mode=DisplayMode.FORCE_POSITION)
+    processor = DataProcessor(
+        data_queue=data_queue,
+        stop_event=stop_event,
+        cycle_manager=cycle_manager,
+        pm_id=1,
+        point_callback=bridge.emit_point,
+        cycle_callback=bridge.emit_cycle_finished,
+        cycle_started_callback=bridge.emit_cycle_started,
+        sim_mode=use_simulator,
+    )
+    processor.start()
+
+    acq_fn = fake_acquisition_loop if use_simulator else acquisition_loop
+    acq_kwargs: dict = {"inject_fault": inject_fault} if use_simulator else {}
+    acq_thread = threading.Thread(
+        target=acq_fn,
+        kwargs={"data_queue": data_queue, "stop_event": stop_event, **acq_kwargs},
+        name="AcquisitionThread",
+        daemon=True,
+    )
+    acq_thread.start()
+
+    # 4. Helper — recrée DataProcessor + acq_thread (réutilisé par sim et Modbus)
+    def _start_cycle(fn, kwargs: dict, sim_mode: bool) -> None:
+        nonlocal data_queue, stop_event, processor, acq_thread
+        stop_event.set()
+        stop_event = threading.Event()
+        data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
+        new_manager = CycleManager(
+            tools=build_tools_from_yaml(pm_id=window._pm_id),
+            mode=DisplayMode.FORCE_POSITION,
+        )
+        new_proc = DataProcessor(
+            data_queue=data_queue,
+            stop_event=stop_event,
+            cycle_manager=new_manager,
+            pm_id=window._pm_id,
+            point_callback=bridge.emit_point,
+            cycle_callback=bridge.emit_cycle_finished,
+            cycle_started_callback=bridge.emit_cycle_started,
+            sim_mode=sim_mode,
+        )
+        new_proc.start()
+        new_thread = threading.Thread(
+            target=fn,
+            kwargs={"data_queue": data_queue, "stop_event": stop_event, **kwargs},
+            name="AcquisitionThread",
+            daemon=True,
+        )
+        new_thread.start()
+        processor = new_proc
+        acq_thread = new_thread
+
+    # 5. Modbus (mode réel) ou bouton relance (mode sim)
     modbus_controller = None
     if not use_simulator:
         from core.modbus_controller import ModbusController
         from pathlib import Path as _Path
 
         def _on_modbus_cycle_start() -> None:
-            """Appelé depuis le thread Modbus — recrée processor + acq_thread."""
-            nonlocal data_queue, stop_event, processor, acq_thread
-
-            stop_event.set()
-            stop_event = threading.Event()
-            data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
-
-            new_cycle_manager = CycleManager(
-                tools=build_tools_from_yaml(pm_id=window._pm_id),
-                mode=DisplayMode.FORCE_POSITION,
-            )
-            new_processor = DataProcessor(
-                data_queue=data_queue,
-                stop_event=stop_event,
-                cycle_manager=new_cycle_manager,
-                pm_id=window._pm_id,
-                point_callback=bridge.emit_point,
-                cycle_callback=bridge.emit_cycle_finished,
-                cycle_started_callback=bridge.emit_cycle_started,
-                sim_mode=False,
-            )
-            new_processor.start()
-
-            new_acq_thread = threading.Thread(
-                target=acquisition_loop,
-                kwargs={"data_queue": data_queue, "stop_event": stop_event},
-                name="AcquisitionThread",
-                daemon=True,
-            )
-            new_acq_thread.start()
-
-            processor = new_processor
-            acq_thread = new_acq_thread
+            _start_cycle(acquisition_loop, {}, sim_mode=False)
             bridge.emit_cycle_started()
 
         def _on_modbus_cycle_stop() -> None:
-            """Appelé depuis le thread Modbus — envoie sentinelle None."""
             try:
                 data_queue.put_nowait(None)
             except Exception:
@@ -215,113 +165,35 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             config_path=_Path(__file__).parent / "config.yaml",
             on_cycle_start=_on_modbus_cycle_start,
             on_cycle_stop=_on_modbus_cycle_stop,
-            stop_event=stop_event,
         )
         modbus_controller.set_status_callback(window.set_modbus_status)
         modbus_controller.start()
-
         bridge.cycle_finished.connect(
             lambda result: modbus_controller.write_result(result)
         )
-
-    # 3. Infrastructure d'acquisition (variables mutables via nonlocal dans _restart_sim_cycle)
-    data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
-    stop_event = threading.Event()
-    pm_id = 1
-
-    cycle_manager = CycleManager(
-        tools=tools,
-        mode=DisplayMode.FORCE_POSITION,
-    )
-    processor = DataProcessor(
-        data_queue=data_queue,
-        stop_event=stop_event,
-        cycle_manager=cycle_manager,
-        pm_id=pm_id,
-        point_callback=bridge.emit_point,
-        cycle_callback=bridge.emit_cycle_finished,
-        cycle_started_callback=bridge.emit_cycle_started,
-        sim_mode=use_simulator,
-    )
-
-    # 4. Demarrage du thread DataProcessor
-    processor.start()
-
-    # 5. Demarrage du thread d'acquisition (simulateur ou reel)
-    acq_fn = fake_acquisition_loop if use_simulator else acquisition_loop
-    acq_kwargs: dict = {"inject_fault": inject_fault} if use_simulator else {}
-
-    acq_thread = threading.Thread(
-        target=acq_fn,
-        kwargs={"data_queue": data_queue, "stop_event": stop_event, **acq_kwargs},
-        name="AcquisitionThread",
-        daemon=True,
-    )
-    acq_thread.start()
-
-    # 6. Callback relance cycle simulateur (bouton "NOUVEAU CYCLE")
-    def _restart_sim_cycle() -> None:
-        """Recrée un DataProcessor et un acq_thread pour un nouveau cycle sim."""
-        nonlocal data_queue, stop_event, processor, acq_thread
-
-        # Signaler l'arrêt des anciens threads (déjà terminés, mais par précaution)
-        stop_event.set()
-
-        # Nouveau stop_event et queue propres
-        stop_event = threading.Event()
-        data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
-
-        # Nouveau CycleManager (repart de zéro)
-        new_cycle_manager = CycleManager(
-            tools=build_tools_from_yaml(pm_id=window._pm_id),
-            mode=DisplayMode.FORCE_POSITION,
-        )
-
-        new_processor = DataProcessor(
-            data_queue=data_queue,
-            stop_event=stop_event,
-            cycle_manager=new_cycle_manager,
-            pm_id=window._pm_id,
-            point_callback=bridge.emit_point,
-            cycle_callback=bridge.emit_cycle_finished,
-            cycle_started_callback=bridge.emit_cycle_started,
-            sim_mode=True,
-        )
-        new_processor.start()
-
-        new_acq_thread = threading.Thread(
-            target=fake_acquisition_loop,
-            kwargs={
-                "data_queue": data_queue,
-                "stop_event": stop_event,
-                "inject_fault": inject_fault,
-            },
-            name="AcquisitionThread",
-            daemon=True,
-        )
-        new_acq_thread.start()
-
-        processor = new_processor
-        acq_thread = new_acq_thread
-
-    if use_simulator:
+    else:
+        def _restart_sim_cycle() -> None:
+            _start_cycle(
+                fake_acquisition_loop,
+                {"inject_fault": inject_fault},
+                sim_mode=True,
+            )
         window.set_restart_callback(_restart_sim_cycle)
 
-    # 7. Boucle evenements Qt (bloquant jusqu'a fermeture de la fenetre)
+    # 6. Boucle événements Qt
     exit_code = app.exec()
 
-    # 8. Arret propre des threads d'acquisition
+    # 7. Arrêt propre des threads
     stop_event.set()
     try:
         data_queue.put_nowait(None)
     except queue.Full:
         pass
-    processor.join(timeout=4.0)
-    acq_thread.join(timeout=2.0)
-
+    processor.join(timeout=THREAD_JOIN_TIMEOUT)
+    acq_thread.join(timeout=ACQ_THREAD_TIMEOUT)
     if modbus_controller:
         modbus_controller._stop_event.set()
-        modbus_controller.join(timeout=3.0)
+        modbus_controller.join(timeout=MODBUS_THREAD_TIMEOUT)
 
     sys.exit(exit_code)
 

@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
 from PySide6.QtCore import Qt, QPointF, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (
@@ -32,6 +30,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSpinBox,
     QStackedWidget,
@@ -42,7 +41,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import PM_DEFINITIONS
+from config import PM_DEFINITIONS, ProgramMeasure
+from ihm.ui_utils import load_config, save_config
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
@@ -585,7 +585,6 @@ class PMEditDialog(QDialog):
     # ---- Onglet 2 — NO-PASS -----------------------------------------------
 
     def _build_tab_no_pass(self) -> QWidget:
-        from PySide6.QtWidgets import QScrollArea
         outer = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -622,7 +621,6 @@ class PMEditDialog(QDialog):
     # ---- Onglet 3 — UNI-BOX -----------------------------------------------
 
     def _build_tab_uni_box(self) -> QWidget:
-        from PySide6.QtWidgets import QScrollArea
         outer = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -732,10 +730,8 @@ class PMEditDialog(QDialog):
             idx = self._gen_mode.findData(pm.view_mode)
             if idx >= 0:
                 self._gen_mode.setCurrentIndex(idx)
-        try:
-            with open(_CONFIG_PATH, encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-        except (FileNotFoundError, yaml.YAMLError):
+        cfg = load_config(_CONFIG_PATH)
+        if not cfg:
             return
         tools = cfg.get("programmes", {}).get(self._pm_id, {}).get("tools", {})
         np_d = tools.get("no_pass", {})
@@ -784,11 +780,7 @@ class PMEditDialog(QDialog):
     # ---- Sauvegarde -------------------------------------------------------
 
     def _save(self) -> None:
-        try:
-            with open(_CONFIG_PATH, encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-        except (FileNotFoundError, yaml.YAMLError):
-            cfg = {}
+        cfg = load_config(_CONFIG_PATH)
         cfg.setdefault("programmes", {})
         cfg["programmes"][self._pm_id] = {
             "name":        _get_alpha_value(self._gen_name),
@@ -817,9 +809,7 @@ class PMEditDialog(QDialog):
                 },
             },
         }
-        with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
-            yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
-        from config import ProgramMeasure
+        save_config(_CONFIG_PATH, cfg)
         PM_DEFINITIONS[self._pm_id] = ProgramMeasure(
             pm_id=self._pm_id,
             name=_get_alpha_value(self._gen_name),
@@ -976,10 +966,8 @@ class VoieXDialog(QDialog):
         root.addWidget(footer)
 
     def _load_config(self) -> None:
-        try:
-            with open(_CONFIG_PATH) as f:
-                cfg = yaml.safe_load(f) or {}
-        except (FileNotFoundError, yaml.YAMLError):
+        cfg = load_config(_CONFIG_PATH)
+        if not cfg:
             return
 
         scaling = cfg.get("scaling", {})
@@ -1001,21 +989,14 @@ class VoieXDialog(QDialog):
             btn.setText(f"{val}{suffix}")
 
     def _save(self) -> None:
-        try:
-            with open(_CONFIG_PATH) as f:
-                cfg = yaml.safe_load(f) or {}
-        except (FileNotFoundError, yaml.YAMLError):
-            cfg = {}
-
+        cfg = load_config(_CONFIG_PATH)
         cfg.setdefault("scaling", {})
         cfg.setdefault("acquisition", {})
         cfg["scaling"]["position_mm_max"] = _get_numpad_value(self._max_spin)
         cfg["scaling"]["position_unit"] = self._unit_combo.currentText()
         cfg["scaling"]["position_name"] = _get_alpha_value(self._name_edit)
         cfg["acquisition"]["position_channel"] = int(_get_numpad_value(self._channel_spin))
-
-        with open(_CONFIG_PATH, "w") as f:
-            yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
+        save_config(_CONFIG_PATH, cfg)
 
         QMessageBox.information(
             self,
@@ -1109,10 +1090,8 @@ class VoieYDialog(QDialog):
         root.addWidget(footer)
 
     def _load_config(self) -> None:
-        try:
-            with open(_CONFIG_PATH) as f:
-                cfg = yaml.safe_load(f) or {}
-        except (FileNotFoundError, yaml.YAMLError):
+        cfg = load_config(_CONFIG_PATH)
+        if not cfg:
             return
 
         scaling = cfg.get("scaling", {})
@@ -1136,12 +1115,7 @@ class VoieYDialog(QDialog):
             btn.setText(f"{val}{suffix}")
 
     def _save(self) -> None:
-        try:
-            with open(_CONFIG_PATH) as f:
-                cfg = yaml.safe_load(f) or {}
-        except (FileNotFoundError, yaml.YAMLError):
-            cfg = {}
-
+        cfg = load_config(_CONFIG_PATH)
         cfg.setdefault("scaling", {})
         cfg.setdefault("acquisition", {})
         cfg.setdefault("thresholds", {})
@@ -1150,9 +1124,7 @@ class VoieYDialog(QDialog):
         cfg["scaling"]["force_name"] = _get_alpha_value(self._name_edit)
         cfg["acquisition"]["force_channel"] = int(_get_numpad_value(self._channel_spin))
         cfg["thresholds"]["force_max_n"] = _get_numpad_value(self._alarm_spin)
-
-        with open(_CONFIG_PATH, "w") as f:
-            yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False)
+        save_config(_CONFIG_PATH, cfg)
 
         QMessageBox.information(
             self,

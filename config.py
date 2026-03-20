@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 # Carte MCC 118
 BOARD_NUM = 0
@@ -19,6 +20,11 @@ SAMPLE_RATE_HZ = 5000.0
 CHUNK_SIZE = 250
 READ_TIMEOUT_SEC = 0.2
 QUEUE_MAXSIZE = 200
+
+# Timeouts arrêt des threads (secondes)
+THREAD_JOIN_TIMEOUT  = 4.0   # DataProcessor
+ACQ_THREAD_TIMEOUT   = 2.0   # AcquisitionThread
+MODBUS_THREAD_TIMEOUT = 3.0  # ModbusController
 
 # Trigger externe (signal GO sur GPIO de la Pi)
 GO_TRIGGER_GPIO = 17
@@ -77,7 +83,6 @@ PM_DEFINITIONS: dict[int, ProgramMeasure] = {
 def load_pm_from_yaml() -> None:
     """Charge les PM depuis config.yaml si la section 'programmes' existe."""
     import yaml
-    from pathlib import Path
 
     cfg_path = Path(__file__).parent / "config.yaml"
     if not cfg_path.exists():
@@ -95,6 +100,82 @@ def load_pm_from_yaml() -> None:
                 description=pm_data.get("description", ""),
                 view_mode=pm_data.get("view_mode", "FORCE_POSITION"),
             )
+
+
+def build_default_tools() -> list:
+    """Jeu d'outils d'évaluation par défaut pour Force=f(Position)."""
+    from core.models import EvaluationTool, EvaluationType, Point2D
+
+    return [
+        EvaluationTool(
+            name="no_pass_overload",
+            tool_type=EvaluationType.NO_PASS,
+            x_min=20.0,
+            x_max=80.0,
+            y_limit=4200.0,
+        ),
+        EvaluationTool(
+            name="uni_box_fitting",
+            tool_type=EvaluationType.UNI_BOX,
+            box_x_min=10.0,
+            box_x_max=40.0,
+            box_y_min=500.0,
+            box_y_max=2500.0,
+            entry_side="left",
+            exit_side="right",
+        ),
+        EvaluationTool(
+            name="envelope_signature",
+            tool_type=EvaluationType.ENVELOPE,
+            lower_curve=[Point2D(0.0, 0.0), Point2D(100.0, 3000.0)],
+            upper_curve=[Point2D(0.0, 500.0), Point2D(100.0, 5000.0)],
+        ),
+    ]
+
+
+def build_tools_from_yaml(pm_id: int) -> list:
+    """Charge les outils d'évaluation depuis config.yaml pour un PM donné."""
+    import yaml
+    from core.models import EvaluationTool, EvaluationType, Point2D
+
+    cfg_path = Path(__file__).parent / "config.yaml"
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        tools_data = cfg.get("programmes", {}).get(pm_id, {}).get("tools", {})
+    except Exception:
+        return build_default_tools()
+
+    tools: list = []
+
+    np_d = tools_data.get("no_pass", {})
+    if np_d.get("enabled", False):
+        tools.append(EvaluationTool(
+            name="no_pass",
+            tool_type=EvaluationType.NO_PASS,
+            x_min=np_d["x_min"], x_max=np_d["x_max"], y_limit=np_d["y_limit"],
+        ))
+
+    ub_d = tools_data.get("uni_box", {})
+    if ub_d.get("enabled", False):
+        tools.append(EvaluationTool(
+            name="uni_box",
+            tool_type=EvaluationType.UNI_BOX,
+            box_x_min=ub_d["box_x_min"], box_x_max=ub_d["box_x_max"],
+            box_y_min=ub_d["box_y_min"], box_y_max=ub_d["box_y_max"],
+            entry_side=ub_d["entry_side"], exit_side=ub_d["exit_side"],
+        ))
+
+    env_d = tools_data.get("envelope", {})
+    if env_d.get("enabled", False):
+        tools.append(EvaluationTool(
+            name="envelope",
+            tool_type=EvaluationType.ENVELOPE,
+            lower_curve=[Point2D(p[0], p[1]) for p in env_d["lower_curve"]],
+            upper_curve=[Point2D(p[0], p[1]) for p in env_d["upper_curve"]],
+        ))
+
+    return tools if tools else build_default_tools()
 
 
 def volts_to_force(voltage: float) -> float:

@@ -17,10 +17,8 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
-from PySide6.QtCore import Qt, QRect, QTimer, Slot
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QPoint, QRect, QTimer, Slot
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -52,6 +50,12 @@ from config import (
 )
 from core.analysis import DisplayMode
 from core.models import EvaluationTool, EvaluationType
+from ihm.ui_utils import (
+    RIGHT_PANEL_WIDTH,
+    load_config,
+    make_hseparator,
+    make_vseparator,
+)
 
 # ---------------------------------------------------------------------------
 # Constantes de couleur — thème industriel sombre (maXYmos style)
@@ -469,8 +473,6 @@ class GraphWidget(QWidget):
             lower = env_d.get("lower_curve", [])
             upper = env_d.get("upper_curve", [])
             if len(lower) >= 2 and len(upper) >= 2:
-                from PySide6.QtGui import QPolygon
-                from PySide6.QtCore import QPoint
                 poly = QPolygon()
                 for x, y in lower:
                     px, py = self._to_px(x, y, rect)
@@ -1116,13 +1118,11 @@ class MainWindow(QMainWindow):
         self._apply_state_style("idle")
 
         # Charger les outils depuis config.yaml
-        try:
-            cfg_path = Path(__file__).parent.parent / "config.yaml"
-            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-            pm_tools = cfg.get("programmes", {}).get(self._pm_id, {}).get("tools", {})
+        cfg_path = Path(__file__).parent.parent / "config.yaml"
+        cfg = load_config(cfg_path)
+        pm_tools = cfg.get("programmes", {}).get(self._pm_id, {}).get("tools", {})
+        if pm_tools:
             self._graph.set_tools_config(pm_tools)
-        except Exception:
-            pass
 
         # Timer 30 FPS
         self._refresh_timer = QTimer(self)
@@ -1224,7 +1224,21 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
 
-        # 1. Badge résultat — 140px
+        layout.addWidget(self._build_result_badge())
+        layout.addWidget(self._build_counters_section())
+        layout.addWidget(self._build_datetime_section())
+        layout.addWidget(make_hseparator(COLORS["separator"]))
+        layout.addWidget(self._build_pm_section())
+        layout.addWidget(make_hseparator(COLORS["separator"]))
+        layout.addWidget(self._build_peaks_section())
+        layout.addWidget(make_hseparator(COLORS["separator"]))
+        self._build_live_section(layout)
+        layout.addStretch()
+        layout.addWidget(self._build_modbus_indicator())
+        layout.addWidget(self._build_settings_button())
+        return panel
+
+    def _build_result_badge(self) -> QLabel:
         self._result_badge = QLabel("ATTENTE")
         self._result_badge.setObjectName("result_label")
         self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1234,150 +1248,120 @@ class MainWindow(QMainWindow):
             "border: 2px solid #333; border-radius: 10px; "
             "font-size: 36px; font-weight: bold; padding: 10px;"
         )
-        layout.addWidget(self._result_badge)
+        return self._result_badge
 
-        # 2. Compteurs ✓ / ✗ / Σ — 55px, 3 colonnes
-        counters_w = QWidget()
-        counters_w.setFixedHeight(55)
-        counters_w.setStyleSheet(
+    def _build_counters_section(self) -> QWidget:
+        w = QWidget()
+        w.setFixedHeight(55)
+        w.setStyleSheet(
             "background-color: #1e1e1e; border: 1px solid #333; border-radius: 6px;"
         )
-        ch = QHBoxLayout(counters_w)
-        ch.setContentsMargins(10, 4, 10, 4)
-        ch.setSpacing(0)
-
+        h = QHBoxLayout(w)
+        h.setContentsMargins(10, 4, 10, 4)
+        h.setSpacing(0)
         self._ok_count_label = QLabel("✓  0")
         self._ok_count_label.setObjectName("counter_ok")
         self._ok_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         self._nok_count_label = QLabel("✗  0")
         self._nok_count_label.setObjectName("counter_nok")
         self._nok_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         self._total_count_label = QLabel("Σ  0")
         self._total_count_label.setObjectName("counter_tot")
         self._total_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(self._ok_count_label, stretch=1)
+        h.addWidget(make_vseparator(COLORS["separator"]))
+        h.addWidget(self._nok_count_label, stretch=1)
+        h.addWidget(make_vseparator(COLORS["separator"]))
+        h.addWidget(self._total_count_label, stretch=1)
+        return w
 
-        ch.addWidget(self._ok_count_label, stretch=1)
-        ch.addWidget(self._make_vsep())
-        ch.addWidget(self._nok_count_label, stretch=1)
-        ch.addWidget(self._make_vsep())
-        ch.addWidget(self._total_count_label, stretch=1)
-        layout.addWidget(counters_w)
-
-        # 3. Horodatage — 40px
+    def _build_datetime_section(self) -> QLabel:
         self._datetime_label = QLabel(datetime.now().strftime("%d/%m/%y   %H:%M:%S"))
         self._datetime_label.setObjectName("datetime_label")
         self._datetime_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._datetime_label.setFixedHeight(40)
-        layout.addWidget(self._datetime_label)
-
         self._dt_timer = QTimer(self)
         self._dt_timer.setInterval(1000)
         self._dt_timer.timeout.connect(self._update_datetime)
         self._dt_timer.start()
+        return self._datetime_label
 
-        layout.addWidget(self._make_separator())
-
-        # 4. Label PM — 30px
-        pm_section = QLabel("ACM — Riveteuse")
-        pm_section.setObjectName("pm_section_title")
-        pm_section.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pm_section.setFixedHeight(30)
-        layout.addWidget(pm_section)
-
-        # 5. Bouton PM actif — 45px
+    def _build_pm_section(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(4)
+        title = QLabel("ACM — Riveteuse")
+        title.setObjectName("pm_section_title")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setFixedHeight(30)
+        v.addWidget(title)
         pm = PM_DEFINITIONS.get(self._pm_id)
-        pm_name = pm.name if pm else "—"
-        self._pm_btn = QPushButton(f"PM-{self._pm_id:02d}  ·  {pm_name}")
+        self._pm_btn = QPushButton(f"PM-{self._pm_id:02d}  ·  {pm.name if pm else '—'}")
         self._pm_btn.setObjectName("btn_pm")
         self._pm_btn.setFixedHeight(45)
         self._pm_btn.clicked.connect(self._on_pm_clicked)
-        layout.addWidget(self._pm_btn)
+        v.addWidget(self._pm_btn)
+        return w
 
-        layout.addWidget(self._make_separator())
+    def _build_peaks_section(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        for attr, lbl_text, init_text in [
+            ("_fmax_label", "Fmax", "0 N"),
+            ("_xmax_label", "Xmax", "0.0 mm"),
+        ]:
+            row = QHBoxLayout()
+            lbl = QLabel(lbl_text)
+            lbl.setObjectName("peak_label")
+            val = QLabel(init_text)
+            val.setObjectName("peak_value")
+            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            setattr(self, attr, val)
+            row.addWidget(lbl)
+            row.addWidget(val)
+            row_w = QWidget()
+            row_w.setFixedHeight(50)
+            row_w.setLayout(row)
+            v.addWidget(row_w)
+        return w
 
-        # 6. Fmax — 50px
-        fmax_row = QHBoxLayout()
-        lbl_fmax = QLabel("Fmax")
-        lbl_fmax.setObjectName("peak_label")
-        self._fmax_label = QLabel("0 N")
-        self._fmax_label.setObjectName("peak_value")
-        self._fmax_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        fmax_row.addWidget(lbl_fmax)
-        fmax_row.addWidget(self._fmax_label)
-        fmax_w = QWidget()
-        fmax_w.setFixedHeight(50)
-        fmax_w.setLayout(fmax_row)
-        layout.addWidget(fmax_w)
+    def _build_live_section(self, layout: QVBoxLayout) -> None:
+        for attr_val, attr_bar, lbl_text, max_val in [
+            ("_force_value", "_force_bar", "Force",    int(FORCE_NEWTON_MAX)),
+            ("_pos_value",   "_pos_bar",   "Position", int(POSITION_MM_MAX)),
+        ]:
+            lbl = QLabel(lbl_text)
+            lbl.setObjectName("live_label")
+            layout.addWidget(lbl)
+            row = QHBoxLayout()
+            val_lbl = QLabel("0 N" if "force" in attr_val else "0.0 mm")
+            val_lbl.setObjectName("live_value")
+            bar = QProgressBar()
+            bar.setRange(0, max_val)
+            bar.setValue(0)
+            bar.setTextVisible(False)
+            bar.setProperty("alarm", "false")
+            setattr(self, attr_val, val_lbl)
+            setattr(self, attr_bar, bar)
+            row.addWidget(val_lbl)
+            row.addWidget(bar, stretch=1)
+            layout.addLayout(row)
 
-        # 7. Xmax — 50px
-        xmax_row = QHBoxLayout()
-        lbl_xmax = QLabel("Xmax")
-        lbl_xmax.setObjectName("peak_label")
-        self._xmax_label = QLabel("0.0 mm")
-        self._xmax_label.setObjectName("peak_value")
-        self._xmax_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        xmax_row.addWidget(lbl_xmax)
-        xmax_row.addWidget(self._xmax_label)
-        xmax_w = QWidget()
-        xmax_w.setFixedHeight(50)
-        xmax_w.setLayout(xmax_row)
-        layout.addWidget(xmax_w)
-
-        layout.addWidget(self._make_separator())
-
-        # 8. Force live (compact)
-        lbl_f = QLabel("Force")
-        lbl_f.setObjectName("live_label")
-        layout.addWidget(lbl_f)
-        live_f_row = QHBoxLayout()
-        self._force_value = QLabel("0 N")
-        self._force_value.setObjectName("live_value")
-        self._force_bar = QProgressBar()
-        self._force_bar.setRange(0, int(FORCE_NEWTON_MAX))
-        self._force_bar.setValue(0)
-        self._force_bar.setTextVisible(False)
-        self._force_bar.setProperty("alarm", "false")
-        live_f_row.addWidget(self._force_value)
-        live_f_row.addWidget(self._force_bar, stretch=1)
-        layout.addLayout(live_f_row)
-
-        # 9. Position live (compact)
-        lbl_p = QLabel("Position")
-        lbl_p.setObjectName("live_label")
-        layout.addWidget(lbl_p)
-        live_p_row = QHBoxLayout()
-        self._pos_value = QLabel("0.0 mm")
-        self._pos_value.setObjectName("live_value")
-        self._pos_bar = QProgressBar()
-        self._pos_bar.setRange(0, int(POSITION_MM_MAX))
-        self._pos_bar.setValue(0)
-        self._pos_bar.setTextVisible(False)
-        self._pos_bar.setProperty("alarm", "false")
-        live_p_row.addWidget(self._pos_value)
-        live_p_row.addWidget(self._pos_bar, stretch=1)
-        layout.addLayout(live_p_row)
-
-        # 10. Stretch
-        layout.addStretch()
-
-        # 11. Indicateur Modbus
+    def _build_modbus_indicator(self) -> QLabel:
         self._modbus_indicator = QLabel("⬤  Modbus : --")
-        self._modbus_indicator.setStyleSheet(
-            "color: #9e9e9e; font-size: 12px; padding: 4px;"
-        )
+        self._modbus_indicator.setStyleSheet("color: #9e9e9e; font-size: 12px; padding: 4px;")
         self._modbus_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._modbus_indicator)
+        return self._modbus_indicator
 
-        # 12. Bouton RÉGLAGES — 60px
+    def _build_settings_button(self) -> QPushButton:
         self._settings_btn = QPushButton("⚙   RÉGLAGES")
         self._settings_btn.setObjectName("btn_settings")
         self._settings_btn.setMinimumHeight(60)
         self._settings_btn.clicked.connect(self._on_settings_clicked)
-        layout.addWidget(self._settings_btn)
-
-        return panel
+        return self._settings_btn
 
     # ------------------------------------------------------------------
     # Barre de navigation bas
@@ -1437,20 +1421,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _make_separator() -> QFrame:
-        sep = QFrame()
-        sep.setObjectName("separator")
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {COLORS['separator']};")
-        return sep
+        return make_hseparator(COLORS["separator"])
 
     @staticmethod
     def _make_vsep() -> QFrame:
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFixedWidth(1)
-        sep.setStyleSheet(f"background-color: {COLORS['separator']};")
-        return sep
+        return make_vseparator(COLORS["separator"])
 
     # ------------------------------------------------------------------
     # Fond de fenêtre dynamique
@@ -1716,13 +1691,10 @@ class MainWindow(QMainWindow):
         self._pm_btn.setText(f"PM-{pm_id:02d}  ·  {pm_name}")
 
         # Recharger les overlays visuels depuis config.yaml
-        try:
-            cfg_path = Path(__file__).parent.parent / "config.yaml"
-            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-            pm_tools = cfg.get("programmes", {}).get(pm_id, {}).get("tools", {})
-            self._graph.set_tools_config(pm_tools)
-        except Exception:
-            pass
+        cfg_path = Path(__file__).parent.parent / "config.yaml"
+        cfg = load_config(cfg_path)
+        pm_tools = cfg.get("programmes", {}).get(pm_id, {}).get("tools", {})
+        self._graph.set_tools_config(pm_tools)
 
         # Réinitialiser l'affichage du cycle
         self._cycle_fmax = 0.0
