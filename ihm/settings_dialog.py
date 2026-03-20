@@ -1545,71 +1545,6 @@ class VoieYDialog(QDialog):
 # _CycleGraphWidget — mini-graphique ALLER / RETOUR (QPainter)
 # ===========================================================================
 
-class _CycleGraphWidget(QWidget):
-    """Mini-graphique 200×130 : courbe ALLER (rouge) + RETOUR (bleu)."""
-
-    def __init__(self, mode: str = "ALLER-RETOUR", parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setFixedSize(200, 130)
-        self._mode = mode
-
-    def set_mode(self, mode: str) -> None:
-        self._mode = mode
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        mx, my = 22, 14
-        ax_w = w - mx - 10
-        ax_h = h - my - 22
-
-        p.fillRect(0, 0, w, h, QColor("#1a1a1a"))
-
-        # Axes
-        p.setPen(QPen(QColor("#555555"), 1))
-        p.drawLine(mx, h - my, mx + ax_w, h - my)
-        p.drawLine(mx, my, mx, h - my)
-
-        # Courbe ALLER (rouge)
-        aller_pts = [
-            QPointF(mx,               h - my),
-            QPointF(mx + ax_w * 0.25, h - my - ax_h * 0.35),
-            QPointF(mx + ax_w * 0.55, h - my - ax_h * 0.75),
-            QPointF(mx + ax_w,        h - my - ax_h * 0.9),
-        ]
-        pen_a = QPen(QColor("#E24B4A"), 2)
-        if self._mode == "RETOUR":
-            pen_a.setStyle(Qt.PenStyle.DashLine)
-        p.setPen(pen_a)
-        for i in range(len(aller_pts) - 1):
-            p.drawLine(aller_pts[i], aller_pts[i + 1])
-
-        # Courbe RETOUR (bleu)
-        retour_pts = [
-            QPointF(mx + ax_w,        h - my - ax_h * 0.9),
-            QPointF(mx + ax_w * 0.70, h - my - ax_h * 0.55),
-            QPointF(mx + ax_w * 0.40, h - my - ax_h * 0.20),
-            QPointF(mx,               h - my),
-        ]
-        pen_r = QPen(QColor("#378ADD"), 2)
-        if self._mode == "ALLER":
-            pen_r.setStyle(Qt.PenStyle.DashLine)
-        p.setPen(pen_r)
-        for i in range(len(retour_pts) - 1):
-            p.drawLine(retour_pts[i], retour_pts[i + 1])
-
-        # Labels
-        p.setFont(QFont("Arial", 8))
-        if self._mode != "RETOUR":
-            p.setPen(QColor("#E24B4A"))
-            p.drawText(mx + 4, my + 12, "POSITIVE")
-        if self._mode != "ALLER":
-            p.setPen(QColor("#378ADD"))
-            p.drawText(mx + ax_w - 48, h - my - 4, "NEGATIVE")
-
-
 # ===========================================================================
 # ControleCycleDialog — configuration du contrôle de cycle (4 pages)
 # ===========================================================================
@@ -1632,6 +1567,12 @@ class ControleCycleDialog(QDialog):
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
+
+    def closeEvent(self, event) -> None:
+        """Ferme tous les sous-dialogs enfants encore ouverts avant de quitter."""
+        for child in self.findChildren(QDialog):
+            child.reject()
+        super().closeEvent(event)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1860,13 +1801,19 @@ class ControleCycleDialog(QDialog):
 
         v.addLayout(form)
 
-        # Mini-graphique statique ALLER+RETOUR
-        graph_row = QHBoxLayout()
-        graph_row.addStretch()
-        self._aller_graph = _CycleGraphWidget("ALLER-RETOUR", self)
-        graph_row.addWidget(self._aller_graph)
-        graph_row.addStretch()
-        v.addLayout(graph_row)
+        # Indicateur visuel statique (ALLER + RETOUR toujours affichés)
+        ind_row = QHBoxLayout()
+        ind_row.setSpacing(32)
+        ind_row.addStretch()
+        for txt, color in [("↗  ALLER", "#E24B4A"), ("↘  RETOUR", "#378ADD")]:
+            lbl = QLabel(txt)
+            lbl.setStyleSheet(
+                f"color: {color}; font-size: 18px; font-weight: bold; background: transparent;"
+            )
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ind_row.addWidget(lbl)
+        ind_row.addStretch()
+        v.addLayout(ind_row)
 
         v.addStretch()
         return w
@@ -1893,20 +1840,40 @@ class ControleCycleDialog(QDialog):
 
         v.addLayout(form)
 
-        # Mini-graphique dynamique (mis à jour au retour sur cette page)
-        graph_row = QHBoxLayout()
-        graph_row.addStretch()
-        self._tracage_graph = _CycleGraphWidget("ALLER", self)
-        graph_row.addWidget(self._tracage_graph)
-        graph_row.addStretch()
-        v.addLayout(graph_row)
+        # Indicateur visuel dynamique (mis à jour dans _refresh_tracage_graph)
+        ind_row = QHBoxLayout()
+        ind_row.setSpacing(32)
+        ind_row.addStretch()
+        self._tracage_lbl_aller = QLabel("↗  ALLER")
+        self._tracage_lbl_aller.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ind_row.addWidget(self._tracage_lbl_aller)
+        self._tracage_lbl_retour = QLabel("↘  RETOUR")
+        self._tracage_lbl_retour.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ind_row.addWidget(self._tracage_lbl_retour)
+        ind_row.addStretch()
+        v.addLayout(ind_row)
 
         v.addStretch()
         return w
 
     def _refresh_tracage_graph(self) -> None:
         mode = self._tracage_btn.property("choice_value") or "ALLER"
-        self._tracage_graph.set_mode(mode)
+        aller_active  = (mode != "RETOUR")
+        retour_active = (mode != "ALLER")
+        self._tracage_lbl_aller.setStyleSheet(
+            f"color: {'#E24B4A' if aller_active else '#555555'};"
+            " font-size: 18px; font-weight: bold; background: transparent;"
+        )
+        self._tracage_lbl_aller.setText(
+            "↗  ALLER" + ("" if aller_active else "  (ignoré)")
+        )
+        self._tracage_lbl_retour.setStyleSheet(
+            f"color: {'#378ADD' if retour_active else '#555555'};"
+            " font-size: 18px; font-weight: bold; background: transparent;"
+        )
+        self._tracage_lbl_retour.setText(
+            "↘  RETOUR" + ("" if retour_active else "  (ignoré)")
+        )
 
     # ------------------------------------------------------------------
     # Load / Save
