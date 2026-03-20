@@ -1542,6 +1542,428 @@ class VoieYDialog(QDialog):
 
 
 # ===========================================================================
+# _CycleGraphWidget — mini-graphique ALLER / RETOUR (QPainter)
+# ===========================================================================
+
+class _CycleGraphWidget(QWidget):
+    """Mini-graphique 200×130 : courbe ALLER (rouge) + RETOUR (bleu)."""
+
+    def __init__(self, mode: str = "ALLER-RETOUR", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(200, 130)
+        self._mode = mode
+
+    def set_mode(self, mode: str) -> None:
+        self._mode = mode
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        mx, my = 22, 14
+        ax_w = w - mx - 10
+        ax_h = h - my - 22
+
+        p.fillRect(0, 0, w, h, QColor("#1a1a1a"))
+
+        # Axes
+        p.setPen(QPen(QColor("#555555"), 1))
+        p.drawLine(mx, h - my, mx + ax_w, h - my)
+        p.drawLine(mx, my, mx, h - my)
+
+        # Courbe ALLER (rouge)
+        aller_pts = [
+            QPointF(mx,               h - my),
+            QPointF(mx + ax_w * 0.25, h - my - ax_h * 0.35),
+            QPointF(mx + ax_w * 0.55, h - my - ax_h * 0.75),
+            QPointF(mx + ax_w,        h - my - ax_h * 0.9),
+        ]
+        pen_a = QPen(QColor("#E24B4A"), 2)
+        if self._mode == "RETOUR":
+            pen_a.setStyle(Qt.PenStyle.DashLine)
+        p.setPen(pen_a)
+        for i in range(len(aller_pts) - 1):
+            p.drawLine(aller_pts[i], aller_pts[i + 1])
+
+        # Courbe RETOUR (bleu)
+        retour_pts = [
+            QPointF(mx + ax_w,        h - my - ax_h * 0.9),
+            QPointF(mx + ax_w * 0.70, h - my - ax_h * 0.55),
+            QPointF(mx + ax_w * 0.40, h - my - ax_h * 0.20),
+            QPointF(mx,               h - my),
+        ]
+        pen_r = QPen(QColor("#378ADD"), 2)
+        if self._mode == "ALLER":
+            pen_r.setStyle(Qt.PenStyle.DashLine)
+        p.setPen(pen_r)
+        for i in range(len(retour_pts) - 1):
+            p.drawLine(retour_pts[i], retour_pts[i + 1])
+
+        # Labels
+        p.setFont(QFont("Arial", 8))
+        if self._mode != "RETOUR":
+            p.setPen(QColor("#E24B4A"))
+            p.drawText(mx + 4, my + 12, "POSITIVE")
+        if self._mode != "ALLER":
+            p.setPen(QColor("#378ADD"))
+            p.drawText(mx + ax_w - 48, h - my - 4, "NEGATIVE")
+
+
+# ===========================================================================
+# ControleCycleDialog — configuration du contrôle de cycle (4 pages)
+# ===========================================================================
+
+class ControleCycleDialog(QDialog):
+    """Dialog 4 pages — Mode mesure, Conditions, Parties aller/retour, Traçage."""
+
+    _TITLES = [
+        "Contrôle cycle — Mode mesure",
+        "Contrôle cycle — Conditions début / fin",
+        "Contrôle cycle — Parties aller / retour",
+        "Contrôle cycle — Traçage de la courbe",
+    ]
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setModal(True)
+        self.setFixedSize(560, 560)
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+        self._load_config()
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        hdr = QWidget()
+        hdr.setFixedHeight(50)
+        hdr.setStyleSheet("background-color: #252525;")
+        hh = QHBoxLayout(hdr)
+        hh.setContentsMargins(16, 0, 16, 0)
+        self._header_lbl = QLabel(self._TITLES[0])
+        self._header_lbl.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+        )
+        hh.addWidget(self._header_lbl)
+        root.addWidget(hdr)
+
+        # Contenu (4 pages)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_page0())
+        self._stack.addWidget(self._build_page1())
+        self._stack.addWidget(self._build_page2())
+        self._stack.addWidget(self._build_page3())
+        root.addWidget(self._stack, stretch=1)
+
+        # Footer (4 états)
+        self._footer = QStackedWidget()
+        self._footer.setFixedHeight(64)
+        for i in range(4):
+            self._footer.addWidget(self._build_footer_nav(i))
+        root.addWidget(self._footer)
+
+    def _build_footer_nav(self, page_idx: int) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(12)
+
+        if page_idx > 0:
+            btn_back = QPushButton("←  Retour")
+            btn_back.setObjectName("btn_cancel")
+            btn_back.clicked.connect(
+                lambda _c=False, i=page_idx: self._go_page(i - 1)
+            )
+            h.addWidget(btn_back)
+
+        btn_cancel = QPushButton("✗  Annuler")
+        btn_cancel.setObjectName("btn_cancel")
+        btn_cancel.clicked.connect(self.reject)
+        h.addWidget(btn_cancel)
+        h.addStretch()
+
+        if page_idx < 3:
+            btn_next = QPushButton("Suivant  →")
+            btn_next.setObjectName("btn_nav")
+            btn_next.clicked.connect(
+                lambda _c=False, i=page_idx: self._go_page(i + 1)
+            )
+            h.addWidget(btn_next)
+        else:
+            btn_save = QPushButton("✓  Sauvegarder")
+            btn_save.setObjectName("btn_save")
+            btn_save.clicked.connect(self._save)
+            h.addWidget(btn_save)
+
+        return w
+
+    def _go_page(self, idx: int) -> None:
+        self._stack.setCurrentIndex(idx)
+        self._footer.setCurrentIndex(idx)
+        self._header_lbl.setText(self._TITLES[idx])
+        if idx == 0:
+            self._refresh_mode_indicator()
+        elif idx == 1:
+            self._refresh_duree_visibility()
+        elif idx == 3:
+            self._refresh_tracage_graph()
+
+    # ------------------------------------------------------------------
+    # Page 0 — Mode mesure + acquisition
+    # ------------------------------------------------------------------
+
+    def _build_page0(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(14)
+
+        form = QFormLayout()
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._mode_btn = _make_choice_btn(
+            ["Y (x)", "Y (t)", "X (t)", "Y (x, t)"], "Y (x)", "Mode mesure", self
+        )
+        form.addRow("Mode mesure :", self._mode_btn)
+
+        self._nb_samples_btn = _make_numpad_btn(
+            "1000", suffix="", title="Nombre d'échantillons", parent=self
+        )
+        form.addRow("Nb d'échantillons :", self._nb_samples_btn)
+
+        self._delta_x_btn = _make_choice_btn(
+            ["Automatique", "Manuel"], "Automatique", "Delta X", self
+        )
+        form.addRow("Delta X :", self._delta_x_btn)
+
+        v.addLayout(form)
+
+        # Indicateur mode (texte dynamique)
+        self._mode_indicator = QLabel()
+        self._mode_indicator.setStyleSheet(
+            "background-color: #252525; color: #378ADD; font-size: 13px;"
+            " padding: 10px 16px; border-radius: 6px; border: 1px solid #333333;"
+        )
+        self._mode_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._mode_indicator.setFixedHeight(50)
+        v.addWidget(self._mode_indicator)
+        v.addStretch()
+        return w
+
+    def _refresh_mode_indicator(self) -> None:
+        _desc = {
+            "Y (x)":    "Force en fonction de la position",
+            "Y (t)":    "Force en fonction du temps",
+            "X (t)":    "Position en fonction du temps",
+            "Y (x, t)": "Force en fonction de la position et du temps",
+        }
+        mode = self._mode_btn.property("choice_value") or "Y (x)"
+        self._mode_indicator.setText(f"~  {_desc.get(mode, mode)}")
+
+    # ------------------------------------------------------------------
+    # Page 1 — Conditions début / fin
+    # ------------------------------------------------------------------
+
+    def _build_page1(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(16)
+
+        # En-têtes colonnes
+        hdr_row = QHBoxLayout()
+        for txt in ["  Début", "", "  Fin"]:
+            lbl = QLabel(txt)
+            if txt:
+                lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #e0e0e0;")
+            hdr_row.addWidget(lbl, 0 if not txt else 1)
+        v.addLayout(hdr_row)
+
+        # Deux colonnes
+        cols = QHBoxLayout()
+        cols.setSpacing(10)
+
+        self._condition_debut_btn = _make_choice_btn(
+            ["E-TOR 1 / Bus", "Seuil-X", "Seuil-Y", "Manuel"],
+            "E-TOR 1 / Bus",
+            "Condition début",
+            self,
+        )
+        self._condition_debut_btn.setMinimumHeight(54)
+        cols.addWidget(self._condition_debut_btn, stretch=1)
+
+        arrow = QLabel("→")
+        arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow.setStyleSheet("color: #888888; font-size: 20px;")
+        arrow.setFixedWidth(24)
+        cols.addWidget(arrow)
+
+        self._condition_fin_btn = _make_choice_btn(
+            ["E-TOR 1 / Bus", "Manuel", "Seuil-X", "Seuil-Y", "Retour-X", "Temps"],
+            "E-TOR 1 / Bus",
+            "Condition fin",
+            self,
+        )
+        self._condition_fin_btn.setMinimumHeight(54)
+        cols.addWidget(self._condition_fin_btn, stretch=1)
+
+        v.addLayout(cols)
+
+        # Durée du cycle (pleine largeur, grisée si condition fin ≠ "Temps")
+        form_duree = QFormLayout()
+        form_duree.setSpacing(14)
+        form_duree.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._duree_btn = _make_numpad_btn(
+            "20.0", suffix=" s", title="Durée du cycle (s)", parent=self
+        )
+        form_duree.addRow("Durée du cycle :", self._duree_btn)
+        v.addLayout(form_duree)
+        v.addStretch()
+        return w
+
+    def _refresh_duree_visibility(self) -> None:
+        is_temps = (self._condition_fin_btn.property("choice_value") == "Temps")
+        self._duree_btn.setEnabled(is_temps)
+
+    # ------------------------------------------------------------------
+    # Page 2 — Parties ALLER / RETOUR
+    # ------------------------------------------------------------------
+
+    def _build_page2(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(16)
+
+        form = QFormLayout()
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._aller_btn = _make_choice_btn(
+            ["Non défini", "Xmax", "Ymax", "Ymin"], "Xmax",
+            "Partie ALLER jusqu'à", self,
+        )
+        form.addRow("Partie ALLER jusqu'à :", self._aller_btn)
+
+        self._retour_btn = _make_choice_btn(
+            ["Non défini", "Xmin", "Ymax", "Ymin"], "Non défini",
+            "Partie RETOUR jusqu'à", self,
+        )
+        form.addRow("Partie RETOUR jusqu'à :", self._retour_btn)
+
+        v.addLayout(form)
+
+        # Mini-graphique statique ALLER+RETOUR
+        graph_row = QHBoxLayout()
+        graph_row.addStretch()
+        self._aller_graph = _CycleGraphWidget("ALLER-RETOUR", self)
+        graph_row.addWidget(self._aller_graph)
+        graph_row.addStretch()
+        v.addLayout(graph_row)
+
+        v.addStretch()
+        return w
+
+    # ------------------------------------------------------------------
+    # Page 3 — Traçage de la courbe
+    # ------------------------------------------------------------------
+
+    def _build_page3(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(16)
+
+        form = QFormLayout()
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._tracage_btn = _make_choice_btn(
+            ["ALLER-RETOUR", "ALLER", "RETOUR"], "ALLER",
+            "Traçage de la courbe", self,
+        )
+        form.addRow("Traçage de la courbe :", self._tracage_btn)
+
+        v.addLayout(form)
+
+        # Mini-graphique dynamique (mis à jour au retour sur cette page)
+        graph_row = QHBoxLayout()
+        graph_row.addStretch()
+        self._tracage_graph = _CycleGraphWidget("ALLER", self)
+        graph_row.addWidget(self._tracage_graph)
+        graph_row.addStretch()
+        v.addLayout(graph_row)
+
+        v.addStretch()
+        return w
+
+    def _refresh_tracage_graph(self) -> None:
+        mode = self._tracage_btn.property("choice_value") or "ALLER"
+        self._tracage_graph.set_mode(mode)
+
+    # ------------------------------------------------------------------
+    # Load / Save
+    # ------------------------------------------------------------------
+
+    def _load_config(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        cc = cfg.get("cycle_control", {})
+
+        for btn, val, default in [
+            (self._mode_btn,            cc.get("mode_mesure"),       "Y (x)"),
+            (self._delta_x_btn,         cc.get("delta_x"),           "Automatique"),
+            (self._condition_debut_btn, cc.get("condition_debut"),    "E-TOR 1 / Bus"),
+            (self._condition_fin_btn,   cc.get("condition_fin"),      "E-TOR 1 / Bus"),
+            (self._aller_btn,           cc.get("partie_aller"),       "Xmax"),
+            (self._retour_btn,          cc.get("partie_retour"),      "Non défini"),
+            (self._tracage_btn,         cc.get("tracage"),            "ALLER"),
+        ]:
+            v = val or default
+            btn.setProperty("choice_value", v)
+            btn.setText(v)
+
+        for btn, val, default in [
+            (self._nb_samples_btn, str(cc.get("nb_echantillons", 1000)), "1000"),
+            (self._duree_btn,      str(cc.get("duree_cycle_s", 20.0)),   "20.0"),
+        ]:
+            sfx = btn.property("numpad_suffix") or ""
+            btn.setProperty("numpad_value", val)
+            btn.setText(f"{val}{sfx}")
+
+        self._refresh_mode_indicator()
+        self._refresh_duree_visibility()
+        self._refresh_tracage_graph()
+
+    def _save(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        cc = cfg.setdefault("cycle_control", {})
+
+        cc["mode_mesure"]     = self._mode_btn.property("choice_value") or "Y (x)"
+        cc["nb_echantillons"] = int(_get_numpad_value(self._nb_samples_btn))
+        cc["delta_x"]         = self._delta_x_btn.property("choice_value") or "Automatique"
+        cc["condition_debut"] = self._condition_debut_btn.property("choice_value") or "E-TOR 1 / Bus"
+        cc["condition_fin"]   = self._condition_fin_btn.property("choice_value") or "E-TOR 1 / Bus"
+        cc["duree_cycle_s"]   = _get_numpad_value(self._duree_btn)
+        cc["partie_aller"]    = self._aller_btn.property("choice_value") or "Xmax"
+        cc["partie_retour"]   = self._retour_btn.property("choice_value") or "Non défini"
+        cc["tracage"]         = self._tracage_btn.property("choice_value") or "ALLER"
+
+        save_config(_CONFIG_PATH, cfg)
+        QMessageBox.information(
+            self, "Contrôle cycle",
+            "✓ Configuration sauvegardée.\nRedémarrez pour appliquer.",
+        )
+        self.accept()
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -1679,7 +2101,7 @@ class SettingsPage(QWidget):
             ("📅", "Date / Heure",    0, 2, None),
             ("📊", "Voie X",          1, 0, "voie_x"),
             ("📡", "Voie Y",          1, 1, "voie_y"),
-            ("⏱",  "Contrôle cycle", 1, 2, None),
+            ("⏱",  "Contrôle cycle", 1, 2, "cycle"),
             ("🖥",  "Affichage prod.",2, 0, None),
             ("💾", "Exportation",     2, 1, None),
             ("⚙",  "Extras",         2, 2, None),
@@ -1692,6 +2114,8 @@ class SettingsPage(QWidget):
                 btn.clicked.connect(lambda checked=False: VoieXDialog(self).exec())
             elif action == "voie_y":
                 btn.clicked.connect(lambda checked=False: VoieYDialog(self).exec())
+            elif action == "cycle":
+                btn.clicked.connect(lambda checked=False: ControleCycleDialog(self).exec())
             else:
                 btn.clicked.connect(
                     lambda checked=False, t=label: QMessageBox.information(
