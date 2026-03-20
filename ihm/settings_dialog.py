@@ -286,6 +286,27 @@ QPushButton#btn_cancel {
     min-width: 160px;
 }
 QPushButton#btn_cancel:pressed { background-color: #2a0e0e; }
+QPushButton#btn_nav {
+    background-color: #185FA5;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    min-height: 44px;
+    min-width: 120px;
+}
+QPushButton#btn_nav:pressed { background-color: #0d4a80; }
+QPushButton#btn_nav:disabled { background-color: #2a2a2a; color: #555555; }
+QCheckBox {
+    font-size: 15px; color: #e0e0e0; spacing: 8px;
+    min-height: 42px; background: transparent;
+}
+QCheckBox::indicator {
+    width: 22px; height: 22px; background-color: #2a2a2a;
+    border: 1.5px solid #444; border-radius: 4px;
+}
+QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75; }
 """
 
 
@@ -886,21 +907,128 @@ class _Tile(QFrame):
 
 
 # ===========================================================================
+# Constantes de choix — dialogues Voie X / Voie Y
+# ===========================================================================
+
+_DECIMAL_CHOICES  = ["0", "1", "2", "3", "4"]
+_SENSOR_TYPES_X   = ["Linéaire", "Rotatif", "Angulaire", "Impulsion"]
+_UNITS_X          = ["mm", "cm", "°", "pulse", "µm", "in"]
+_UNITS_Y          = ["N", "kN", "kg", "lbf"]
+_FILTER_CHOICES   = ["Aucun", "50 Hz", "100 Hz", "200 Hz", "500 Hz"]
+_SCALE_METHODS    = ["Sensibilité", "2 points"]
+
+
+# ---------------------------------------------------------------------------
+# _ChoiceDialog — sélecteur tactile (liste de boutons)
+# ---------------------------------------------------------------------------
+
+class _ChoiceDialog(QDialog):
+    """Sélecteur plein-écran tactile : affiche une liste de boutons."""
+
+    def __init__(
+        self,
+        choices: list[str],
+        current: str,
+        title: str = "Choisir",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setModal(True)
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._value = current
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        hdr = QWidget()
+        hdr.setFixedHeight(46)
+        hdr.setStyleSheet("background-color: #252525;")
+        hh = QHBoxLayout(hdr)
+        hh.setContentsMargins(16, 0, 16, 0)
+        lbl = QLabel(title)
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #e0e0e0;")
+        hh.addWidget(lbl)
+        root.addWidget(hdr)
+
+        # Boutons de choix
+        for c in choices:
+            b = QPushButton(c)
+            b.setMinimumHeight(48)
+            bg = "#185FA5" if c == current else "#2a2a2a"
+            b.setStyleSheet(
+                f"background-color: {bg}; color: #e0e0e0; font-size: 15px;"
+                " border: none; border-bottom: 1px solid #333;"
+                " text-align: left; padding-left: 16px;"
+            )
+            b.clicked.connect(lambda _chk, v=c: self._pick(v))
+            root.addWidget(b)
+
+        # Annuler
+        btn_x = QPushButton("✗  Fermer")
+        btn_x.setObjectName("btn_cancel")
+        btn_x.clicked.connect(self.reject)
+        root.addWidget(btn_x)
+
+        self.setFixedSize(320, 46 + len(choices) * 48 + 54)
+
+    def _pick(self, v: str) -> None:
+        self._value = v
+        self.accept()
+
+    def value(self) -> str:
+        return self._value
+
+
+# ---------------------------------------------------------------------------
+# _make_choice_btn — bouton tactile ouvrant _ChoiceDialog
+# ---------------------------------------------------------------------------
+
+def _make_choice_btn(
+    choices: list[str],
+    current: str,
+    title: str,
+    parent: QWidget | None = None,
+) -> QPushButton:
+    """Retourne un QPushButton qui ouvre _ChoiceDialog au clic."""
+    btn = QPushButton(current)
+    btn.setProperty("choice_value", current)
+    btn.setMinimumHeight(42)
+
+    def _open(_chk: bool = False) -> None:
+        dlg = _ChoiceDialog(choices, btn.property("choice_value") or current, title, parent)
+        if dlg.exec():
+            v = dlg.value()
+            btn.setProperty("choice_value", v)
+            btn.setText(v)
+
+    btn.clicked.connect(_open)
+    return btn
+
+
+# ===========================================================================
 # VoieXDialog — configuration Voie X (Position)
 # ===========================================================================
 
 class VoieXDialog(QDialog):
-    """Dialog de configuration du capteur Position (Voie X)."""
+    """Dialog 2 pages — configuration Voie X (Position).
+
+    Page 0 : Déclaration capteur (nom, type, unité, canal, décimales)
+    Page 1 : Mise à l'échelle 2 points (table affichage / signal%)
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setModal(True)
-        self.setFixedSize(500, 380)
+        self.setFixedSize(560, 500)
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
 
+    # ------------------------------------------------------------------
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -912,95 +1040,217 @@ class VoieXDialog(QDialog):
         header.setStyleSheet("background-color: #252525;")
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
-        title = QLabel("📊   Configuration Voie X — Position")
-        title.setStyleSheet(
+        self._header_lbl = QLabel("Voie X — Déclaration capteur")
+        self._header_lbl.setStyleSheet(
             "font-size: 16px; font-weight: bold; color: #e0e0e0; background: transparent;"
         )
-        hh.addWidget(title)
+        hh.addWidget(self._header_lbl)
         root.addWidget(header)
 
-        # Formulaire
-        form_w = QWidget()
-        form = QFormLayout(form_w)
-        form.setContentsMargins(24, 20, 24, 20)
-        form.setSpacing(16)
+        # Contenu (2 pages)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_page0())
+        self._stack.addWidget(self._build_page1())
+        root.addWidget(self._stack, stretch=1)
+
+        # Footer (2 états)
+        self._footer = QStackedWidget()
+        self._footer.setFixedHeight(64)
+        self._footer.addWidget(self._build_footer0())
+        self._footer.addWidget(self._build_footer1())
+        root.addWidget(self._footer)
+
+    def _build_page0(self) -> QWidget:
+        w = QWidget()
+        form = QFormLayout(w)
+        form.setContentsMargins(24, 18, 24, 18)
+        form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._name_edit = _make_alpha_btn("", title="Nom du capteur", parent=self)
-        form.addRow("Nom du capteur :", self._name_edit)
+        self._name_btn = _make_alpha_btn("", title="Nom du capteur", parent=self)
+        form.addRow("Nom du capteur :", self._name_btn)
 
-        self._unit_combo = QComboBox()
-        self._unit_combo.addItems(["mm", "cm", "°", "pulse"])
-        form.addRow("Unité :", self._unit_combo)
+        self._sensor_type_btn = _make_choice_btn(
+            _SENSOR_TYPES_X, "Linéaire", "Type de capteur", self
+        )
+        form.addRow("Type de capteur :", self._sensor_type_btn)
 
-        self._min_spin = _make_numpad_btn("0.0", suffix=" mm", title="Valeur minimum", parent=self)
-        form.addRow("Valeur minimum :", self._min_spin)
+        self._unit_btn = _make_choice_btn(_UNITS_X, "mm", "Unité", self)
+        form.addRow("Unité :", self._unit_btn)
 
-        self._max_spin = _make_numpad_btn("100.0", suffix=" mm", title="Valeur maximum", parent=self)
-        form.addRow("Valeur maximum :", self._max_spin)
+        self._channel_btn = _make_numpad_btn(
+            "1", suffix="", title="Canal MCC 118 (0-7)", parent=self
+        )
+        form.addRow("Canal MCC 118 :", self._channel_btn)
 
-        self._channel_spin = _make_numpad_btn("1", suffix="", title="Canal MCC 118 (0-7)", parent=self)
-        form.addRow("Canal MCC 118 :", self._channel_spin)
+        self._decimal_btn = _make_choice_btn(_DECIMAL_CHOICES, "2", "Décimales", self)
+        form.addRow("Décimales :", self._decimal_btn)
 
-        root.addWidget(form_w, stretch=1)
+        return w
 
-        # Footer boutons
-        footer = QWidget()
-        footer.setFixedHeight(60)
-        footer.setStyleSheet("background-color: #181818;")
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(24, 8, 24, 8)
-        fh.setSpacing(16)
-        fh.addStretch()
+    def _build_page1(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 16, 24, 16)
+        v.setSpacing(12)
 
-        btn_save = QPushButton("✓  Sauvegarder")
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        fh.addWidget(btn_save)
+        lbl = QLabel("Mise à l'échelle — 2 points")
+        lbl.setStyleSheet("font-size: 14px; color: #888888; font-weight: bold;")
+        v.addWidget(lbl)
 
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        # En-têtes colonnes
+        for col, txt in enumerate(["", "Affichage", "Signal  %", ""], start=0):
+            lc = QLabel(txt)
+            lc.setStyleSheet("font-size: 13px; color: #888888;")
+            lc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            grid.addWidget(lc, 0, col)
+
+        # Point 1
+        grid.addWidget(QLabel("Point 1"), 1, 0)
+        self._p1_display = _make_numpad_btn(
+            "0.0", suffix="", title="Point 1 — Affichage", parent=self
+        )
+        grid.addWidget(self._p1_display, 1, 1)
+        self._p1_signal = _make_numpad_btn(
+            "0.0", suffix=" %", title="Point 1 — Signal %", parent=self
+        )
+        grid.addWidget(self._p1_signal, 1, 2)
+        btn_t1 = QPushButton("TEACH")
+        btn_t1.setObjectName("btn_nav")
+        btn_t1.setEnabled(False)
+        grid.addWidget(btn_t1, 1, 3)
+
+        # Point 2
+        grid.addWidget(QLabel("Point 2"), 2, 0)
+        self._p2_display = _make_numpad_btn(
+            "100.0", suffix="", title="Point 2 — Affichage", parent=self
+        )
+        grid.addWidget(self._p2_display, 2, 1)
+        self._p2_signal = _make_numpad_btn(
+            "100.0", suffix=" %", title="Point 2 — Signal %", parent=self
+        )
+        grid.addWidget(self._p2_signal, 2, 2)
+        btn_t2 = QPushButton("TEACH")
+        btn_t2.setObjectName("btn_nav")
+        btn_t2.setEnabled(False)
+        grid.addWidget(btn_t2, 2, 3)
+
+        v.addLayout(grid)
+        v.addStretch()
+        return w
+
+    def _build_footer0(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(16)
         btn_cancel = QPushButton("✗  Annuler")
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self.reject)
-        fh.addWidget(btn_cancel)
+        h.addWidget(btn_cancel)
+        h.addStretch()
+        btn_next = QPushButton("Suivant  →")
+        btn_next.setObjectName("btn_nav")
+        btn_next.clicked.connect(self._go_page1)
+        h.addWidget(btn_next)
+        return w
 
-        root.addWidget(footer)
+    def _build_footer1(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(16)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(self._go_page0)
+        h.addWidget(btn_back)
+        h.addStretch()
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+        return w
 
+    def _go_page0(self) -> None:
+        self._stack.setCurrentIndex(0)
+        self._footer.setCurrentIndex(0)
+        self._header_lbl.setText("Voie X — Déclaration capteur")
+
+    def _go_page1(self) -> None:
+        self._stack.setCurrentIndex(1)
+        self._footer.setCurrentIndex(1)
+        self._header_lbl.setText("Voie X — Mise à l'échelle")
+
+    # ------------------------------------------------------------------
     def _load_config(self) -> None:
         cfg = load_config(_CONFIG_PATH)
         if not cfg:
             return
 
         scaling = cfg.get("scaling", {})
-        acquisition = cfg.get("acquisition", {})
+        acq = cfg.get("acquisition", {})
+        cal = cfg.get("calibration", {}).get("voie_x", {})
 
         name = scaling.get("position_name", "")
-        self._name_edit.setProperty("alpha_value", name)
-        self._name_edit.setText(name or "—")
-        idx = self._unit_combo.findText(scaling.get("position_unit", "mm"))
-        if idx >= 0:
-            self._unit_combo.setCurrentIndex(idx)
-        for btn, val in [
-            (self._min_spin, "0.0"),
-            (self._max_spin, str(scaling.get("position_mm_max", 100.0))),
-            (self._channel_spin, str(acquisition.get("position_channel", 1))),
+        self._name_btn.setProperty("alpha_value", name)
+        self._name_btn.setText(name or "—")
+
+        for btn, val, default in [
+            (self._sensor_type_btn, scaling.get("position_sensor_type"), "Linéaire"),
+            (self._unit_btn,        scaling.get("position_unit"),        "mm"),
+            (self._decimal_btn,     str(scaling.get("position_decimal", 2)), "2"),
         ]:
-            suffix = btn.property("numpad_suffix") or ""
+            v = val or default
+            btn.setProperty("choice_value", v)
+            btn.setText(v)
+
+        ch = str(acq.get("position_channel", 1))
+        self._channel_btn.setProperty("numpad_value", ch)
+        self._channel_btn.setText(ch)
+
+        for btn, key, default in [
+            (self._p1_display, "p1_display", "0.0"),
+            (self._p1_signal,  "p1_signal",  "0.0"),
+            (self._p2_display, "p2_display", "100.0"),
+            (self._p2_signal,  "p2_signal",  "100.0"),
+        ]:
+            val = str(cal.get(key, default))
+            sfx = btn.property("numpad_suffix") or ""
             btn.setProperty("numpad_value", val)
-            btn.setText(f"{val}{suffix}")
+            btn.setText(f"{val}{sfx}")
 
     def _save(self) -> None:
         cfg = load_config(_CONFIG_PATH)
         cfg.setdefault("scaling", {})
         cfg.setdefault("acquisition", {})
-        cfg["scaling"]["position_mm_max"] = _get_numpad_value(self._max_spin)
-        cfg["scaling"]["position_unit"] = self._unit_combo.currentText()
-        cfg["scaling"]["position_name"] = _get_alpha_value(self._name_edit)
-        cfg["acquisition"]["position_channel"] = int(_get_numpad_value(self._channel_spin))
-        save_config(_CONFIG_PATH, cfg)
+        cfg.setdefault("calibration", {})
+        cfg["calibration"].setdefault("voie_x", {})
 
+        cfg["scaling"]["position_name"] = _get_alpha_value(self._name_btn)
+        cfg["scaling"]["position_sensor_type"] = (
+            self._sensor_type_btn.property("choice_value") or "Linéaire"
+        )
+        cfg["scaling"]["position_unit"] = self._unit_btn.property("choice_value") or "mm"
+        cfg["scaling"]["position_decimal"] = int(
+            self._decimal_btn.property("choice_value") or "2"
+        )
+        cfg["scaling"]["position_mm_max"] = _get_numpad_value(self._p2_display)
+        cfg["acquisition"]["position_channel"] = int(_get_numpad_value(self._channel_btn))
+
+        cal = cfg["calibration"]["voie_x"]
+        cal["p1_display"] = _get_numpad_value(self._p1_display)
+        cal["p1_signal"]  = _get_numpad_value(self._p1_signal)
+        cal["p2_display"] = _get_numpad_value(self._p2_display)
+        cal["p2_signal"]  = _get_numpad_value(self._p2_signal)
+
+        save_config(_CONFIG_PATH, cfg)
         QMessageBox.information(
-            self,
-            "Voie X",
+            self, "Voie X",
             "✓ Configuration Voie X sauvegardée.\nRedémarrez pour appliquer.",
         )
         self.accept()
@@ -1011,17 +1261,22 @@ class VoieXDialog(QDialog):
 # ===========================================================================
 
 class VoieYDialog(QDialog):
-    """Dialog de configuration du capteur Force (Voie Y)."""
+    """Dialog 2 pages — configuration Voie Y (Force piézoélectrique).
+
+    Page 0 : Déclaration capteur (nom, unité, force max, canal, décimales)
+    Page 1 : Sensibilité piézo (méthode, sensibilité, alarme, Avancé ▼)
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setModal(True)
-        self.setFixedSize(500, 430)
+        self.setFixedSize(560, 540)
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
 
+    # ------------------------------------------------------------------
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1033,102 +1288,254 @@ class VoieYDialog(QDialog):
         header.setStyleSheet("background-color: #252525;")
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
-        title = QLabel("📡   Configuration Voie Y — Force")
-        title.setStyleSheet(
+        self._header_lbl = QLabel("Voie Y — Déclaration capteur")
+        self._header_lbl.setStyleSheet(
             "font-size: 16px; font-weight: bold; color: #e0e0e0; background: transparent;"
         )
-        hh.addWidget(title)
+        hh.addWidget(self._header_lbl)
         root.addWidget(header)
 
-        # Formulaire
-        form_w = QWidget()
-        form = QFormLayout(form_w)
-        form.setContentsMargins(24, 20, 24, 20)
-        form.setSpacing(16)
+        # Contenu (2 pages)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_page0())
+        self._stack.addWidget(self._build_page1())
+        root.addWidget(self._stack, stretch=1)
+
+        # Footer (2 états)
+        self._footer = QStackedWidget()
+        self._footer.setFixedHeight(64)
+        self._footer.addWidget(self._build_footer0())
+        self._footer.addWidget(self._build_footer1())
+        root.addWidget(self._footer)
+
+    def _build_page0(self) -> QWidget:
+        w = QWidget()
+        form = QFormLayout(w)
+        form.setContentsMargins(24, 18, 24, 18)
+        form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._name_edit = _make_alpha_btn("", title="Nom du capteur", parent=self)
-        form.addRow("Nom du capteur :", self._name_edit)
+        self._name_btn = _make_alpha_btn("", title="Nom du capteur", parent=self)
+        form.addRow("Nom du capteur :", self._name_btn)
 
-        self._unit_combo = QComboBox()
-        self._unit_combo.addItems(["N", "kN", "kg", "lbf"])
-        form.addRow("Unité :", self._unit_combo)
+        # Type fixe piézo
+        btn_piezo = QPushButton("Piézoélectrique")
+        btn_piezo.setObjectName("btn_nav")
+        btn_piezo.setEnabled(False)
+        form.addRow("Type de capteur :", btn_piezo)
 
-        self._min_spin = _make_numpad_btn("0.0", suffix=" N", title="Valeur minimum", parent=self)
-        form.addRow("Valeur minimum :", self._min_spin)
+        self._unit_btn = _make_choice_btn(_UNITS_Y, "N", "Unité", self)
+        form.addRow("Unité :", self._unit_btn)
 
-        self._max_spin = _make_numpad_btn("5000.0", suffix=" N", title="Valeur maximum", parent=self)
-        form.addRow("Valeur maximum :", self._max_spin)
+        self._max_btn = _make_numpad_btn(
+            "5000.0", suffix="", title="Force max (pleine échelle)", parent=self
+        )
+        form.addRow("Force max :", self._max_btn)
 
-        self._channel_spin = _make_numpad_btn("0", suffix="", title="Canal MCC 118 (0-7)", parent=self)
-        form.addRow("Canal MCC 118 :", self._channel_spin)
+        self._channel_btn = _make_numpad_btn(
+            "0", suffix="", title="Canal MCC 118 (0-7)", parent=self
+        )
+        form.addRow("Canal MCC 118 :", self._channel_btn)
 
-        self._alarm_spin = _make_numpad_btn("4500.0", suffix=" N", title="Seuil d'alarme", parent=self)
-        form.addRow("Seuil d'alarme :", self._alarm_spin)
+        self._decimal_btn = _make_choice_btn(_DECIMAL_CHOICES, "1", "Décimales", self)
+        form.addRow("Décimales :", self._decimal_btn)
 
-        root.addWidget(form_w, stretch=1)
+        return w
 
-        # Footer boutons
-        footer = QWidget()
-        footer.setFixedHeight(60)
-        footer.setStyleSheet("background-color: #181818;")
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(24, 8, 24, 8)
-        fh.setSpacing(16)
-        fh.addStretch()
+    def _build_page1(self) -> QWidget:
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(24, 16, 24, 16)
+        v.setSpacing(12)
 
-        btn_save = QPushButton("✓  Sauvegarder")
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        fh.addWidget(btn_save)
+        form = QFormLayout()
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
+        self._scale_method_btn = _make_choice_btn(
+            _SCALE_METHODS, "Sensibilité", "Méthode d'échelle", self
+        )
+        form.addRow("Méthode d'échelle :", self._scale_method_btn)
+
+        self._sensitivity_btn = _make_numpad_btn(
+            "-10.0", suffix=" pC/N", title="Sensibilité (pC/N)", parent=self
+        )
+        form.addRow("Sensibilité :", self._sensitivity_btn)
+
+        self._alarm_btn = _make_numpad_btn(
+            "4500.0", suffix="", title="Seuil d'alarme", parent=self
+        )
+        form.addRow("Seuil d'alarme :", self._alarm_btn)
+
+        self._invert_chk = QCheckBox("Inverser le signal")
+        form.addRow("", self._invert_chk)
+
+        v.addLayout(form)
+
+        # Section Avancé (collapsible)
+        self._avance_toggle = QPushButton("Avancé  ▼")
+        self._avance_toggle.setStyleSheet(
+            "background: transparent; color: #378ADD; font-size: 14px;"
+            " font-weight: bold; border: none; text-align: left; padding: 4px 0;"
+        )
+        self._avance_toggle.clicked.connect(self._toggle_avance)
+        v.addWidget(self._avance_toggle)
+
+        self._avance_w = QWidget()
+        av = QFormLayout(self._avance_w)
+        av.setContentsMargins(0, 4, 0, 4)
+        av.setSpacing(12)
+        av.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._filter_btn = _make_choice_btn(_FILTER_CHOICES, "Aucun", "Filtre", self)
+        av.addRow("Filtre :", self._filter_btn)
+
+        self._couple_dcy_chk = QCheckBox("Couple DCY")
+        av.addRow("", self._couple_dcy_chk)
+
+        self._test_point_btn = _make_numpad_btn(
+            "0.0", suffix="", title="Point de test", parent=self
+        )
+        av.addRow("Point de test :", self._test_point_btn)
+
+        self._tolerance_btn = _make_numpad_btn(
+            "5.0", suffix=" %", title="Tolérance (%)", parent=self
+        )
+        av.addRow("Tolérance :", self._tolerance_btn)
+
+        self._test_tor_chk = QCheckBox("Test TOR")
+        av.addRow("", self._test_tor_chk)
+
+        self._avance_w.setVisible(False)
+        v.addWidget(self._avance_w)
+        v.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(inner)
+        return scroll
+
+    def _toggle_avance(self) -> None:
+        vis = self._avance_w.isVisible()
+        self._avance_w.setVisible(not vis)
+        self._avance_toggle.setText("Avancé  ▲" if not vis else "Avancé  ▼")
+
+    def _build_footer0(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(16)
         btn_cancel = QPushButton("✗  Annuler")
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self.reject)
-        fh.addWidget(btn_cancel)
+        h.addWidget(btn_cancel)
+        h.addStretch()
+        btn_next = QPushButton("Suivant  →")
+        btn_next.setObjectName("btn_nav")
+        btn_next.clicked.connect(self._go_page1)
+        h.addWidget(btn_next)
+        return w
 
-        root.addWidget(footer)
+    def _build_footer1(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(16)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(self._go_page0)
+        h.addWidget(btn_back)
+        h.addStretch()
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+        return w
 
+    def _go_page0(self) -> None:
+        self._stack.setCurrentIndex(0)
+        self._footer.setCurrentIndex(0)
+        self._header_lbl.setText("Voie Y — Déclaration capteur")
+
+    def _go_page1(self) -> None:
+        self._stack.setCurrentIndex(1)
+        self._footer.setCurrentIndex(1)
+        self._header_lbl.setText("Voie Y — Sensibilité piézo")
+
+    # ------------------------------------------------------------------
     def _load_config(self) -> None:
         cfg = load_config(_CONFIG_PATH)
         if not cfg:
             return
 
         scaling = cfg.get("scaling", {})
-        acquisition = cfg.get("acquisition", {})
-        thresholds = cfg.get("thresholds", {})
+        acq = cfg.get("acquisition", {})
+        thr = cfg.get("thresholds", {})
+        cal = cfg.get("calibration", {}).get("voie_y", {})
 
         name = scaling.get("force_name", "")
-        self._name_edit.setProperty("alpha_value", name)
-        self._name_edit.setText(name or "—")
-        idx = self._unit_combo.findText(scaling.get("force_unit", "N"))
-        if idx >= 0:
-            self._unit_combo.setCurrentIndex(idx)
-        for btn, val in [
-            (self._min_spin, "0.0"),
-            (self._max_spin, str(scaling.get("force_newton_max", 5000.0))),
-            (self._channel_spin, str(acquisition.get("force_channel", 0))),
-            (self._alarm_spin, str(thresholds.get("force_max_n", 4500.0))),
+        self._name_btn.setProperty("alpha_value", name)
+        self._name_btn.setText(name or "—")
+
+        for btn, val, default in [
+            (self._unit_btn,         scaling.get("force_unit"),          "N"),
+            (self._decimal_btn,      str(scaling.get("force_decimal", 1)), "1"),
+            (self._scale_method_btn, cal.get("scale_method"),             "Sensibilité"),
+            (self._filter_btn,       cal.get("filter"),                   "Aucun"),
         ]:
-            suffix = btn.property("numpad_suffix") or ""
+            v = val or default
+            btn.setProperty("choice_value", v)
+            btn.setText(v)
+
+        for btn, val, default in [
+            (self._max_btn,         str(scaling.get("force_newton_max", 5000.0)), "5000.0"),
+            (self._channel_btn,     str(acq.get("force_channel", 0)),             "0"),
+            (self._sensitivity_btn, str(cal.get("sensitivity", -10.0)),           "-10.0"),
+            (self._alarm_btn,       str(thr.get("force_max_n", 4500.0)),          "4500.0"),
+            (self._test_point_btn,  str(cal.get("test_point", 0.0)),              "0.0"),
+            (self._tolerance_btn,   str(cal.get("tolerance_pct", 5.0)),           "5.0"),
+        ]:
+            sfx = btn.property("numpad_suffix") or ""
             btn.setProperty("numpad_value", val)
-            btn.setText(f"{val}{suffix}")
+            btn.setText(f"{val}{sfx}")
+
+        self._invert_chk.setChecked(bool(cal.get("invert_signal", False)))
+        self._couple_dcy_chk.setChecked(bool(cal.get("couple_dcy", False)))
+        self._test_tor_chk.setChecked(bool(cal.get("test_tor", False)))
 
     def _save(self) -> None:
         cfg = load_config(_CONFIG_PATH)
         cfg.setdefault("scaling", {})
         cfg.setdefault("acquisition", {})
         cfg.setdefault("thresholds", {})
-        cfg["scaling"]["force_newton_max"] = _get_numpad_value(self._max_spin)
-        cfg["scaling"]["force_unit"] = self._unit_combo.currentText()
-        cfg["scaling"]["force_name"] = _get_alpha_value(self._name_edit)
-        cfg["acquisition"]["force_channel"] = int(_get_numpad_value(self._channel_spin))
-        cfg["thresholds"]["force_max_n"] = _get_numpad_value(self._alarm_spin)
-        save_config(_CONFIG_PATH, cfg)
+        cfg.setdefault("calibration", {})
+        cfg["calibration"].setdefault("voie_y", {})
 
+        cfg["scaling"]["force_name"] = _get_alpha_value(self._name_btn)
+        cfg["scaling"]["force_unit"] = self._unit_btn.property("choice_value") or "N"
+        cfg["scaling"]["force_newton_max"] = _get_numpad_value(self._max_btn)
+        cfg["scaling"]["force_decimal"] = int(
+            self._decimal_btn.property("choice_value") or "1"
+        )
+        cfg["acquisition"]["force_channel"] = int(_get_numpad_value(self._channel_btn))
+        cfg["thresholds"]["force_max_n"] = _get_numpad_value(self._alarm_btn)
+
+        cal = cfg["calibration"]["voie_y"]
+        cal["scale_method"]  = self._scale_method_btn.property("choice_value") or "Sensibilité"
+        cal["sensitivity"]   = _get_numpad_value(self._sensitivity_btn)
+        cal["invert_signal"] = self._invert_chk.isChecked()
+        cal["filter"]        = self._filter_btn.property("choice_value") or "Aucun"
+        cal["couple_dcy"]    = self._couple_dcy_chk.isChecked()
+        cal["test_point"]    = _get_numpad_value(self._test_point_btn)
+        cal["tolerance_pct"] = _get_numpad_value(self._tolerance_btn)
+        cal["test_tor"]      = self._test_tor_chk.isChecked()
+
+        save_config(_CONFIG_PATH, cfg)
         QMessageBox.information(
-            self,
-            "Voie Y",
+            self, "Voie Y",
             "✓ Configuration Voie Y sauvegardée.\nRedémarrez pour appliquer.",
         )
         self.accept()
