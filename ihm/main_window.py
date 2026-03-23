@@ -13,7 +13,6 @@ Données : on_new_point() accumule dans buffer ; timer 30 FPS vide le buffer.
 from __future__ import annotations
 
 import collections
-import csv
 from datetime import datetime
 from pathlib import Path
 
@@ -24,7 +23,6 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -33,6 +31,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTableWidget,
@@ -971,6 +970,408 @@ class PmSelectorDialog(QDialog):
 
 
 # ===========================================================================
+# _TendanceWidget — mini tracé Fmax via QPainter (page stable, pas de transition)
+# ===========================================================================
+
+class _TendanceWidget(QWidget):
+    """Graphe Fmax par cycle (QPainter autorisé : widget stable, hors transition stack)."""
+
+    _ML, _MR, _MT, _MB = 45, 12, 15, 28
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._data: list[float] = []
+        self.setFixedHeight(200)
+        self.setStyleSheet("background-color: #1a1a1a;")
+
+    def set_data(self, fmax_values: list[float]) -> None:
+        self._data = fmax_values
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        ml, mr, mt, mb = self._ML, self._MR, self._MT, self._MB
+        pw, ph = w - ml - mr, h - mt - mb
+
+        if len(self._data) < 2:
+            p.setPen(QPen(QColor("#9e9e9e")))
+            p.drawText(QRect(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, "Pas assez de données")
+            return
+
+        # Grille horizontale
+        p.setPen(QPen(QColor("#222222"), 1))
+        for i in range(5):
+            y = mt + int(ph * i / 4)
+            p.drawLine(ml, y, w - mr, y)
+
+        # Labels Y
+        font = QFont()
+        font.setPointSize(8)
+        p.setFont(font)
+        p.setPen(QPen(QColor("#556677")))
+        p.drawText(2, mt + 8, f"{FORCE_NEWTON_MAX:.0f}N")
+        p.drawText(2, h - mb + 5, "0N")
+
+        # Axes
+        p.setPen(QPen(QColor("#444444"), 1))
+        p.drawLine(ml, mt, ml, h - mb)
+        p.drawLine(ml, h - mb, w - mr, h - mb)
+
+        # Points
+        n = len(self._data)
+        pts = []
+        for i, fmax in enumerate(self._data):
+            x = ml + int(i * pw / max(n - 1, 1))
+            raw_y = mt + ph - int(min(fmax, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * ph)
+            pts.append((x, max(mt, min(mt + ph, raw_y))))
+
+        # Moyenne
+        avg = sum(self._data) / n
+        avg_y = mt + ph - int(min(avg, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * ph)
+        avg_y = max(mt, min(mt + ph, avg_y))
+        p.setPen(QPen(QColor("#ef5350"), 1, Qt.PenStyle.DashLine))
+        p.drawLine(ml, avg_y, w - mr, avg_y)
+
+        # Courbe Fmax
+        p.setPen(QPen(QColor("#42a5f5"), 2))
+        for i in range(len(pts) - 1):
+            p.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
+
+        # Labels X (premier et dernier cycle)
+        p.setPen(QPen(QColor("#556677")))
+        p.drawText(ml, h - 4, "1")
+        last_x = pts[-1][0]
+        p.drawText(max(ml, last_x - 20), h - 4, str(n))
+
+
+# ===========================================================================
+# _StatsWidget — page statistiques production
+# ===========================================================================
+
+class _StatsWidget(QWidget):
+    """Affiche les statistiques de production en scroll vertical."""
+
+    _N_OPTIONS = [20, 50, 100]
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._n_histo = 50
+        self._last_log: list[tuple] = []
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    # Construction UI
+    # ------------------------------------------------------------------
+
+    def _build_ui(self) -> None:
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background-color: #121212; border: none;")
+
+        content = QWidget()
+        content.setStyleSheet("background-color: #121212;")
+        v = QVBoxLayout(content)
+        v.setContentsMargins(12, 12, 12, 12)
+        v.setSpacing(14)
+
+        v.addWidget(self._build_summary_section())
+        v.addWidget(self._build_histogram_section())
+        v.addWidget(self._build_tendance_section())
+        v.addWidget(self._build_rebut_section())
+        v.addWidget(self._build_nok_table_section())
+        v.addStretch()
+
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
+
+    @staticmethod
+    def _card_section(title: str, inner: QWidget) -> QWidget:
+        box = QWidget()
+        box.setStyleSheet("background-color: #1e1e1e; border-radius: 8px;")
+        v = QVBoxLayout(box)
+        v.setContentsMargins(10, 8, 10, 10)
+        v.setSpacing(6)
+        lbl = QLabel(title)
+        lbl.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #9e9e9e; background: transparent;"
+        )
+        sep = QFrame()
+        sep.setObjectName("separator")
+        v.addWidget(lbl)
+        v.addWidget(sep)
+        v.addWidget(inner)
+        return box
+
+    def _build_summary_section(self) -> QWidget:
+        w = QWidget()
+        h = QHBoxLayout(w)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+        specs = [
+            ("total", "Total",   "#1e1e1e", "#e0e0e0"),
+            ("ok",    "OK",      "#1a3a1a", "#4caf50"),
+            ("nok",   "NOK",     "#3a1a1a", "#ef5350"),
+            ("taux",  "Taux OK", "#1a2a3a", "#42a5f5"),
+        ]
+        self._card_lbls: dict[str, QLabel] = {}
+        for key, name, bg, fg in specs:
+            frame = QFrame()
+            frame.setFixedSize(140, 80)
+            frame.setStyleSheet(
+                f"QFrame {{ background-color: {bg}; border-radius: 8px;"
+                f" border: 1px solid #333; }}"
+            )
+            fv = QVBoxLayout(frame)
+            fv.setContentsMargins(6, 4, 6, 4)
+            fv.setSpacing(2)
+            val = QLabel("—")
+            val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            val.setStyleSheet(
+                f"font-size: 28px; font-weight: bold; color: {fg};"
+                " background: transparent; border: none;"
+            )
+            sub = QLabel(name)
+            sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            sub.setStyleSheet("font-size: 12px; color: #9e9e9e; background: transparent; border: none;")
+            fv.addWidget(val)
+            fv.addWidget(sub)
+            self._card_lbls[key] = val
+            h.addWidget(frame)
+        h.addStretch()
+        return self._card_section("Résumé global", w)
+
+    def _build_histogram_section(self) -> QWidget:
+        wrapper = QWidget()
+        v = QVBoxLayout(wrapper)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+
+        self._bar_container = QWidget()
+        self._bar_container.setFixedHeight(120)
+        self._bar_container.setStyleSheet(
+            "background-color: #1a1a1a; border: 1px solid #333; border-radius: 4px;"
+        )
+        self._bar_layout = QHBoxLayout(self._bar_container)
+        self._bar_layout.setContentsMargins(4, 4, 4, 4)
+        self._bar_layout.setSpacing(2)
+        self._bar_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        v.addWidget(self._bar_container)
+
+        row = QWidget()
+        rh = QHBoxLayout(row)
+        rh.setContentsMargins(0, 0, 0, 0)
+        self._histo_info = QLabel("0 cycles affichés")
+        self._histo_info.setStyleSheet("font-size: 12px; color: #9e9e9e;")
+        rh.addWidget(self._histo_info)
+        rh.addStretch()
+        self._n_btn = QPushButton(f"{self._n_histo} cycles")
+        self._n_btn.setObjectName("nav_btn")
+        self._n_btn.setFixedSize(120, 32)
+        self._n_btn.clicked.connect(self._cycle_n_histo)
+        rh.addWidget(self._n_btn)
+        v.addWidget(row)
+
+        return self._card_section(f"Historique des {self._n_histo} derniers cycles", wrapper)
+
+    def _build_tendance_section(self) -> QWidget:
+        self._tendance = _TendanceWidget()
+        return self._card_section("Tendance Fmax", self._tendance)
+
+    def _build_rebut_section(self) -> QWidget:
+        self._rebut_inner = QWidget()
+        self._rebut_layout = QVBoxLayout(self._rebut_inner)
+        self._rebut_layout.setContentsMargins(0, 0, 0, 0)
+        self._rebut_layout.setSpacing(4)
+        return self._card_section("Taux de rebut par heure", self._rebut_inner)
+
+    def _build_nok_table_section(self) -> QWidget:
+        self._nok_table = QTableWidget(0, 5)
+        self._nok_table.setHorizontalHeaderLabels(
+            ["Cycle", "Heure", "Fmax (N)", "Xmax (mm)", "PM"]
+        )
+        self._nok_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._nok_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._nok_table.setStyleSheet(
+            "QTableWidget { background-color: #1a0808; color: #e0e0e0;"
+            " gridline-color: #333; }"
+            "QHeaderView::section { background-color: #2a0a0a; color: #e0e0e0;"
+            " border: none; padding: 4px; }"
+        )
+        self._nok_table.horizontalHeader().setDefaultSectionSize(110)
+        return self._card_section("Détail des cycles NOK", self._nok_table)
+
+    # ------------------------------------------------------------------
+    # Interactions
+    # ------------------------------------------------------------------
+
+    def _cycle_n_histo(self) -> None:
+        idx = self._N_OPTIONS.index(self._n_histo) if self._n_histo in self._N_OPTIONS else 1
+        self._n_histo = self._N_OPTIONS[(idx + 1) % len(self._N_OPTIONS)]
+        self._n_btn.setText(f"{self._n_histo} cycles")
+        self._update_histogram(self._last_log)
+
+    # ------------------------------------------------------------------
+    # Refresh principal
+    # ------------------------------------------------------------------
+
+    def refresh(self, production_log: list[tuple]) -> None:
+        """
+        production_log : liste de tuples (cycle_num, fmax, xmax, result, heure)
+        """
+        self._last_log = production_log
+        self._update_summary(production_log)
+        self._update_histogram(production_log)
+        self._update_tendance(production_log)
+        self._update_rebut_par_heure(production_log)
+        self._update_nok_table(production_log)
+
+    def _update_summary(self, log: list[tuple]) -> None:
+        total = len(log)
+        nb_ok = sum(1 for r in log if r[3] == "PASS")
+        nb_nok = total - nb_ok
+        taux = (nb_ok / total * 100) if total else 0.0
+
+        self._card_lbls["total"].setText(str(total))
+        self._card_lbls["ok"].setText(str(nb_ok))
+        self._card_lbls["nok"].setText(str(nb_nok))
+        self._card_lbls["taux"].setText(f"{taux:.1f} %")
+
+        # Couleur dynamique Taux OK
+        if taux >= 95:
+            taux_color = "#4caf50"
+        elif taux >= 90:
+            taux_color = "#42a5f5"
+        else:
+            taux_color = "#ef5350"
+        self._card_lbls["taux"].setStyleSheet(
+            f"font-size: 28px; font-weight: bold; color: {taux_color};"
+            " background: transparent; border: none;"
+        )
+
+    def _update_histogram(self, log: list[tuple]) -> None:
+        # Vider le container
+        while self._bar_layout.count():
+            item = self._bar_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        subset = log[-self._n_histo:]
+        self._histo_info.setText(f"{len(subset)} cycles affichés")
+
+        bar_h = self._bar_container.height() - 8  # marges
+
+        for _, fmax, _, result, _ in subset:
+            color = "#4caf50" if result == "PASS" else "#ef5350"
+            height = max(4, int(min(fmax, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * bar_h))
+
+            slot = QWidget()
+            slot.setFixedWidth(12)
+            sv = QVBoxLayout(slot)
+            sv.setContentsMargins(0, 0, 0, 0)
+            sv.setSpacing(0)
+            sv.addStretch()
+
+            bar = QFrame(slot)
+            bar.setFixedSize(12, height)
+            bar.setStyleSheet(
+                f"QFrame {{ background-color: {color}; border-radius: 2px; border: none; }}"
+            )
+            sv.addWidget(bar)
+            self._bar_layout.addWidget(slot)
+
+        self._bar_layout.addStretch()
+
+    def _update_tendance(self, log: list[tuple]) -> None:
+        fmax_values = [r[1] for r in log[-self._n_histo:]]
+        self._tendance.set_data(fmax_values)
+
+    def _update_rebut_par_heure(self, log: list[tuple]) -> None:
+        # Nettoyer
+        while self._rebut_layout.count():
+            item = self._rebut_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # Grouper par heure (HH:MM:SS → clé HH)
+        hours: dict[str, list[tuple]] = {}
+        for entry in log:
+            heure = entry[4]  # format HH:MM:SS
+            key = heure[:5] if len(heure) >= 5 else heure  # HH:MM
+            hours.setdefault(key, []).append(entry)
+
+        if not hours:
+            lbl = QLabel("Aucune donnée")
+            lbl.setStyleSheet("color: #9e9e9e;")
+            self._rebut_layout.addWidget(lbl)
+            return
+
+        for key in sorted(hours.keys()):
+            entries = hours[key]
+            nb_total = len(entries)
+            nb_nok = sum(1 for e in entries if e[3] != "PASS")
+            pct = (nb_nok / nb_total * 100) if nb_total else 0.0
+
+            row = QWidget()
+            rh = QHBoxLayout(row)
+            rh.setContentsMargins(0, 2, 0, 2)
+            rh.setSpacing(8)
+
+            lbl = QLabel(f"{key}")
+            lbl.setFixedWidth(50)
+            lbl.setStyleSheet("font-size: 12px; color: #9e9e9e;")
+            rh.addWidget(lbl)
+
+            pb = QProgressBar()
+            pb.setMaximum(nb_total)
+            pb.setValue(nb_nok)
+            pb.setFixedHeight(18)
+            pb.setTextVisible(False)
+            if pct > 10:
+                chunk_color = "#ef5350"
+            elif pct > 5:
+                chunk_color = "#f57f17"
+            else:
+                chunk_color = "#4caf50"
+            pb.setStyleSheet(
+                "QProgressBar { background-color: #2a2a2a; border-radius: 3px; border: none; }"
+                f"QProgressBar::chunk {{ background-color: {chunk_color}; border-radius: 3px; }}"
+            )
+            rh.addWidget(pb, stretch=1)
+
+            info = QLabel(f"{nb_nok} NOK / {nb_total}  ({pct:.1f} %)")
+            info.setFixedWidth(170)
+            info.setStyleSheet("font-size: 12px; color: #9e9e9e;")
+            rh.addWidget(info)
+
+            self._rebut_layout.addWidget(row)
+
+    def _update_nok_table(self, log: list[tuple]) -> None:
+        self._nok_table.setRowCount(0)
+        nok_entries = [(i, e) for i, e in enumerate(log) if e[3] != "PASS"]
+        # Plus récent en haut
+        nok_entries = sorted(nok_entries, key=lambda x: x[1][4], reverse=True)[:50]
+
+        for _, (cycle_num, fmax, xmax, result, heure) in nok_entries:
+            row = self._nok_table.rowCount()
+            self._nok_table.insertRow(row)
+            for col, text in enumerate(
+                [str(cycle_num), heure, f"{fmax:.0f}", f"{xmax:.1f}", "—"]
+            ):
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                item.setBackground(QColor("#1a0808"))
+                if col == 2:
+                    item.setForeground(QColor("#ef5350"))
+                self._nok_table.setItem(row, col, item)
+
+
+# ===========================================================================
 # PinDialog — saisie PIN avec verrouillage
 # ===========================================================================
 
@@ -1219,8 +1620,10 @@ class MainWindow(QMainWindow):
         self._graph = GraphWidget()
         self._graph.set_tools(self._tools)
         self._data_table = self._build_data_table()
-        self._content_stack.addWidget(self._graph)       # index 0
-        self._content_stack.addWidget(self._data_table)  # index 1
+        self._stats_widget = _StatsWidget()
+        self._content_stack.addWidget(self._graph)        # index 0
+        self._content_stack.addWidget(self._data_table)   # index 1
+        self._content_stack.addWidget(self._stats_widget) # index 2
         self._graph.setMinimumWidth(860)
         h.addWidget(self._content_stack, stretch=1)
 
@@ -1408,7 +1811,7 @@ class MainWindow(QMainWindow):
             ("📈  Courbe actuelle", "nav_btn",       self._show_current_curve, True),
             ("🕐  Historique",      "nav_btn",        self._show_history,       False),
             ("📊  Données",         "nav_btn",        self._show_data_table,    False),
-            ("💾  Export CSV",      "nav_btn_green",  self._export_csv,         False),
+            ("📊  Statistiques",    "nav_btn",        self._show_stats,         False),
             ("🔄  RAZ",             "nav_btn_red",    self._reset_counters,     False),
         ]
 
@@ -1542,6 +1945,9 @@ class MainWindow(QMainWindow):
         self._add_production_row(cycle_num, self._cycle_fmax, self._cycle_xmax, result, now)
         self._graph.finish_cycle(result)
 
+        if self._content_stack.currentIndex() == 2:
+            self._stats_widget.refresh(self._production_log)
+
         if self._sim_mode:
             self._show_restart_button()
 
@@ -1640,23 +2046,10 @@ class MainWindow(QMainWindow):
     def _show_data_table(self) -> None:
         self._content_stack.setCurrentIndex(1)
 
-    def _export_csv(self) -> None:
-        if not self._production_log:
-            QMessageBox.information(self, "Export", "Aucune donnée à exporter.")
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Exporter les données de production",
-            f"production_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            "CSV (*.csv)",
-        )
-        if not path:
-            return
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Cycle", "Fmax_N", "Xmax_mm", "Resultat", "Heure"])
-            writer.writerows(self._production_log)
-        QMessageBox.information(self, "Export", f"Données exportées :\n{path}")
+    def _show_stats(self) -> None:
+        self._graph.set_history_mode(False)
+        self._content_stack.setCurrentIndex(2)
+        self._stats_widget.refresh(self._production_log)
 
     def _update_counters(self) -> None:
         total = self._count_ok + self._count_nok
