@@ -13,6 +13,42 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import QThread, Signal
+
+
+class ExportWorker(QThread):
+    """Worker thread pour les opérations d'export lourdes (PDF, USB, détection)."""
+
+    finished = Signal(bool, str)  # succès, message
+
+    def __init__(self, task: str, **kwargs) -> None:
+        super().__init__()
+        self._task = task
+        self._kwargs = kwargs
+
+    def run(self) -> None:
+        try:
+            if self._task == "pdf":
+                ok = generate_pdf_report(**self._kwargs)
+                msg = "Rapport PDF généré." if ok else "Erreur génération PDF."
+                self.finished.emit(ok, msg)
+            elif self._task == "usb":
+                copied, skipped = export_csv_to_usb(**self._kwargs)
+                self.finished.emit(
+                    True,
+                    f"{copied} fichier(s) copié(s), {skipped} ignoré(s).",
+                )
+            elif self._task == "detect":
+                drives = find_usb_drives()
+                if drives:
+                    self.finished.emit(
+                        True, f"{len(drives)} clé(s) : {', '.join(drives)}"
+                    )
+                else:
+                    self.finished.emit(False, "Aucune clé USB détectée")
+        except Exception as e:
+            self.finished.emit(False, str(e))
+
 
 def find_usb_drives() -> list[str]:
     """Retourne la liste des points de montage USB détectés.

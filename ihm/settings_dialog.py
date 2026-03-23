@@ -2851,10 +2851,10 @@ class _ExportationPage(QWidget):
         sec1.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
         v.addWidget(sec1)
 
-        btn_detect = QPushButton("🔍  Détecter les clés USB")
-        btn_detect.setObjectName("btn_nav")
-        btn_detect.clicked.connect(self._detect_usb)
-        v.addWidget(btn_detect)
+        self._btn_detect = QPushButton("🔍  Détecter les clés USB")
+        self._btn_detect.setObjectName("btn_nav")
+        self._btn_detect.clicked.connect(self._detect_usb)
+        v.addWidget(self._btn_detect)
 
         self._usb_status_lbl = QLabel("Aucune clé USB détectée")
         self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
@@ -2874,10 +2874,10 @@ class _ExportationPage(QWidget):
         fw_usb.setLayout(form_usb)
         v.addWidget(fw_usb)
 
-        btn_export = QPushButton("💾  Exporter vers la clé USB")
-        btn_export.setObjectName("btn_save")
-        btn_export.clicked.connect(self._do_export_usb)
-        v.addWidget(btn_export)
+        self._btn_export = QPushButton("💾  Exporter vers la clé USB")
+        self._btn_export.setObjectName("btn_save")
+        self._btn_export.clicked.connect(self._do_export_usb)
+        v.addWidget(self._btn_export)
 
         sep1 = QFrame()
         sep1.setObjectName("separator")
@@ -2903,10 +2903,10 @@ class _ExportationPage(QWidget):
         fw_pdf.setLayout(form_pdf)
         v.addWidget(fw_pdf)
 
-        btn_pdf = QPushButton("📄  Générer rapport PDF")
-        btn_pdf.setObjectName("btn_nav")
-        btn_pdf.clicked.connect(self._do_generate_pdf)
-        v.addWidget(btn_pdf)
+        self._btn_pdf = QPushButton("📄  Générer rapport PDF")
+        self._btn_pdf.setObjectName("btn_nav")
+        self._btn_pdf.clicked.connect(self._do_generate_pdf)
+        v.addWidget(self._btn_pdf)
 
         v.addStretch()
         scroll.setWidget(w)
@@ -3069,61 +3069,76 @@ class _ExportationPage(QWidget):
 
     # ------------------------------------------------------------------
     def _detect_usb(self) -> None:
-        from core.export_manager import find_usb_drives
+        from core.export_manager import ExportWorker
 
-        self._detected_drives = find_usb_drives()
-        if self._detected_drives:
-            drives_str = ", ".join(self._detected_drives)
-            count = len(self._detected_drives)
-            self._usb_status_lbl.setText(
-                f"{count} clé(s) détectée(s) : {drives_str}"
-            )
+        self._btn_detect.setEnabled(False)
+        self._btn_detect.setText("⏳  Recherche...")
+        self._worker_detect = ExportWorker(task="detect")
+        self._worker_detect.finished.connect(self._on_detect_done)
+        self._worker_detect.start()
+
+    def _on_detect_done(self, success: bool, message: str) -> None:
+        self._btn_detect.setEnabled(True)
+        self._btn_detect.setText("🔍  Détecter les clés USB")
+        if success:
+            # Extraire les drives depuis le message pour usage interne
+            from core.export_manager import find_usb_drives
+
+            self._detected_drives = find_usb_drives()
+            self._usb_status_lbl.setText(message)
             self._usb_status_lbl.setStyleSheet("color: #1D9E75; font-size: 14px;")
         else:
+            self._detected_drives = []
             self._usb_status_lbl.setText("Aucune clé USB détectée")
             self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
 
     def _do_export_usb(self) -> None:
-        from core.export_manager import export_csv_to_usb
-
-        if not self._detected_drives:
-            self._detect_usb()
         if not self._detected_drives:
             QMessageBox.warning(
                 self,
                 "Export USB",
-                "Aucune clé USB détectée.\nBrancheez une clé USB et cliquez sur Détecter.",
+                "Aucune clé USB détectée.\nBranchez une clé USB et cliquez sur Détecter.",
             )
             return
+
+        self._btn_export.setEnabled(False)
+        self._btn_export.setText("⏳  Export en cours...")
+
+        from core.export_manager import ExportWorker
 
         cfg = _load_cfg_safe()
         data_dir = Path(cfg.get("storage", {}).get("data_dir", "./data"))
         filtre = self._filtre_btn.property("choice_value") or "OK+NOK"
 
-        copied, skipped = export_csv_to_usb(
+        self._worker_usb = ExportWorker(
+            task="usb",
             source_dir=data_dir,
             usb_path=self._detected_drives[0],
             filter_result=filtre,
         )
-        QMessageBox.information(
-            self,
-            "Export USB terminé",
-            f"{copied} fichier(s) copié(s) vers {self._detected_drives[0]}/ACM_Export/\n"
-            f"{skipped} fichier(s) ignoré(s) (filtre : {filtre})",
-        )
+        self._worker_usb.finished.connect(self._on_export_done)
+        self._worker_usb.start()
+
+    def _on_export_done(self, success: bool, message: str) -> None:
+        self._btn_export.setEnabled(True)
+        self._btn_export.setText("💾  Exporter vers la clé USB")
+        if success:
+            QMessageBox.information(self, "Export USB terminé", message)
+        else:
+            QMessageBox.warning(self, "Export USB", f"Erreur : {message}")
 
     def _do_generate_pdf(self) -> None:
-        from core.export_manager import generate_pdf_report
+        self._btn_pdf.setEnabled(False)
+        self._btn_pdf.setText("⏳  Génération en cours...")
+
+        from core.export_manager import ExportWorker
 
         cfg = _load_cfg_safe()
         data_dir = Path(cfg.get("storage", {}).get("data_dir", "./data"))
         contenu = self._contenu_btn.property("choice_value") or "Tous les cycles"
 
-        # Reconstruction des cycles depuis les noms de fichiers CSV
-        # Format attendu : YYYYMMDD_HHMMSS_PMxx_RESULT.csv
         cycles_data = _build_cycles_from_csv(data_dir, contenu)
 
-        # Destination : clé USB en priorité, sinon data_dir
         if self._detected_drives:
             output_dir = Path(self._detected_drives[0]) / "ACM_Export"
         else:
@@ -3133,24 +3148,22 @@ class _ExportationPage(QWidget):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = output_dir / f"rapport_{timestamp}.pdf"
 
-        ok = generate_pdf_report(
+        self._worker_pdf = ExportWorker(
+            task="pdf",
             cycles_data=cycles_data,
             output_path=output_path,
             machine_name="ACM Riveteuse",
         )
-        if ok:
-            QMessageBox.information(
-                self,
-                "Rapport PDF généré",
-                f"Rapport enregistré :\n{output_path}",
-            )
+        self._worker_pdf.finished.connect(self._on_pdf_done)
+        self._worker_pdf.start()
+
+    def _on_pdf_done(self, success: bool, message: str) -> None:
+        self._btn_pdf.setEnabled(True)
+        self._btn_pdf.setText("📄  Générer rapport PDF")
+        if success:
+            QMessageBox.information(self, "Rapport PDF", message)
         else:
-            QMessageBox.warning(
-                self,
-                "Erreur PDF",
-                "Impossible de générer le rapport.\n"
-                "Vérifiez que reportlab est installé : pip install reportlab",
-            )
+            QMessageBox.warning(self, "Rapport PDF", f"Erreur : {message}")
 
 
 def _load_cfg_safe() -> dict:
