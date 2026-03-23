@@ -60,62 +60,85 @@ from ihm.ui_utils import (
 # Constantes de couleur — thème industriel sombre (maXYmos style)
 # ---------------------------------------------------------------------------
 COLORS: dict[str, str] = {
-    # États machine (IEC 60073)
+    # Fonds
+    "bg_main":        "#2E2E2E",
+    "bg_panel":       "#3A3A3A",
+    "bg_button":      "#444444",
+    "bg_graph":       "#2E2E2E",
+
+    # Textes
+    "text_primary":   "#F0F0F0",
+    "text_secondary": "#AAAAAA",
+
+    # Séparateurs
+    "border":         "#555555",
+    "separator":      "#555555",
+    "grid":           "#3A3A3A",
+    "axis_text":      "#888888",
+
+    # Accent ACM Or
+    "nav_active":     "#A07830",
+    "blue":           "#C49A3C",
+
+    # États machine (IEC 60073 — inchangés)
     "ok_bg":          "#1a3a1a",
     "ok_border":      "#2d7a2d",
     "ok_text":        "#4caf50",
     "nok_bg":         "#3a1a1a",
     "nok_border":     "#c62828",
     "nok_text":       "#ef5350",
-    "running_bg":     "#1a2a3a",
-    "running_border": "#1565c0",
-    "idle_bg":        "#1e1e1e",
-    "idle_text":      "#9e9e9e",
-    # Fond fenêtre dynamique selon état
-    "win_idle":       "#121212",
-    "win_running":    "#0d1a26",
-    "win_ok":         "#0d1a0d",
-    "win_nok":        "#1a0d0d",
-    # Alarme seuil (jaune ambre IEC 60073)
+
+    # Running — or ACM au lieu de bleu
+    "running_bg":     "#2a2010",
+    "running_border": "#C49A3C",
+
+    # Idle
+    "idle_bg":        "#2E2E2E",
+    "idle_text":      "#AAAAAA",
+
+    # Fond fenêtre dynamique
+    "win_idle":       "#2E2E2E",
+    "win_running":    "#2a2010",
+    "win_ok":         "#1a2a1a",
+    "win_nok":        "#2a1a1a",
+
+    # Alarme (jaune ambre IEC 60073 — inchangé)
     "alarm":          "#f57f17",
     "alarm_bg":       "#2a2a1a",
-    # Courbe
-    "curve_running":  "#1976D2",
-    "curve_ok":       "#388E3C",
-    "curve_nok":      "#D32F2F",
-    "curve_history":  "#616161",
+
+    # Courbes
+    "curve_running":  "#C49A3C",
+    "curve_ok":       "#4caf50",
+    "curve_nok":      "#ef5350",
+    "curve_history":  "#777777",
+    "curve_live":     "#C49A3C",
+
     # Outils graphique
     "nopass_fill":    "#c62828",
     "nopass_border":  "#ef5350",
-    "unibox_border":  "#f57f17",
-    "envelope_border":"#1565c0",
-    "envelope_fill":  "#1565c0",
-    # Interface générale
-    "bg_main":        "#121212",
-    "bg_panel":       "#1e1e1e",
-    "bg_button":      "#252525",
-    "text_primary":   "#e0e0e0",
-    "text_secondary": "#9e9e9e",
-    "border":         "#333333",
-    "settings_btn":   "#b45309",
-    "nav_active":     "#1565c0",
+    "unibox_border":  "#C49A3C",
+    "envelope_border":"#A07830",
+    "envelope_fill":  "#A07830",
+
+    # Boutons navigation
+    "settings_btn":   "#A07830",
     "export_btn":     "#1a3a1a",
     "raz_btn":        "#3a1a1a",
-    # Aliases pour compatibilité avec l'existant
-    "bg_graph":       "#121212",
-    "grid":           "#222222",
-    "axis_text":      "#556677",
-    "curve_live":     "#1976D2",
-    "tool_no_pass":   "#c62828",
-    "tool_unibox":    "#f57f17",
-    "tool_envelope":  "#1565c0",
+
+    # Résultat
     "result_ok":      "#1a3a1a",
     "result_nok":     "#3a1a1a",
-    "result_idle":    "#1e1e1e",
-    "panel_bg":       "#1e1e1e",
-    "separator":      "#333333",
+    "result_idle":    "#3A3A3A",
+
+    # Aliases
+    "panel_bg":       "#3A3A3A",
     "progress_ok":    "#4caf50",
     "progress_warn":  "#ef5350",
+
+    # Compatibilité outils graphique
+    "tool_no_pass":   "#c62828",
+    "tool_unibox":    "#C49A3C",
+    "tool_envelope":  "#A07830",
 }
 
 _PIN_CODE = "1234"
@@ -146,17 +169,17 @@ QLabel#counter_ok   {{ color: {COLORS['ok_text']}; font-size: 22px; font-weight:
 QLabel#counter_nok  {{ color: {COLORS['nok_text']}; font-size: 22px; font-weight: bold; }}
 QLabel#counter_tot  {{ color: {COLORS['text_primary']}; font-size: 22px; font-weight: bold; }}
 QLabel#datetime_label {{ font-size: 12px; color: {COLORS['text_secondary']}; }}
-QLabel#pm_section_title {{ font-size: 13px; font-weight: bold; color: #378ADD; }}
+QLabel#pm_section_title {{ font-size: 13px; font-weight: bold; color: {COLORS['blue']}; }}
 QLabel#pm_btn_label {{ font-size: 17px; font-weight: bold; color: {COLORS['text_primary']}; }}
 QLabel#live_label   {{ font-size: 15px; font-weight: 600; color: {COLORS['text_secondary']}; }}
 QLabel#live_value   {{ font-size: 26px; font-weight: bold; color: {COLORS['text_primary']}; }}
 QLabel#peak_label   {{ font-size: 15px; font-weight: 600; color: {COLORS['text_secondary']}; }}
-QLabel#peak_value   {{ font-size: 22px; font-weight: bold; color: #378ADD; }}
+QLabel#peak_value   {{ font-size: 22px; font-weight: bold; color: {COLORS['blue']}; }}
 
 QProgressBar {{
     border: none;
     border-radius: 4px;
-    background-color: #2a2a2a;
+    background-color: {COLORS['bg_button']};
     max-height: 10px;
 }}
 QProgressBar::chunk {{
@@ -201,7 +224,7 @@ QPushButton#nav_btn {{
 QPushButton#nav_btn:checked, QPushButton#nav_btn:pressed {{
     background-color: {COLORS['nav_active']};
     color: #ffffff;
-    border-color: #42a5f5;
+    border-color: {COLORS['blue']};
 }}
 QPushButton#nav_btn_green {{
     background-color: {COLORS['export_btn']};
@@ -231,20 +254,20 @@ QFrame#separator {{
 # Style du dialogue PIN
 # ---------------------------------------------------------------------------
 PINSTYLE = """
-QDialog { background-color: #1e1e1e; }
-QLabel  { color: #e0e0e0; font-size: 15px; }
+QDialog { background-color: #3A3A3A; }
+QLabel  { color: #F0F0F0; font-size: 15px; }
 QLineEdit {
-    background-color: #2a2a2a;
+    background-color: #444444;
     color: #ffffff;
-    border: 2px solid #444;
+    border: 2px solid #555555;
     border-radius: 8px;
     font-size: 28px;
     padding: 8px;
     letter-spacing: 12px;
 }
-QLineEdit:focus { border-color: #378ADD; }
+QLineEdit:focus { border-color: #C49A3C; }
 QPushButton {
-    background-color: #378ADD;
+    background-color: #C49A3C;
     color: white;
     border-radius: 8px;
     padding: 10px 24px;
@@ -252,7 +275,7 @@ QPushButton {
     font-weight: bold;
     border: none;
 }
-QPushButton:pressed { background-color: #185FA5; }
+QPushButton:pressed { background-color: #A07830; }
 """
 
 
@@ -576,17 +599,17 @@ class NumpadDialog(QDialog):
         self.setModal(True)
         self.setFixedSize(360, 460)
         self.setStyleSheet("""
-            QDialog { background-color: #1e1e1e; }
+            QDialog { background-color: #3A3A3A; }
             QLabel#numpad_title {
-                color: #9e9e9e; font-size: 13px; font-weight: 600;
+                color: #AAAAAA; font-size: 13px; font-weight: 600;
             }
             QLabel#numpad_unit {
-                color: #9e9e9e; font-size: 13px;
+                color: #AAAAAA; font-size: 13px;
             }
             QLineEdit#numpad_display {
-                background-color: #2a2a2a;
+                background-color: #444444;
                 color: #ffffff;
-                border: 2px solid #378ADD;
+                border: 2px solid #C49A3C;
                 border-radius: 8px;
                 font-size: 28px;
                 font-weight: bold;
@@ -594,17 +617,17 @@ class NumpadDialog(QDialog):
                 min-height: 52px;
             }
             QPushButton#numpad_key {
-                background-color: #2a2a2a;
-                color: #e0e0e0;
+                background-color: #444444;
+                color: #F0F0F0;
                 font-size: 20px;
                 font-weight: bold;
-                border: 1px solid #444;
+                border: 1px solid #555555;
                 border-radius: 8px;
                 min-height: 56px;
             }
-            QPushButton#numpad_key:pressed { background-color: #1565c0; }
+            QPushButton#numpad_key:pressed { background-color: #A07830; }
             QPushButton#numpad_backspace {
-                background-color: #2a2a2a;
+                background-color: #444444;
                 color: #ef9a9a;
                 font-size: 18px;
                 font-weight: bold;
@@ -737,12 +760,12 @@ class AlphaNumpadDialog(QDialog):
         self.setModal(True)
         self.setFixedSize(660, 400)
         self.setStyleSheet("""
-            QDialog { background-color: #1e1e1e; }
-            QLabel { color: #9e9e9e; font-size: 13px; font-weight: 600; }
+            QDialog { background-color: #3A3A3A; }
+            QLabel { color: #AAAAAA; font-size: 13px; font-weight: 600; }
             QLineEdit#alpha_display {
-                background-color: #2a2a2a;
+                background-color: #444444;
                 color: #ffffff;
-                border: 2px solid #378ADD;
+                border: 2px solid #C49A3C;
                 border-radius: 8px;
                 font-size: 22px;
                 font-weight: bold;
@@ -750,18 +773,18 @@ class AlphaNumpadDialog(QDialog):
                 min-height: 48px;
             }
             QPushButton#alpha_key {
-                background-color: #2a2a2a;
-                color: #e0e0e0;
+                background-color: #444444;
+                color: #F0F0F0;
                 font-size: 16px;
                 font-weight: bold;
-                border: 1px solid #444;
+                border: 1px solid #555555;
                 border-radius: 6px;
                 min-height: 48px;
                 min-width: 48px;
             }
-            QPushButton#alpha_key:pressed { background-color: #1565c0; }
+            QPushButton#alpha_key:pressed { background-color: #A07830; }
             QPushButton#alpha_special {
-                background-color: #2a2a2a;
+                background-color: #444444;
                 color: #ef9a9a;
                 font-size: 14px;
                 font-weight: bold;
@@ -869,17 +892,17 @@ QLabel#title {{
     padding: 4px 0 12px 0;
 }}
 QPushButton#pm_item {{
-    background-color: #2a2a2a;
+    background-color: {COLORS['bg_button']};
     color: {COLORS['text_primary']};
-    border: 2px solid #444;
+    border: 2px solid {COLORS['border']};
     border-radius: 8px;
     font-size: 15px;
     font-weight: bold;
     padding: 8px;
 }}
 QPushButton#pm_item:hover {{
-    background-color: #383838;
-    border-color: #666;
+    background-color: #4e4e4e;
+    border-color: #777777;
 }}
 QPushButton#pm_item_active {{
     background-color: {COLORS['ok_bg']};
@@ -894,9 +917,9 @@ QPushButton#pm_item_active:hover {{
     background-color: #1f4a1f;
 }}
 QPushButton#btn_cancel {{
-    background-color: #333;
+    background-color: {COLORS['border']};
     color: {COLORS['text_primary']};
-    border: 1px solid #555;
+    border: 1px solid #777777;
     border-radius: 6px;
     font-size: 14px;
     padding: 6px;
@@ -1650,6 +1673,16 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
 
+        logo_label = QLabel("ACM FRANCE")
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_label.setFixedHeight(30)
+        logo_label.setStyleSheet(
+            "color: #C49A3C; font-size: 16px; font-weight: bold; "
+            "letter-spacing: 3px; background: transparent; "
+            "border-bottom: 1px solid #C49A3C; padding-bottom: 4px;"
+        )
+        layout.addWidget(logo_label)
+
         layout.addWidget(self._build_result_badge())
         layout.addWidget(self._build_counters_section())
         layout.addWidget(self._build_datetime_section())
@@ -1891,7 +1924,7 @@ class MainWindow(QMainWindow):
             self._apply_state_style("nok")
         elif status == "running":
             self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['running_bg']}; color: #42a5f5; "
+                f"background-color: {COLORS['running_bg']}; color: {COLORS['blue']}; "
                 f"border: 2px solid {COLORS['running_border']}; border-radius: 10px; "
                 "font-size: 36px; font-weight: bold; padding: 10px;"
             )
@@ -1899,7 +1932,7 @@ class MainWindow(QMainWindow):
         else:  # idle
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
-                "border: 2px solid #333; border-radius: 10px; "
+                f"border: 2px solid {COLORS['border']}; border-radius: 10px; "
                 "font-size: 36px; font-weight: bold; padding: 10px;"
             )
             self._apply_state_style("idle")

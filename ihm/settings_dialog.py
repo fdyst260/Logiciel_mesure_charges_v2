@@ -69,16 +69,16 @@ def _make_numpad_btn(
     btn.setProperty("numpad_suffix", suffix)
     btn.setStyleSheet("""
         QPushButton {
-            background-color: #2a2a2a;
+            background-color: #444444;
             color: #ffffff;
-            border: 1.5px solid #444;
+            border: 1.5px solid #555555;
             border-radius: 6px;
             padding: 6px 12px;
             font-size: 15px;
             min-height: 42px;
             text-align: right;
         }
-        QPushButton:pressed { border-color: #378ADD; }
+        QPushButton:pressed { border-color: #C49A3C; }
     """)
 
     def _open_numpad():
@@ -117,16 +117,16 @@ def _make_alpha_btn(
     btn.setProperty("alpha_value", value)
     btn.setStyleSheet("""
         QPushButton {
-            background-color: #2a2a2a;
+            background-color: #444444;
             color: #ffffff;
-            border: 1.5px solid #444;
+            border: 1.5px solid #555555;
             border-radius: 6px;
             padding: 6px 12px;
             font-size: 15px;
             min-height: 42px;
             text-align: left;
         }
-        QPushButton:pressed { border-color: #378ADD; }
+        QPushButton:pressed { border-color: #C49A3C; }
     """)
 
     def _open_alpha():
@@ -152,19 +152,19 @@ def _get_alpha_value(btn: QPushButton) -> str:
 # Palette de couleurs — thème sombre identique à main_window
 # ---------------------------------------------------------------------------
 _C = {
-    "bg":         "#111111",
-    "panel":      "#181818",
-    "card":       "#1e1e1e",
-    "border":     "#333333",
-    "header_bg":  "#1e1e1e",
-    "text":       "#e0e0e0",
-    "text_dim":   "#888888",
-    "btn_bg":     "#252525",
-    "btn_border": "#383838",
-    "btn_active": "#185FA5",
-    "ok_green":   "#1D9E75",
-    "nok_red":    "#E24B4A",
-    "blue":       "#378ADD",
+    "bg":         "#2E2E2E",
+    "panel":      "#3A3A3A",
+    "card":       "#444444",
+    "border":     "#555555",
+    "header_bg":  "#3A3A3A",
+    "text":       "#F0F0F0",
+    "text_dim":   "#AAAAAA",
+    "btn_bg":     "#444444",
+    "btn_border": "#555555",
+    "btn_active": "#A07830",
+    "ok_green":   "#4caf50",
+    "nok_red":    "#ef5350",
+    "blue":       "#C49A3C",
 }
 
 # ---------------------------------------------------------------------------
@@ -221,7 +221,7 @@ QTableWidget {{
 }}
 QTableWidget::item:selected {{ background-color: {_C['btn_active']}; }}
 QHeaderView::section {{
-    background-color: #2a2a2a;
+    background-color: {_C['card']};
     color: {_C['text_dim']};
     padding: 5px;
     border: 1px solid {_C['border']};
@@ -235,36 +235,36 @@ QFrame#separator {{ background-color: {_C['border']}; max-height: 1px; }}
 # ---------------------------------------------------------------------------
 _DIALOG_STYLE = """
 QDialog, QWidget {
-    background-color: #1e1e1e;
-    color: #e0e0e0;
+    background-color: #3A3A3A;
+    color: #F0F0F0;
     font-family: 'Segoe UI', Arial, sans-serif;
 }
 QLabel {
     background-color: transparent;
     font-size: 15px;
-    color: #e0e0e0;
+    color: #F0F0F0;
 }
 QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
-    background-color: #2a2a2a;
-    color: #e0e0e0;
-    border: 1.5px solid #444;
+    background-color: #444444;
+    color: #F0F0F0;
+    border: 1.5px solid #555555;
     border-radius: 6px;
     padding: 6px;
     font-size: 15px;
     min-height: 42px;
 }
 QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {
-    border-color: #378ADD;
+    border-color: #C49A3C;
 }
 QComboBox::drop-down { border: none; width: 20px; }
 QComboBox QAbstractItemView {
-    background-color: #2a2a2a;
-    color: #e0e0e0;
-    selection-background-color: #185FA5;
+    background-color: #444444;
+    color: #F0F0F0;
+    selection-background-color: #A07830;
 }
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
 QSpinBox::up-button,       QSpinBox::down-button {
-    background-color: #333;
+    background-color: #555555;
     border: none;
     width: 20px;
 }
@@ -291,7 +291,7 @@ QPushButton#btn_cancel {
 }
 QPushButton#btn_cancel:pressed { background-color: #2a0e0e; }
 QPushButton#btn_nav {
-    background-color: #185FA5;
+    background-color: #A07830;
     color: #ffffff;
     font-size: 14px;
     font-weight: bold;
@@ -300,15 +300,15 @@ QPushButton#btn_nav {
     min-height: 44px;
     min-width: 120px;
 }
-QPushButton#btn_nav:pressed { background-color: #0d4a80; }
-QPushButton#btn_nav:disabled { background-color: #2a2a2a; color: #555555; }
+QPushButton#btn_nav:pressed { background-color: #7a5c24; }
+QPushButton#btn_nav:disabled { background-color: #444444; color: #777777; }
 QCheckBox {
-    font-size: 15px; color: #e0e0e0; spacing: 8px;
+    font-size: 15px; color: #F0F0F0; spacing: 8px;
     min-height: 42px; background: transparent;
 }
 QCheckBox::indicator {
-    width: 22px; height: 22px; background-color: #2a2a2a;
-    border: 1.5px solid #444; border-radius: 4px;
+    width: 22px; height: 22px; background-color: #444444;
+    border: 1.5px solid #555555; border-radius: 4px;
 }
 QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75; }
 """
@@ -318,19 +318,19 @@ QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75;
 # Style QTabWidget pour PMEditDialog
 # ---------------------------------------------------------------------------
 _PM_EDIT_STYLE = _DIALOG_STYLE + """
-QTabWidget::pane { background-color: #1e1e1e; border: none; }
+QTabWidget::pane { background-color: #3A3A3A; border: none; }
 QTabBar::tab {
-    background: #252525; color: #888888; padding: 10px 20px;
+    background: #444444; color: #AAAAAA; padding: 10px 20px;
     font-size: 14px; border-radius: 6px 6px 0 0; margin-right: 2px;
 }
-QTabBar::tab:selected { background: #1e1e1e; color: #ffffff; border-bottom: 2px solid #378ADD; }
+QTabBar::tab:selected { background: #3A3A3A; color: #ffffff; border-bottom: 2px solid #C49A3C; }
 QCheckBox {
-    font-size: 15px; color: #e0e0e0; spacing: 8px;
+    font-size: 15px; color: #F0F0F0; spacing: 8px;
     min-height: 42px; background: transparent;
 }
 QCheckBox::indicator {
-    width: 22px; height: 22px; background-color: #2a2a2a;
-    border: 1.5px solid #444; border-radius: 4px;
+    width: 22px; height: 22px; background-color: #444444;
+    border: 1.5px solid #555555; border-radius: 4px;
 }
 QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75; }
 """
