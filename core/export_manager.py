@@ -20,6 +20,7 @@ class ExportWorker(QThread):
     """Worker thread pour les opérations d'export lourdes (PDF, USB, détection)."""
 
     finished = Signal(bool, str)  # succès, message
+    drives_detected = Signal(list)  # liste des points de montage
 
     def __init__(self, task: str, **kwargs) -> None:
         super().__init__()
@@ -40,6 +41,7 @@ class ExportWorker(QThread):
                 )
             elif self._task == "detect":
                 drives = find_usb_drives()
+                self.drives_detected.emit(drives)
                 if drives:
                     self.finished.emit(
                         True, f"{len(drives)} clé(s) : {', '.join(drives)}"

@@ -3074,22 +3074,20 @@ class _ExportationPage(QWidget):
         self._btn_detect.setEnabled(False)
         self._btn_detect.setText("⏳  Recherche...")
         self._worker_detect = ExportWorker(task="detect")
+        self._worker_detect.drives_detected.connect(self._on_drives_detected)
         self._worker_detect.finished.connect(self._on_detect_done)
         self._worker_detect.start()
+
+    def _on_drives_detected(self, drives: list) -> None:
+        self._detected_drives = drives
 
     def _on_detect_done(self, success: bool, message: str) -> None:
         self._btn_detect.setEnabled(True)
         self._btn_detect.setText("🔍  Détecter les clés USB")
+        self._usb_status_lbl.setText(message)
         if success:
-            # Extraire les drives depuis le message pour usage interne
-            from core.export_manager import find_usb_drives
-
-            self._detected_drives = find_usb_drives()
-            self._usb_status_lbl.setText(message)
             self._usb_status_lbl.setStyleSheet("color: #1D9E75; font-size: 14px;")
         else:
-            self._detected_drives = []
-            self._usb_status_lbl.setText("Aucune clé USB détectée")
             self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
 
     def _do_export_usb(self) -> None:
