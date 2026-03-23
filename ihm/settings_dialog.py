@@ -1955,6 +1955,235 @@ class _ControleCyclePage(QWidget):
 
 
 # ===========================================================================
+# _DateHeurePage — réglage date / heure système (index 8)
+# ===========================================================================
+
+class _DateHeurePage(QWidget):
+    """Page unique — réglage de la date et de l'heure système du Raspberry Pi."""
+
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+
+    def showEvent(self, event) -> None:
+        self._load_current_datetime()
+        super().showEvent(event)
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        from datetime import datetime
+        now = datetime.now()
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        hdr = QWidget()
+        hdr.setFixedHeight(50)
+        hdr.setStyleSheet("background-color: #252525;")
+        hh = QHBoxLayout(hdr)
+        hh.setContentsMargins(16, 0, 16, 0)
+        lbl = QLabel("📅   Date / Heure")
+        lbl.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+        )
+        hh.addWidget(lbl)
+        root.addWidget(hdr)
+
+        # Corps
+        body = QWidget()
+        form_v = QVBoxLayout(body)
+        form_v.setContentsMargins(28, 22, 28, 22)
+        form_v.setSpacing(22)
+
+        # ---- NTP ----
+        ntp_grp = QWidget()
+        ntp_v = QVBoxLayout(ntp_grp)
+        ntp_v.setContentsMargins(0, 0, 0, 0)
+        ntp_v.setSpacing(10)
+
+        self._ntp_check = QCheckBox("Utiliser l'horloge serveur pour horodatage auto.")
+        self._ntp_check.setStyleSheet("color: #cccccc; font-size: 14px;")
+        ntp_v.addWidget(self._ntp_check)
+
+        ntp_row = QHBoxLayout()
+        ntp_lbl = QLabel("Serveur NTP :")
+        ntp_lbl.setStyleSheet("color: #888888; font-size: 13px;")
+        ntp_row.addWidget(ntp_lbl)
+        self._btn_ntp = _make_alpha_btn("pool.ntp.org", title="Serveur NTP", parent=self)
+        ntp_row.addWidget(self._btn_ntp, stretch=1)
+        ntp_v.addLayout(ntp_row)
+
+        self._ntp_check.stateChanged.connect(
+            lambda state: self._btn_ntp.setEnabled(bool(state))
+        )
+        # état initial : chargé depuis config dans showEvent
+        self._btn_ntp.setEnabled(False)
+
+        form_v.addWidget(ntp_grp)
+
+        # Séparateur
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #333333;")
+        form_v.addWidget(sep)
+
+        # ---- Date ----
+        date_lbl = QLabel("Date")
+        date_lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        form_v.addWidget(date_lbl)
+
+        date_row = QHBoxLayout()
+        date_row.setSpacing(12)
+        for unit_lbl, attr, title, default in [
+            ("AAAA", "_btn_annee", "Année [AAAA]",  f"{now.year:04d}"),
+            ("MM",   "_btn_mois",  "Mois [MM]",     f"{now.month:02d}"),
+            ("JJ",   "_btn_jour",  "Jour [JJ]",     f"{now.day:02d}"),
+        ]:
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            lbl_u = QLabel(unit_lbl)
+            lbl_u.setStyleSheet("color: #888888; font-size: 12px;")
+            lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            col.addWidget(lbl_u)
+            btn = _make_numpad_btn(default, suffix="", title=title, parent=self)
+            setattr(self, attr, btn)
+            col.addWidget(btn)
+            date_row.addLayout(col)
+        form_v.addLayout(date_row)
+
+        # ---- Heure ----
+        heure_lbl = QLabel("Heure")
+        heure_lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        form_v.addWidget(heure_lbl)
+
+        heure_row = QHBoxLayout()
+        heure_row.setSpacing(12)
+        for unit_lbl, attr, title, default in [
+            ("HH", "_btn_heure",  "Heure [HH]",     f"{now.hour:02d}"),
+            ("MM", "_btn_minute", "Minutes [MM]",    f"{now.minute:02d}"),
+            ("SS", "_btn_sec",    "Secondes [SS]",   f"{now.second:02d}"),
+        ]:
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            lbl_u = QLabel(unit_lbl)
+            lbl_u.setStyleSheet("color: #888888; font-size: 12px;")
+            lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            col.addWidget(lbl_u)
+            btn = _make_numpad_btn(default, suffix="", title=title, parent=self)
+            setattr(self, attr, btn)
+            col.addWidget(btn)
+            heure_row.addLayout(col)
+        form_v.addLayout(heure_row)
+
+        form_v.addStretch()
+        root.addWidget(body, stretch=1)
+
+        # Footer
+        footer = QWidget()
+        footer.setFixedHeight(64)
+        footer.setStyleSheet("background-color: #181818;")
+        fh = QHBoxLayout(footer)
+        fh.setContentsMargins(24, 10, 24, 10)
+        fh.setSpacing(12)
+
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
+        fh.addWidget(btn_back)
+        fh.addStretch()
+
+        btn_apply = QPushButton("✓  Appliquer")
+        btn_apply.setObjectName("btn_save")
+        btn_apply.clicked.connect(self._apply)
+        fh.addWidget(btn_apply)
+
+        root.addWidget(footer)
+
+    # ------------------------------------------------------------------
+    def _load_current_datetime(self) -> None:
+        from datetime import datetime
+        now = datetime.now()
+        for btn, val in [
+            (self._btn_annee,  f"{now.year:04d}"),
+            (self._btn_mois,   f"{now.month:02d}"),
+            (self._btn_jour,   f"{now.day:02d}"),
+            (self._btn_heure,  f"{now.hour:02d}"),
+            (self._btn_minute, f"{now.minute:02d}"),
+            (self._btn_sec,    f"{now.second:02d}"),
+        ]:
+            btn.setProperty("numpad_value", val)
+            btn.setText(val)
+
+        cfg = load_config(_CONFIG_PATH)
+        sys_cfg = cfg.get("system", {})
+        ntp_enabled = bool(sys_cfg.get("ntp_enabled", False))
+        ntp_server  = sys_cfg.get("ntp_server", "pool.ntp.org")
+
+        self._ntp_check.setChecked(ntp_enabled)
+        self._btn_ntp.setProperty("alpha_value", ntp_server)
+        self._btn_ntp.setText(ntp_server or "pool.ntp.org")
+        self._btn_ntp.setEnabled(ntp_enabled)
+
+    # ------------------------------------------------------------------
+    def _apply(self) -> None:
+        import subprocess
+        from datetime import datetime
+
+        annee   = _get_numpad_value(self._btn_annee,  2024)
+        mois    = _get_numpad_value(self._btn_mois,   1)
+        jour    = _get_numpad_value(self._btn_jour,   1)
+        heure   = _get_numpad_value(self._btn_heure,  0)
+        minute  = _get_numpad_value(self._btn_minute, 0)
+        seconde = _get_numpad_value(self._btn_sec,    0)
+
+        date_str = (
+            f"{int(annee):04d}-{int(mois):02d}-{int(jour):02d} "
+            f"{int(heure):02d}:{int(minute):02d}:{int(seconde):02d}"
+        )
+
+        try:
+            subprocess.run(
+                ["sudo", "date", "-s", date_str],
+                check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["sudo", "hwclock", "--systohc"],
+                capture_output=True,
+            )
+            QMessageBox.information(
+                self, "Date / Heure",
+                f"✓ Date et heure appliquées :\n{date_str}",
+            )
+        except subprocess.CalledProcessError as e:
+            QMessageBox.warning(
+                self, "Erreur",
+                f"Impossible d'appliquer la date :\n{e.stderr.decode()}\n\n"
+                "Vérifiez que le Pi a les droits sudo sans mot de passe.",
+            )
+
+        if self._ntp_check.isChecked():
+            try:
+                subprocess.run(
+                    ["sudo", "timedatectl", "set-ntp", "true"],
+                    capture_output=True,
+                )
+            except Exception:
+                pass
+
+        cfg = load_config(_CONFIG_PATH)
+        cfg.setdefault("system", {})
+        cfg["system"]["ntp_enabled"] = self._ntp_check.isChecked()
+        cfg["system"]["ntp_server"]  = _get_alpha_value(self._btn_ntp)
+        save_config(_CONFIG_PATH, cfg)
+
+        self._main_stack.setCurrentIndex(1)
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -1991,6 +2220,8 @@ class SettingsPage(QWidget):
             self._settings_stack, self._on_pm_saved, self
         )
         self._settings_stack.addWidget(self._pm_edit_page)              # 7
+        self._date_heure_page = _DateHeurePage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._date_heure_page)           # 8
 
         root.addWidget(self._settings_stack)
 
@@ -2100,7 +2331,7 @@ class SettingsPage(QWidget):
         buttons = [
             ("🌐", "Langue",          0, 0, None),
             ("🔒", "Droits d'accès",  0, 1, None),
-            ("📅", "Date / Heure",    0, 2, None),
+            ("📅", "Date / Heure",    0, 2, "date_heure"),
             ("📊", "Voie X",          1, 0, "voie_x"),
             ("📡", "Voie Y",          1, 1, "voie_y"),
             ("⏱",  "Contrôle cycle", 1, 2, "cycle"),
@@ -2123,6 +2354,10 @@ class SettingsPage(QWidget):
             elif action == "cycle":
                 btn.clicked.connect(
                     lambda checked=False: self._settings_stack.setCurrentIndex(4)
+                )
+            elif action == "date_heure":
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(8)
                 )
             else:
                 btn.clicked.connect(
