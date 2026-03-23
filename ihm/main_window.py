@@ -160,10 +160,10 @@ QLabel {{
     font-weight: 500;
 }}
 QLabel#result_label {{
-    font-size: 52px;
+    font-size: 44px;
     font-weight: bold;
     border-radius: 10px;
-    padding: 10px;
+    padding: 8px;
 }}
 QLabel#counter_ok   {{ color: {COLORS['ok_text']}; font-size: 22px; font-weight: bold; }}
 QLabel#counter_nok  {{ color: {COLORS['nok_text']}; font-size: 22px; font-weight: bold; }}
@@ -1670,14 +1670,14 @@ class MainWindow(QMainWindow):
             f"border-left: 1px solid {COLORS['separator']};"
         )
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(4)
 
         logo_label = QLabel("ACM FRANCE")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_label.setFixedHeight(30)
+        logo_label.setFixedHeight(24)
         logo_label.setStyleSheet(
-            "color: #C49A3C; font-size: 16px; font-weight: bold; "
+            "color: #C49A3C; font-size: 13px; font-weight: bold; "
             "letter-spacing: 3px; background: transparent; "
             "border-bottom: 1px solid #C49A3C; padding-bottom: 4px;"
         )
@@ -1701,7 +1701,7 @@ class MainWindow(QMainWindow):
         self._result_badge = QLabel("ATTENTE")
         self._result_badge.setObjectName("result_label")
         self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._result_badge.setFixedHeight(140)
+        self._result_badge.setFixedHeight(120)
         self._result_badge.setStyleSheet(
             f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
             "border: 2px solid #333; border-radius: 10px; "
@@ -1912,14 +1912,14 @@ class MainWindow(QMainWindow):
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['ok_bg']}; color: {COLORS['ok_text']}; "
                 f"border: 2px solid {COLORS['ok_border']}; border-radius: 10px; "
-                "font-size: 52px; font-weight: bold; padding: 10px;"
+                "font-size: 44px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("ok")
         elif status == "nok":
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['nok_bg']}; color: {COLORS['nok_text']}; "
                 f"border: 2px solid {COLORS['nok_border']}; border-radius: 10px; "
-                "font-size: 52px; font-weight: bold; padding: 10px;"
+                "font-size: 44px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("nok")
         elif status == "running":
