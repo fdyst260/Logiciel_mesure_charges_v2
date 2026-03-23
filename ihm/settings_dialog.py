@@ -11,6 +11,7 @@ Chaque page enfant a son propre header avec titre + bouton ← Retour.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QPointF, Signal
@@ -2757,6 +2758,449 @@ class _AffichageProdPage(QWidget):
 
 
 # ===========================================================================
+# _ExportationPage — export CSV/PDF vers clé USB (index 11)
+# ===========================================================================
+
+class _ExportationPage(QWidget):
+    """Page 2 pages — export CSV et rapport PDF.
+
+    Page 0 : Configuration export (dossier, clé USB, filtre, PDF)
+    Page 1 : Paramètres avancés (nommage, export auto)
+    """
+
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self._detected_drives: list[str] = []
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+
+    def showEvent(self, event) -> None:
+        self._load_config()
+        super().showEvent(event)
+
+    def _cancel(self) -> None:
+        self._main_stack.setCurrentIndex(1)
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header commun
+        header = QWidget()
+        header.setFixedHeight(50)
+        header.setStyleSheet("background-color: #252525;")
+        hh = QHBoxLayout(header)
+        hh.setContentsMargins(16, 0, 16, 0)
+        lbl = QLabel("💾  Exportation")
+        lbl.setStyleSheet(
+            "font-size: 17px; font-weight: bold; color: #e0e0e0; background: transparent;"
+        )
+        hh.addWidget(lbl)
+        root.addWidget(header)
+
+        # Stack interne (2 pages)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_page0())
+        self._stack.addWidget(self._build_page1())
+        root.addWidget(self._stack, stretch=1)
+
+        # Footer (2 états)
+        self._footer = QStackedWidget()
+        self._footer.setFixedHeight(64)
+        self._footer.addWidget(self._build_footer0())
+        self._footer.addWidget(self._build_footer1())
+        root.addWidget(self._footer)
+
+    # ------------------------------------------------------------------
+    def _build_page0(self) -> QWidget:
+        outer = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(18)
+
+        # ---- Section : Dossier local ----
+        sec0 = QLabel("📁  Dossier local")
+        sec0.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
+        v.addWidget(sec0)
+
+        cfg = _load_cfg_safe()
+        data_dir = cfg.get("storage", {}).get("data_dir", "./data")
+        self._data_dir_lbl = QLabel(str(Path(data_dir).resolve()))
+        self._data_dir_lbl.setStyleSheet(
+            "background-color: #2a2a2a; color: #aaaaaa; border: 1px solid #444;"
+            " border-radius: 6px; padding: 8px 12px; font-size: 14px;"
+        )
+        self._data_dir_lbl.setWordWrap(True)
+        v.addWidget(self._data_dir_lbl)
+
+        sep0 = QFrame()
+        sep0.setObjectName("separator")
+        sep0.setFrameShape(QFrame.Shape.HLine)
+        v.addWidget(sep0)
+
+        # ---- Section : Clé USB ----
+        sec1 = QLabel("🔌  Clé USB")
+        sec1.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
+        v.addWidget(sec1)
+
+        btn_detect = QPushButton("🔍  Détecter les clés USB")
+        btn_detect.setObjectName("btn_nav")
+        btn_detect.clicked.connect(self._detect_usb)
+        v.addWidget(btn_detect)
+
+        self._usb_status_lbl = QLabel("Aucune clé USB détectée")
+        self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
+        v.addWidget(self._usb_status_lbl)
+
+        form_usb = QFormLayout()
+        form_usb.setSpacing(10)
+        form_usb.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._filtre_btn = _make_choice_btn(
+            ["OK+NOK", "OK uniquement", "NOK uniquement"],
+            "OK+NOK",
+            "Filtre export",
+            self,
+        )
+        form_usb.addRow("Filtre export :", self._filtre_btn)
+        fw_usb = QWidget()
+        fw_usb.setLayout(form_usb)
+        v.addWidget(fw_usb)
+
+        btn_export = QPushButton("💾  Exporter vers la clé USB")
+        btn_export.setObjectName("btn_save")
+        btn_export.clicked.connect(self._do_export_usb)
+        v.addWidget(btn_export)
+
+        sep1 = QFrame()
+        sep1.setObjectName("separator")
+        sep1.setFrameShape(QFrame.Shape.HLine)
+        v.addWidget(sep1)
+
+        # ---- Section : Rapport PDF ----
+        sec2 = QLabel("📄  Rapport PDF")
+        sec2.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
+        v.addWidget(sec2)
+
+        form_pdf = QFormLayout()
+        form_pdf.setSpacing(10)
+        form_pdf.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._contenu_btn = _make_choice_btn(
+            ["Tous les cycles", "Cycles NOK uniquement", "Session courante"],
+            "Tous les cycles",
+            "Contenu rapport",
+            self,
+        )
+        form_pdf.addRow("Contenu rapport :", self._contenu_btn)
+        fw_pdf = QWidget()
+        fw_pdf.setLayout(form_pdf)
+        v.addWidget(fw_pdf)
+
+        btn_pdf = QPushButton("📄  Générer rapport PDF")
+        btn_pdf.setObjectName("btn_nav")
+        btn_pdf.clicked.connect(self._do_generate_pdf)
+        v.addWidget(btn_pdf)
+
+        v.addStretch()
+        scroll.setWidget(w)
+        out_v = QVBoxLayout(outer)
+        out_v.setContentsMargins(0, 0, 0, 0)
+        out_v.addWidget(scroll)
+        return outer
+
+    # ------------------------------------------------------------------
+    def _build_page1(self) -> QWidget:
+        outer = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(18)
+
+        form = QFormLayout()
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._nommage_btn = _make_choice_btn(
+            [
+                "PM_date_heure_résultat",
+                "Numéro séquentiel",
+                "PM_numéro_résultat",
+            ],
+            "PM_date_heure_résultat",
+            "Nommage fichier",
+            self,
+        )
+        form.addRow("Nommage fichier :", self._nommage_btn)
+
+        self._auto_export_chk = QCheckBox("Exporter automatiquement à chaque cycle")
+        form.addRow("Export automatique :", self._auto_export_chk)
+
+        self._dest_auto_btn = _make_choice_btn(
+            ["Dossier local", "Clé USB si présente"],
+            "Dossier local",
+            "Destination auto",
+            self,
+        )
+        form.addRow("Destination auto :", self._dest_auto_btn)
+
+        fw = QWidget()
+        fw.setLayout(form)
+        v.addWidget(fw)
+        v.addStretch()
+        scroll.setWidget(w)
+
+        out_v = QVBoxLayout(outer)
+        out_v.setContentsMargins(0, 0, 0, 0)
+        out_v.addWidget(scroll)
+        return outer
+
+    # ------------------------------------------------------------------
+    def _build_footer0(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #1a1a1a; border-top: 1px solid #333;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(16, 8, 16, 8)
+        h.setSpacing(12)
+
+        btn_cancel = QPushButton("←  Retour")
+        btn_cancel.setObjectName("btn_cancel")
+        btn_cancel.clicked.connect(self._cancel)
+        h.addWidget(btn_cancel)
+
+        h.addStretch()
+
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+
+        btn_next = QPushButton("Avancé  →")
+        btn_next.setObjectName("btn_nav")
+        btn_next.clicked.connect(self._go_page1)
+        h.addWidget(btn_next)
+
+        return w
+
+    def _build_footer1(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #1a1a1a; border-top: 1px solid #333;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(16, 8, 16, 8)
+        h.setSpacing(12)
+
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(self._go_page0)
+        h.addWidget(btn_back)
+
+        h.addStretch()
+
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+
+        return w
+
+    # ------------------------------------------------------------------
+    def _go_page0(self) -> None:
+        self._stack.setCurrentIndex(0)
+        self._footer.setCurrentIndex(0)
+
+    def _go_page1(self) -> None:
+        self._stack.setCurrentIndex(1)
+        self._footer.setCurrentIndex(1)
+
+    # ------------------------------------------------------------------
+    def _load_config(self) -> None:
+        cfg = _load_cfg_safe()
+        exp = cfg.get("export", {})
+
+        # Page 0
+        data_dir = cfg.get("storage", {}).get("data_dir", "./data")
+        self._data_dir_lbl.setText(str(Path(data_dir).resolve()))
+
+        filtre = exp.get("filtre", "OK+NOK")
+        self._filtre_btn.setProperty("choice_value", filtre)
+        self._filtre_btn.setText(filtre)
+
+        contenu = exp.get("contenu_rapport", "Tous les cycles")
+        self._contenu_btn.setProperty("choice_value", contenu)
+        self._contenu_btn.setText(contenu)
+
+        # Page 1
+        nommage = exp.get("nommage", "PM_date_heure_résultat")
+        self._nommage_btn.setProperty("choice_value", nommage)
+        self._nommage_btn.setText(nommage)
+
+        self._auto_export_chk.setChecked(exp.get("auto_export", False))
+
+        dest_auto = exp.get("destination_auto", "Dossier local")
+        self._dest_auto_btn.setProperty("choice_value", dest_auto)
+        self._dest_auto_btn.setText(dest_auto)
+
+    def _save(self) -> None:
+        cfg = _load_cfg_safe()
+        cfg.setdefault("export", {})
+        cfg["export"]["filtre"] = self._filtre_btn.property("choice_value") or "OK+NOK"
+        cfg["export"]["contenu_rapport"] = (
+            self._contenu_btn.property("choice_value") or "Tous les cycles"
+        )
+        cfg["export"]["nommage"] = (
+            self._nommage_btn.property("choice_value") or "PM_date_heure_résultat"
+        )
+        cfg["export"]["auto_export"] = self._auto_export_chk.isChecked()
+        cfg["export"]["destination_auto"] = (
+            self._dest_auto_btn.property("choice_value") or "Dossier local"
+        )
+        save_config(_CONFIG_PATH, cfg)
+        self._main_stack.setCurrentIndex(1)
+
+    # ------------------------------------------------------------------
+    def _detect_usb(self) -> None:
+        from core.export_manager import find_usb_drives
+
+        self._detected_drives = find_usb_drives()
+        if self._detected_drives:
+            drives_str = ", ".join(self._detected_drives)
+            count = len(self._detected_drives)
+            self._usb_status_lbl.setText(
+                f"{count} clé(s) détectée(s) : {drives_str}"
+            )
+            self._usb_status_lbl.setStyleSheet("color: #1D9E75; font-size: 14px;")
+        else:
+            self._usb_status_lbl.setText("Aucune clé USB détectée")
+            self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
+
+    def _do_export_usb(self) -> None:
+        from core.export_manager import export_csv_to_usb
+
+        if not self._detected_drives:
+            self._detect_usb()
+        if not self._detected_drives:
+            QMessageBox.warning(
+                self,
+                "Export USB",
+                "Aucune clé USB détectée.\nBrancheez une clé USB et cliquez sur Détecter.",
+            )
+            return
+
+        cfg = _load_cfg_safe()
+        data_dir = Path(cfg.get("storage", {}).get("data_dir", "./data"))
+        filtre = self._filtre_btn.property("choice_value") or "OK+NOK"
+
+        copied, skipped = export_csv_to_usb(
+            source_dir=data_dir,
+            usb_path=self._detected_drives[0],
+            filter_result=filtre,
+        )
+        QMessageBox.information(
+            self,
+            "Export USB terminé",
+            f"{copied} fichier(s) copié(s) vers {self._detected_drives[0]}/ACM_Export/\n"
+            f"{skipped} fichier(s) ignoré(s) (filtre : {filtre})",
+        )
+
+    def _do_generate_pdf(self) -> None:
+        from core.export_manager import generate_pdf_report
+
+        cfg = _load_cfg_safe()
+        data_dir = Path(cfg.get("storage", {}).get("data_dir", "./data"))
+        contenu = self._contenu_btn.property("choice_value") or "Tous les cycles"
+
+        # Reconstruction des cycles depuis les noms de fichiers CSV
+        # Format attendu : YYYYMMDD_HHMMSS_PMxx_RESULT.csv
+        cycles_data = _build_cycles_from_csv(data_dir, contenu)
+
+        # Destination : clé USB en priorité, sinon data_dir
+        if self._detected_drives:
+            output_dir = Path(self._detected_drives[0]) / "ACM_Export"
+        else:
+            output_dir = data_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = output_dir / f"rapport_{timestamp}.pdf"
+
+        ok = generate_pdf_report(
+            cycles_data=cycles_data,
+            output_path=output_path,
+            machine_name="ACM Riveteuse",
+        )
+        if ok:
+            QMessageBox.information(
+                self,
+                "Rapport PDF généré",
+                f"Rapport enregistré :\n{output_path}",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Erreur PDF",
+                "Impossible de générer le rapport.\n"
+                "Vérifiez que reportlab est installé : pip install reportlab",
+            )
+
+
+def _load_cfg_safe() -> dict:
+    """Charge config.yaml sans lever d'exception."""
+    try:
+        return load_config(_CONFIG_PATH)
+    except Exception:
+        return {}
+
+
+def _build_cycles_from_csv(data_dir: Path, contenu: str) -> list[dict]:
+    """Reconstruit une liste de dicts cycles depuis les noms de fichiers CSV.
+
+    Format nom : YYYYMMDD_HHMMSS_PMxx_RESULT.csv
+    """
+    cycles: list[dict] = []
+    if not data_dir.exists():
+        return cycles
+
+    for i, csv_file in enumerate(sorted(data_dir.glob("*.csv")), start=1):
+        name = csv_file.stem.upper()
+        result = "PASS" if "PASS" in name else "NOK"
+
+        if contenu == "Cycles NOK uniquement" and result == "PASS":
+            continue
+
+        # Extraire timestamp depuis le nom (YYYYMMDD_HHMMSS_...)
+        parts = csv_file.stem.split("_")
+        timestamp_str = ""
+        if len(parts) >= 2:
+            try:
+                dt = datetime.strptime(f"{parts[0]}_{parts[1]}", "%Y%m%d_%H%M%S")
+                timestamp_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+            except ValueError:
+                timestamp_str = csv_file.stem[:15]
+
+        cycles.append(
+            {
+                "cycle_num": i,
+                "result": result,
+                "timestamp": timestamp_str,
+                "fmax": 0.0,
+                "xmax": 0.0,
+                "points": [],
+            }
+        )
+    return cycles
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -2799,6 +3243,8 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._droits_page)               # 9
         self._affichage_page = _AffichageProdPage(self._settings_stack, self)
         self._settings_stack.addWidget(self._affichage_page)            # 10
+        self._export_page = _ExportationPage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._export_page)               # 11
 
         root.addWidget(self._settings_stack)
 
@@ -2913,7 +3359,7 @@ class SettingsPage(QWidget):
             ("📡", "Voie Y",          1, 1, "voie_y"),
             ("⏱",  "Contrôle cycle", 1, 2, "cycle"),
             ("🖥",  "Affichage prod.",2, 0, "affichage"),
-            ("💾", "Exportation",     2, 1, None),
+            ("💾", "Exportation",     2, 1, "exportation"),
             ("⚙",  "Extras",         2, 2, None),
         ]
         for icon, label, row, col, action in buttons:
@@ -2943,6 +3389,10 @@ class SettingsPage(QWidget):
             elif action == "affichage":
                 btn.clicked.connect(
                     lambda checked=False: self._settings_stack.setCurrentIndex(10)
+                )
+            elif action == "exportation":
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(11)
                 )
             else:
                 btn.clicked.connect(
