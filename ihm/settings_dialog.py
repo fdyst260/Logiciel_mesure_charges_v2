@@ -2461,6 +2461,299 @@ class _DateHeurePage(QWidget):
 
 
 # ===========================================================================
+# _AffichageProdPage — préférences d'affichage production (index 10)
+# ===========================================================================
+
+class _AffichageProdPage(QWidget):
+    """Page 2 pages internes — histogramme, outil, feu bicolore."""
+
+    _HISTO_VALS = ["OK-NOK en %", "Nb de pièce NOK"]
+    _FEU_VALS   = ["Smiley", "Coche", "Pouce", "Texte", "Vide"]
+
+    # Contenu texte pour chaque style de feu
+    _FEU_CONTENT = {
+        "Smiley": ("😊", "😞"),
+        "Coche":  ("✓",  "✗"),
+        "Pouce":  ("👍", "👎"),
+        "Texte":  ("OK", "NOK"),
+        "Vide":   ("",   ""),
+    }
+
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+
+    def showEvent(self, event) -> None:
+        self._load_config()
+        super().showEvent(event)
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        hdr = QWidget()
+        hdr.setFixedHeight(50)
+        hdr.setStyleSheet("background-color: #252525;")
+        hh = QHBoxLayout(hdr)
+        hh.setContentsMargins(16, 0, 16, 0)
+        lbl = QLabel("🖥   Affichage production")
+        lbl.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+        )
+        hh.addWidget(lbl)
+        root.addWidget(hdr)
+
+        # Contenu (2 pages)
+        self._inner_stack = QStackedWidget()
+        self._inner_stack.addWidget(self._build_page0())
+        self._inner_stack.addWidget(self._build_page1())
+        root.addWidget(self._inner_stack, stretch=1)
+
+        # Footer (2 états)
+        self._footer_stack = QStackedWidget()
+        self._footer_stack.setFixedHeight(64)
+        self._footer_stack.addWidget(self._build_footer0())
+        self._footer_stack.addWidget(self._build_footer1())
+        root.addWidget(self._footer_stack)
+
+    # ------------------------------------------------------------------
+    def _build_page0(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 14)
+        v.setSpacing(16)
+
+        # ---- Histogramme ----
+        lbl_h = QLabel("Histogramme")
+        lbl_h.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        v.addWidget(lbl_h)
+
+        _PB_STYLE = (
+            "QProgressBar { border: 1px solid #444; border-radius: 4px;"
+            " background: #1a1a1a; height: 22px; }"
+            "QProgressBar::chunk { background-color: #E24B4A; border-radius: 4px; }"
+        )
+        self._histo_group = QButtonGroup(self)
+        self._histo_btns: list = []
+
+        for idx, (val, suffix) in enumerate(
+            [("OK-NOK en %", " %"), ("Nb de pièce NOK", " pcs")]
+        ):
+            row = QHBoxLayout()
+            row.setSpacing(10)
+            rb = QRadioButton(val)
+            rb.setStyleSheet("color: #cccccc; font-size: 13px; min-width: 160px;")
+            self._histo_group.addButton(rb, idx)
+            self._histo_btns.append(rb)
+            row.addWidget(rb)
+            pb = QProgressBar()
+            pb.setRange(0, 100)
+            pb.setValue(65)
+            pb.setTextVisible(False)
+            pb.setFixedHeight(22)
+            pb.setStyleSheet(_PB_STYLE)
+            row.addWidget(pb, stretch=1)
+            lbl_val = QLabel(f"65{suffix}")
+            lbl_val.setStyleSheet("color: #888888; font-size: 12px; min-width: 50px;")
+            row.addWidget(lbl_val)
+            v.addLayout(row)
+
+        self._histo_btns[0].setChecked(True)
+
+        # ---- Séparateur ----
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #333333;")
+        v.addWidget(sep)
+
+        # ---- Outil d'évaluation ----
+        lbl_outil = QLabel("Outil d'évaluation")
+        lbl_outil.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        v.addWidget(lbl_outil)
+
+        _APE_STYLE = (
+            "background: #1e1e1e; border: 2px solid #378ADD;"
+            " border-radius: 4px; padding: 2px 8px;"
+        )
+
+        # Fenêtre pleine
+        row_fp = QHBoxLayout()
+        row_fp.setSpacing(14)
+        self._fenetre_pleine_chk = QCheckBox("Fenêtre pleine")
+        self._fenetre_pleine_chk.setStyleSheet("color: #cccccc; font-size: 13px;")
+        self._fenetre_pleine_chk.setChecked(True)
+        row_fp.addWidget(self._fenetre_pleine_chk)
+        row_fp.addStretch()
+        lbl_fp = QLabel("█████")
+        lbl_fp.setStyleSheet(f"color: #378ADD; font-size: 16px; {_APE_STYLE}")
+        row_fp.addWidget(lbl_fp)
+        v.addLayout(row_fp)
+
+        # Indication E/S
+        row_es = QHBoxLayout()
+        row_es.setSpacing(14)
+        self._indication_es_chk = QCheckBox("Indication E/S")
+        self._indication_es_chk.setStyleSheet("color: #cccccc; font-size: 13px;")
+        self._indication_es_chk.setChecked(True)
+        row_es.addWidget(self._indication_es_chk)
+        row_es.addStretch()
+        lbl_es = QLabel("→ □ →")
+        lbl_es.setStyleSheet(f"color: #378ADD; font-size: 14px; {_APE_STYLE}")
+        row_es.addWidget(lbl_es)
+        v.addLayout(row_es)
+
+        v.addStretch()
+        return w
+
+    # ------------------------------------------------------------------
+    def _build_page1(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 14)
+        v.setSpacing(10)
+
+        lbl = QLabel("Feu bicolore — style badge résultat")
+        lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        v.addWidget(lbl)
+
+        self._feu_group = QButtonGroup(self)
+        self._feu_btns: list = []
+
+        _OK_STYLE  = (
+            "background-color: #1a3a1a; color: #4caf50; border-radius: 6px;"
+            " font-size: 18px; font-weight: bold;"
+        )
+        _NOK_STYLE = (
+            "background-color: #3a1a1a; color: #ef5350; border-radius: 6px;"
+            " font-size: 18px; font-weight: bold;"
+        )
+
+        for idx, val in enumerate(self._FEU_VALS):
+            ok_txt, nok_txt = self._FEU_CONTENT[val]
+            row = QHBoxLayout()
+            row.setSpacing(12)
+            rb = QRadioButton(val)
+            rb.setStyleSheet("color: #cccccc; font-size: 13px; min-width: 120px;")
+            self._feu_group.addButton(rb, idx)
+            self._feu_btns.append(rb)
+            row.addWidget(rb)
+            row.addStretch()
+            for txt, style in [(ok_txt, _OK_STYLE), (nok_txt, _NOK_STYLE)]:
+                lbl_ap = QLabel(txt)
+                lbl_ap.setFixedSize(80, 40)
+                lbl_ap.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                lbl_ap.setStyleSheet(style)
+                row.addWidget(lbl_ap)
+            v.addLayout(row)
+
+        self._feu_btns[0].setChecked(True)
+        v.addStretch()
+        return w
+
+    # ------------------------------------------------------------------
+    def _build_footer0(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(12)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
+        h.addWidget(btn_back)
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+        h.addStretch()
+        btn_feu = QPushButton("Feu bicolore  →")
+        btn_feu.setObjectName("btn_nav")
+        btn_feu.clicked.connect(self._go_page1)
+        h.addWidget(btn_feu)
+        return w
+
+    def _build_footer1(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(12)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(self._go_page0)
+        h.addWidget(btn_back)
+        h.addStretch()
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+        return w
+
+    def _go_page0(self) -> None:
+        self._inner_stack.setCurrentIndex(0)
+        self._footer_stack.setCurrentIndex(0)
+
+    def _go_page1(self) -> None:
+        self._inner_stack.setCurrentIndex(1)
+        self._footer_stack.setCurrentIndex(1)
+
+    # ------------------------------------------------------------------
+    def _load_config(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        dp = cfg.get("affichage_prod", {})
+
+        histo = dp.get("histogramme", "OK-NOK en %")
+        for i, val in enumerate(self._HISTO_VALS):
+            self._histo_btns[i].setChecked(val == histo)
+
+        self._fenetre_pleine_chk.setChecked(bool(dp.get("fenetre_pleine", True)))
+        self._indication_es_chk.setChecked(bool(dp.get("indication_es", True)))
+
+        feu = dp.get("feu_bicolore", "Texte")
+        for i, val in enumerate(self._FEU_VALS):
+            self._feu_btns[i].setChecked(val == feu)
+
+    def _save(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        dp = cfg.setdefault("affichage_prod", {})
+
+        checked_histo = self._histo_group.checkedId()
+        dp["histogramme"] = (
+            self._HISTO_VALS[checked_histo]
+            if 0 <= checked_histo < len(self._HISTO_VALS)
+            else "OK-NOK en %"
+        )
+
+        dp["fenetre_pleine"] = self._fenetre_pleine_chk.isChecked()
+        dp["indication_es"]  = self._indication_es_chk.isChecked()
+
+        checked_feu = self._feu_group.checkedId()
+        dp["feu_bicolore"] = (
+            self._FEU_VALS[checked_feu]
+            if 0 <= checked_feu < len(self._FEU_VALS)
+            else "Texte"
+        )
+
+        save_config(_CONFIG_PATH, cfg)
+
+        # Notifier MainWindow pour appliquer immédiatement
+        main_win = self._main_stack.window()
+        if hasattr(main_win, "apply_display_settings"):
+            main_win.apply_display_settings()
+
+        QMessageBox.information(
+            self, "Affichage production",
+            "✓ Préférences d'affichage sauvegardées.",
+        )
+        self._main_stack.setCurrentIndex(1)
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -2501,6 +2794,8 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._date_heure_page)           # 8
         self._droits_page = _DroitsAccesPage(self._settings_stack, self)
         self._settings_stack.addWidget(self._droits_page)               # 9
+        self._affichage_page = _AffichageProdPage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._affichage_page)            # 10
 
         root.addWidget(self._settings_stack)
 
@@ -2614,7 +2909,7 @@ class SettingsPage(QWidget):
             ("📊", "Voie X",          1, 0, "voie_x"),
             ("📡", "Voie Y",          1, 1, "voie_y"),
             ("⏱",  "Contrôle cycle", 1, 2, "cycle"),
-            ("🖥",  "Affichage prod.",2, 0, None),
+            ("🖥",  "Affichage prod.",2, 0, "affichage"),
             ("💾", "Exportation",     2, 1, None),
             ("⚙",  "Extras",         2, 2, None),
         ]
@@ -2641,6 +2936,10 @@ class SettingsPage(QWidget):
             elif action == "droits":
                 btn.clicked.connect(
                     lambda checked=False: self._settings_stack.setCurrentIndex(9)
+                )
+            elif action == "affichage":
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(10)
                 )
             else:
                 btn.clicked.connect(

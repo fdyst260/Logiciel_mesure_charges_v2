@@ -1131,9 +1131,14 @@ class MainWindow(QMainWindow):
         self._access_level: int = 3    # 3=Admin par défaut (sans droits activés)
         self._access_enabled: bool = False
 
+        # Préférences d'affichage
+        self._badge_style: str = "Texte"
+        self._histogramme_mode: str = "OK-NOK en %"
+
         self.setStyleSheet(STYLESHEET)
         self._build_ui()
         self._apply_state_style("idle")
+        self.apply_display_settings()
 
         # Charger les outils depuis config.yaml
         cfg_path = Path(__file__).parent.parent / "config.yaml"
@@ -1462,8 +1467,12 @@ class MainWindow(QMainWindow):
 
     def _update_result_display(self, status: str) -> None:
         """Met à jour badge résultat + fond fenêtre selon l'état."""
+        content = self._BADGE_CONTENT.get(
+            self._badge_style, self._BADGE_CONTENT["Texte"]
+        )
+        self._result_badge.setText(content[status])
+
         if status == "ok":
-            self._result_badge.setText("OK")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['ok_bg']}; color: {COLORS['ok_text']}; "
                 f"border: 2px solid {COLORS['ok_border']}; border-radius: 10px; "
@@ -1471,7 +1480,6 @@ class MainWindow(QMainWindow):
             )
             self._apply_state_style("ok")
         elif status == "nok":
-            self._result_badge.setText("NOK")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['nok_bg']}; color: {COLORS['nok_text']}; "
                 f"border: 2px solid {COLORS['nok_border']}; border-radius: 10px; "
@@ -1479,7 +1487,6 @@ class MainWindow(QMainWindow):
             )
             self._apply_state_style("nok")
         elif status == "running":
-            self._result_badge.setText("EN COURS")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['running_bg']}; color: #42a5f5; "
                 f"border: 2px solid {COLORS['running_border']}; border-radius: 10px; "
@@ -1487,7 +1494,6 @@ class MainWindow(QMainWindow):
             )
             self._apply_state_style("acquiring")
         else:  # idle
-            self._result_badge.setText("ATTENTE")
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
                 "border: 2px solid #333; border-radius: 10px; "
@@ -1720,6 +1726,21 @@ class MainWindow(QMainWindow):
         self._fmax_label.setText("0 N")
         self._xmax_label.setText("0.0 mm")
         self._update_result_display("idle")
+
+    _BADGE_CONTENT: dict[str, dict[str, str]] = {
+        "Smiley": {"ok": "😊", "nok": "😞", "running": "⏳", "idle": "—"},
+        "Coche":  {"ok": "✓",  "nok": "✗",  "running": "⏳", "idle": "—"},
+        "Pouce":  {"ok": "👍", "nok": "👎", "running": "⏳", "idle": "—"},
+        "Texte":  {"ok": "OK", "nok": "NOK", "running": "EN COURS", "idle": "ATTENTE"},
+        "Vide":   {"ok": "",   "nok": "",    "running": "",  "idle": ""},
+    }
+
+    def apply_display_settings(self) -> None:
+        """Recharge les préférences d'affichage depuis config.yaml."""
+        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        dp = cfg.get("affichage_prod", {})
+        self._badge_style      = dp.get("feu_bicolore",  "Texte")
+        self._histogramme_mode = dp.get("histogramme",   "OK-NOK en %")
 
     def set_access_level(self, level: int) -> None:
         """Définit le niveau d'accès courant (1=Opérateur, 2=Technicien, 3=Admin)."""
