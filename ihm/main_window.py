@@ -1034,7 +1034,21 @@ class PinDialog(QDialog):
     def _validate(self) -> None:
         if self._locked:
             return
-        if self._pin_value == _PIN_CODE:
+        import hashlib
+        from ihm.ui_utils import load_config
+        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        stored = cfg.get("access_control", {}).get("pin_admin", "")
+        # Fallback : hash de "1234" si rien en config
+        if not stored:
+            stored = hashlib.sha256("1234".encode()).hexdigest()
+        entered_hash = hashlib.sha256(self._pin_value.encode()).hexdigest()
+        # Compatibilité plain text hérité
+        valid = (
+            entered_hash == stored
+            if len(stored) == 64
+            else self._pin_value == stored
+        )
+        if valid:
             self.accept()
         else:
             self._attempts += 1
@@ -1112,6 +1126,10 @@ class MainWindow(QMainWindow):
         self._sim_mode: bool = False
         self._restart_callback = None
         self._restart_btn = None
+
+        # Droits d'accès
+        self._access_level: int = 3    # 3=Admin par défaut (sans droits activés)
+        self._access_enabled: bool = False
 
         self.setStyleSheet(STYLESHEET)
         self._build_ui()
@@ -1703,10 +1721,31 @@ class MainWindow(QMainWindow):
         self._xmax_label.setText("0.0 mm")
         self._update_result_display("idle")
 
+    def set_access_level(self, level: int) -> None:
+        """Définit le niveau d'accès courant (1=Opérateur, 2=Technicien, 3=Admin)."""
+        self._access_level = level
+        self._update_ui_for_access_level()
+
+    def _update_ui_for_access_level(self) -> None:
+        """Active/désactive les boutons selon le niveau d'accès courant."""
+        is_tech = self._access_level >= 2
+        is_admin = self._access_level >= 3
+
+        self._pm_btn.setEnabled(is_tech)
+        self._settings_btn.setEnabled(is_admin)
+
+        for btn in self.findChildren(QPushButton):
+            if "RAZ" in btn.text():
+                btn.setEnabled(is_tech)
+
     def _on_settings_clicked(self) -> None:
-        """Vérifie le PIN puis navigue vers la page Réglages."""
+        """Vérifie le PIN (si droits activés) puis navigue vers la page Réglages."""
+        if not self._access_enabled:
+            self.stack.setCurrentIndex(1)
+            return
         dlg = PinDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
+            self.set_access_level(3)
             self.stack.setCurrentIndex(1)
 
     # ------------------------------------------------------------------

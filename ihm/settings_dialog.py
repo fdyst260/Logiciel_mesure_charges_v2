@@ -1955,6 +1955,283 @@ class _ControleCyclePage(QWidget):
 
 
 # ===========================================================================
+# _DroitsAccesPage — gestion des droits d'accès et codes PIN (index 9)
+# ===========================================================================
+
+def _hash_pin(pin: str) -> str:
+    import hashlib
+    return hashlib.sha256(pin.encode()).hexdigest()
+
+
+def _check_pin(entered: str, stored: str) -> bool:
+    """Vérifie un PIN saisi contre la valeur stockée (hash ou fallback plain)."""
+    if len(stored) == 64:   # sha256 hexdigest
+        return _hash_pin(entered) == stored
+    return entered == stored  # fallback plain text (migration)
+
+
+class _DroitsAccesPage(QWidget):
+    """Page droits d'accès — 2 pages internes (QStackedWidget)."""
+
+    _LEVELS = [
+        ("🟢", "Opérateur",     "pin_operateur",  "0000"),
+        ("🟡", "Technicien",    "pin_technicien", "2222"),
+        ("🔴", "Administrateur","pin_admin",       "1234"),
+    ]
+
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+
+    def showEvent(self, event) -> None:
+        self._load_config()
+        super().showEvent(event)
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        hdr = QWidget()
+        hdr.setFixedHeight(50)
+        hdr.setStyleSheet("background-color: #252525;")
+        hh = QHBoxLayout(hdr)
+        hh.setContentsMargins(16, 0, 16, 0)
+        lbl = QLabel("🔒   Droits d'accès")
+        lbl.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+        )
+        hh.addWidget(lbl)
+        root.addWidget(hdr)
+
+        # Contenu (2 pages)
+        self._inner_stack = QStackedWidget()
+        self._inner_stack.addWidget(self._build_page0())
+        self._inner_stack.addWidget(self._build_page1())
+        root.addWidget(self._inner_stack, stretch=1)
+
+        # Footer (2 états)
+        self._footer_stack = QStackedWidget()
+        self._footer_stack.setFixedHeight(64)
+        self._footer_stack.addWidget(self._build_footer0())
+        self._footer_stack.addWidget(self._build_footer1())
+        root.addWidget(self._footer_stack)
+
+    def _build_page0(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 14)
+        v.setSpacing(14)
+
+        # Activation des droits
+        self._enabled_chk = QCheckBox("Activer les droits d'accès")
+        self._enabled_chk.setStyleSheet("color: #cccccc; font-size: 14px;")
+        v.addWidget(self._enabled_chk)
+
+        # Déconnexion auto
+        form = QFormLayout()
+        form.setSpacing(12)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._auto_logout_btn = _make_choice_btn(
+            ["Jamais", "5 minutes", "15 minutes", "1 heure"],
+            "Jamais", "Déconnexion auto", self,
+        )
+        form.addRow("Déconnexion auto :", self._auto_logout_btn)
+        v.addLayout(form)
+
+        # Séparateur + titre
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #333333;")
+        v.addWidget(sep)
+        lbl_pin = QLabel("Modifier les codes PIN")
+        lbl_pin.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        v.addWidget(lbl_pin)
+
+        # 3 lignes PIN
+        _ROW_STYLE = (
+            "background-color: #252525; border-radius: 8px; padding: 6px;"
+        )
+        for icon, name, key, _ in self._LEVELS:
+            row_w = QWidget()
+            row_w.setStyleSheet(_ROW_STYLE)
+            rh = QHBoxLayout(row_w)
+            rh.setContentsMargins(10, 4, 10, 4)
+            rh.setSpacing(12)
+            lbl = QLabel(f"{icon}  {name}")
+            lbl.setStyleSheet("color: #cccccc; font-size: 14px; min-width: 160px;")
+            rh.addWidget(lbl)
+            rh.addStretch()
+            pin_lbl = QLabel("PIN : ••••")
+            pin_lbl.setStyleSheet("color: #666666; font-size: 13px;")
+            rh.addWidget(pin_lbl)
+            btn_mod = QPushButton("✏  Modifier")
+            btn_mod.setObjectName("btn_nav")
+            btn_mod.setFixedWidth(120)
+            btn_mod.clicked.connect(
+                lambda _c=False, k=key, n=name: self._change_pin(k, n)
+            )
+            rh.addWidget(btn_mod)
+            v.addWidget(row_w)
+
+        v.addStretch()
+        return w
+
+    def _build_page1(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(14)
+
+        lbl = QLabel("Tableau des niveaux d'accès")
+        lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        v.addWidget(lbl)
+
+        table = QTableWidget(3, 3)
+        table.setHorizontalHeaderLabels(["Niveau", "Nom", "Droits"])
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setDefaultSectionSize(90)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+
+        _ROWS = [
+            ("1", "🟢 Opérateur",     "Voir courbes, compteurs, export CSV"),
+            ("2", "🟡 Technicien",    "+ Changer PM, RAZ compteurs"),
+            ("3", "🔴 Administrateur","+ Réglages complets, PM, date/heure"),
+        ]
+        for row, (niv, nom, droits) in enumerate(_ROWS):
+            for col, txt in enumerate([niv, nom, droits]):
+                item = QTableWidgetItem(txt)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                table.setItem(row, col, item)
+
+        v.addWidget(table, stretch=1)
+        return w
+
+    def _build_footer0(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(12)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
+        h.addWidget(btn_back)
+        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save)
+        h.addStretch()
+        btn_niveaux = QPushButton("Voir niveaux  →")
+        btn_niveaux.setObjectName("btn_nav")
+        btn_niveaux.clicked.connect(self._go_page1)
+        h.addWidget(btn_niveaux)
+        return w
+
+    def _build_footer1(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #181818;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(12)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(self._go_page0)
+        h.addWidget(btn_back)
+        h.addStretch()
+        return w
+
+    def _go_page0(self) -> None:
+        self._inner_stack.setCurrentIndex(0)
+        self._footer_stack.setCurrentIndex(0)
+
+    def _go_page1(self) -> None:
+        self._inner_stack.setCurrentIndex(1)
+        self._footer_stack.setCurrentIndex(1)
+
+    # ------------------------------------------------------------------
+    def _change_pin(self, level_key: str, level_name: str) -> None:
+        """Flux changement PIN : vérification ancien → nouveau × 2."""
+        from ihm.main_window import NumpadDialog
+
+        # 1. Vérifier l'ancien PIN
+        dlg_old = NumpadDialog(
+            title=f"Ancien PIN — {level_name}", unit="", value="", parent=self
+        )
+        if not dlg_old.exec():
+            return
+        entered_old = dlg_old.value()
+        cfg = load_config(_CONFIG_PATH)
+        ac = cfg.get("access_control", {})
+        default_plain = dict(
+            pin_operateur="0000", pin_technicien="2222", pin_admin="1234"
+        )
+        stored = ac.get(level_key, _hash_pin(default_plain[level_key]))
+        if not _check_pin(entered_old, stored):
+            QMessageBox.warning(self, "PIN incorrect", "L'ancien PIN est incorrect.")
+            return
+
+        # 2. Nouveau PIN
+        dlg_new = NumpadDialog(
+            title=f"Nouveau PIN — {level_name}", unit="", value="", parent=self
+        )
+        if not dlg_new.exec():
+            return
+        new_pin = dlg_new.value()
+
+        # 3. Confirmation
+        dlg_conf = NumpadDialog(
+            title=f"Confirmer nouveau PIN — {level_name}", unit="", value="", parent=self
+        )
+        if not dlg_conf.exec():
+            return
+        if dlg_conf.value() != new_pin:
+            QMessageBox.warning(self, "PIN différent", "Les deux PIN ne correspondent pas.")
+            return
+
+        # 4. Sauvegarder
+        ac[level_key] = _hash_pin(new_pin)
+        cfg["access_control"] = ac
+        save_config(_CONFIG_PATH, cfg)
+        QMessageBox.information(self, "PIN modifié", f"✓ PIN {level_name} mis à jour.")
+
+    # ------------------------------------------------------------------
+    def _load_config(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        ac = cfg.get("access_control", {})
+        self._enabled_chk.setChecked(bool(ac.get("enabled", False)))
+        v = ac.get("auto_logout", "Jamais")
+        self._auto_logout_btn.setProperty("choice_value", v)
+        self._auto_logout_btn.setText(v)
+
+    def _save(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        ac = cfg.setdefault("access_control", {})
+        ac["enabled"]     = self._enabled_chk.isChecked()
+        ac["auto_logout"] = self._auto_logout_btn.property("choice_value") or "Jamais"
+        # Initialiser les PIN par défaut hashés s'ils n'existent pas encore
+        _defaults = {
+            "pin_operateur":  "0000",
+            "pin_technicien": "2222",
+            "pin_admin":      "1234",
+        }
+        for key, plain in _defaults.items():
+            ac.setdefault(key, _hash_pin(plain))
+        save_config(_CONFIG_PATH, cfg)
+        QMessageBox.information(
+            self, "Droits d'accès",
+            "✓ Configuration sauvegardée.\nRedémarrez pour appliquer.",
+        )
+        self._main_stack.setCurrentIndex(1)
+
+
+# ===========================================================================
 # _DateHeurePage — réglage date / heure système (index 8)
 # ===========================================================================
 
@@ -2222,6 +2499,8 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._pm_edit_page)              # 7
         self._date_heure_page = _DateHeurePage(self._settings_stack, self)
         self._settings_stack.addWidget(self._date_heure_page)           # 8
+        self._droits_page = _DroitsAccesPage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._droits_page)               # 9
 
         root.addWidget(self._settings_stack)
 
@@ -2330,7 +2609,7 @@ class SettingsPage(QWidget):
 
         buttons = [
             ("🌐", "Langue",          0, 0, None),
-            ("🔒", "Droits d'accès",  0, 1, None),
+            ("🔒", "Droits d'accès",  0, 1, "droits"),
             ("📅", "Date / Heure",    0, 2, "date_heure"),
             ("📊", "Voie X",          1, 0, "voie_x"),
             ("📡", "Voie Y",          1, 1, "voie_y"),
@@ -2358,6 +2637,10 @@ class SettingsPage(QWidget):
             elif action == "date_heure":
                 btn.clicked.connect(
                     lambda checked=False: self._settings_stack.setCurrentIndex(8)
+                )
+            elif action == "droits":
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(9)
                 )
             else:
                 btn.clicked.connect(
