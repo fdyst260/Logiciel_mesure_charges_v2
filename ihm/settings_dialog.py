@@ -3212,6 +3212,411 @@ def _build_cycles_from_csv(data_dir: Path, contenu: str) -> list[dict]:
 
 
 # ===========================================================================
+# _ExtrasPage — Modbus / Réseau / Infos système  (index 12)
+# ===========================================================================
+
+def _extras_section_header(title: str) -> QLabel:
+    lbl = QLabel(title)
+    lbl.setStyleSheet(
+        "background-color: #444444; color: #C49A3C; font-size: 14px; "
+        "font-weight: bold; padding: 8px; border-radius: 6px; "
+        "margin-top: 10px;"
+    )
+    return lbl
+
+
+class _ExtrasPage(QWidget):
+    """Page Extras : Modbus TCP · Réseau · Informations système (index 12)."""
+
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    def showEvent(self, event) -> None:
+        self._load_all()
+        super().showEvent(event)
+
+    # ------------------------------------------------------------------
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── Header ──────────────────────────────────────────────────
+        hdr = QLabel("⚙   Extras")
+        hdr.setStyleSheet(
+            f"background-color: {_C['header_bg']}; color: {_C['text']}; "
+            "font-size: 20px; font-weight: bold; padding: 14px 20px;"
+        )
+        root.addWidget(hdr)
+
+        # ── Scroll ───────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background-color: transparent;")
+
+        content = QWidget()
+        content.setStyleSheet(f"background-color: {_C['bg']};")
+        v = QVBoxLayout(content)
+        v.setContentsMargins(20, 10, 20, 20)
+        v.setSpacing(8)
+
+        # ── Section 1 : Modbus ───────────────────────────────────────
+        v.addWidget(_extras_section_header("🔌 Connexion Modbus TCP"))
+
+        cfg = _load_cfg_safe()
+        mb = cfg.get("modbus", {})
+
+        fw_mb = QFrame()
+        fw_mb.setStyleSheet(
+            f"background-color: {_C['panel']}; border-radius: 8px; padding: 4px;"
+        )
+        form_mb = QFormLayout(fw_mb)
+        form_mb.setContentsMargins(12, 10, 12, 10)
+        form_mb.setSpacing(10)
+        form_mb.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._mb_host_btn = _make_alpha_btn(
+            mb.get("host", "10.0.0.1"),
+            title="IP Automate",
+            parent=self,
+        )
+        self._mb_port_btn = _make_numpad_btn(
+            str(mb.get("port", 502)),
+            suffix="",
+            title="Port Modbus",
+            parent=self,
+        )
+        self._mb_poll_btn = _make_numpad_btn(
+            str(mb.get("poll_interval_ms", 50)),
+            suffix=" ms",
+            title="Intervalle poll",
+            parent=self,
+        )
+
+        form_mb.addRow(QLabel("IP Automate :"), self._mb_host_btn)
+        form_mb.addRow(QLabel("Port Modbus :"), self._mb_port_btn)
+        form_mb.addRow(QLabel("Intervalle poll :"), self._mb_poll_btn)
+
+        btn_apply_mb = QPushButton("✓  Appliquer")
+        btn_apply_mb.setObjectName("btn_save")
+        btn_apply_mb.clicked.connect(self._apply_modbus)
+        form_mb.addRow("", btn_apply_mb)
+
+        v.addWidget(fw_mb)
+
+        # ── Section 2 : Réseau ───────────────────────────────────────
+        v.addWidget(_extras_section_header("🌐 Réseau Raspberry Pi"))
+
+        fw_net = QFrame()
+        fw_net.setStyleSheet(
+            f"background-color: {_C['panel']}; border-radius: 8px; padding: 4px;"
+        )
+        form_net = QFormLayout(fw_net)
+        form_net.setContentsMargins(12, 10, 12, 10)
+        form_net.setSpacing(10)
+        form_net.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        net = cfg.get("network", {})
+
+        # eth0
+        lbl_eth0 = QLabel("── eth0 (automate) ──")
+        lbl_eth0.setStyleSheet("color: #C49A3C; font-weight: bold;")
+        form_net.addRow(lbl_eth0)
+
+        self._eth0_ip_btn = _make_alpha_btn(
+            net.get("eth0_ip", "10.0.0.2"),
+            title="IP fixe eth0",
+            parent=self,
+        )
+        self._eth0_mask_btn = _make_choice_btn(
+            ["/24 (255.255.255.0)", "/16 (255.255.0.0)", "/8 (255.0.0.0)"],
+            net.get("eth0_mask", "/24 (255.255.255.0)"),
+            "Masque réseau",
+            self,
+        )
+        form_net.addRow(QLabel("IP fixe eth0 :"), self._eth0_ip_btn)
+        form_net.addRow(QLabel("Masque réseau :"), self._eth0_mask_btn)
+
+        btn_apply_eth0 = QPushButton("✓  Appliquer eth0")
+        btn_apply_eth0.setObjectName("btn_save")
+        btn_apply_eth0.clicked.connect(self._apply_eth0)
+        form_net.addRow("", btn_apply_eth0)
+
+        # WiFi (lecture seule)
+        lbl_wifi = QLabel("── WiFi (réseau entreprise) ──")
+        lbl_wifi.setStyleSheet("color: #C49A3C; font-weight: bold; margin-top: 6px;")
+        form_net.addRow(lbl_wifi)
+
+        self._wifi_ip_lbl = QLabel("—")
+        self._wifi_ssid_lbl = QLabel("—")
+        form_net.addRow(QLabel("IP WiFi :"), self._wifi_ip_lbl)
+        form_net.addRow(QLabel("SSID :"), self._wifi_ssid_lbl)
+
+        note_wifi = QLabel(
+            "ℹ La config WiFi se fait via raspi-config ou l'interface graphique du Pi."
+        )
+        note_wifi.setWordWrap(True)
+        note_wifi.setStyleSheet("color: #AAAAAA; font-size: 12px;")
+        form_net.addRow(note_wifi)
+
+        btn_refresh_net = QPushButton("🔄  Rafraîchir réseau")
+        btn_refresh_net.setObjectName("btn_nav")
+        btn_refresh_net.clicked.connect(self._refresh_network)
+        form_net.addRow("", btn_refresh_net)
+
+        v.addWidget(fw_net)
+
+        # ── Section 3 : Infos système ────────────────────────────────
+        v.addWidget(_extras_section_header("ℹ️ Informations système"))
+
+        fw_sys = QFrame()
+        fw_sys.setStyleSheet(
+            f"background-color: {_C['panel']}; border-radius: 8px; padding: 4px;"
+        )
+        form_sys = QFormLayout(fw_sys)
+        form_sys.setContentsMargins(12, 10, 12, 10)
+        form_sys.setSpacing(10)
+        form_sys.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._sys_labels: dict[str, QLabel] = {}
+        for key in ("version", "modele", "os", "uptime", "disque", "ram", "temp"):
+            lbl = QLabel("—")
+            lbl.setWordWrap(True)
+            self._sys_labels[key] = lbl
+
+        form_sys.addRow(QLabel("Version logiciel :"), self._sys_labels["version"])
+        form_sys.addRow(QLabel("Modèle Pi :"), self._sys_labels["modele"])
+        form_sys.addRow(QLabel("OS :"), self._sys_labels["os"])
+        form_sys.addRow(QLabel("Uptime :"), self._sys_labels["uptime"])
+        form_sys.addRow(QLabel("Espace disque :"), self._sys_labels["disque"])
+        form_sys.addRow(QLabel("RAM utilisée :"), self._sys_labels["ram"])
+        form_sys.addRow(QLabel("Température CPU :"), self._sys_labels["temp"])
+
+        btn_refresh_sys = QPushButton("🔄  Rafraîchir infos")
+        btn_refresh_sys.setObjectName("btn_nav")
+        btn_refresh_sys.clicked.connect(self._refresh_sysinfo)
+        form_sys.addRow("", btn_refresh_sys)
+
+        v.addWidget(fw_sys)
+        v.addStretch()
+
+        scroll.setWidget(content)
+        root.addWidget(scroll, stretch=1)
+
+        # ── Footer ───────────────────────────────────────────────────
+        footer = QFrame()
+        footer.setObjectName("footer_bar")
+        footer.setStyleSheet(
+            f"background-color: {_C['header_bg']}; border-top: 1px solid {_C['border']};"
+        )
+        fh = QHBoxLayout(footer)
+        fh.setContentsMargins(16, 8, 16, 8)
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(
+            lambda: self._main_stack.setCurrentIndex(1)
+        )
+        fh.addWidget(btn_back)
+        fh.addStretch()
+        root.addWidget(footer)
+
+    # ------------------------------------------------------------------
+    def _load_all(self) -> None:
+        cfg = _load_cfg_safe()
+        mb = cfg.get("modbus", {})
+        # Recharger les valeurs Modbus dans les boutons
+        _btn_set_alpha(self._mb_host_btn, mb.get("host", "10.0.0.1"))
+        _btn_set_numpad(self._mb_port_btn, str(mb.get("port", 502)), "")
+        _btn_set_numpad(self._mb_poll_btn, str(mb.get("poll_interval_ms", 50)), " ms")
+        # Réseau
+        net = cfg.get("network", {})
+        _btn_set_alpha(self._eth0_ip_btn, net.get("eth0_ip", "10.0.0.2"))
+        mask = net.get("eth0_mask", "/24 (255.255.255.0)")
+        self._eth0_mask_btn.setProperty("choice_value", mask)
+        self._eth0_mask_btn.setText(mask)
+        # Sys info + réseau
+        self._refresh_sysinfo()
+        self._refresh_network()
+
+    # ------------------------------------------------------------------
+    def _apply_modbus(self) -> None:
+        host = self._mb_host_btn.property("alpha_value") or "10.0.0.1"
+        port_str = self._mb_port_btn.property("numpad_value") or "502"
+        poll_str = self._mb_poll_btn.property("numpad_value") or "50"
+        try:
+            port = int(port_str)
+            poll = int(poll_str)
+        except ValueError:
+            QMessageBox.warning(self, "Modbus", "Port et intervalle doivent être des entiers.")
+            return
+        cfg = _load_cfg_safe()
+        cfg.setdefault("modbus", {})
+        cfg["modbus"]["host"] = host
+        cfg["modbus"]["port"] = port
+        cfg["modbus"]["poll_interval_ms"] = poll
+        save_config(_CONFIG_PATH, cfg)
+        QMessageBox.information(self, "Modbus", "Configuration sauvegardée.\nRedémarrez pour appliquer.")
+
+    # ------------------------------------------------------------------
+    def _apply_eth0(self) -> None:
+        import subprocess
+        ip = self._eth0_ip_btn.property("alpha_value") or "10.0.0.2"
+        mask_full = self._eth0_mask_btn.property("choice_value") or "/24 (255.255.255.0)"
+        # Extraire juste le préfixe "/24" depuis "/24 (255.255.255.0)"
+        prefix = mask_full.split()[0]  # "/24"
+        address = f"{ip}{prefix}"
+
+        nmcli_args = [
+            "sudo", "nmcli", "connection", "modify", "Wired connection 1",
+            "ipv4.addresses", address,
+            "ipv4.method", "manual",
+        ]
+        try:
+            result = subprocess.run(nmcli_args, capture_output=True, text=True)
+            if result.returncode != 0:
+                # Réessai avec "eth0"
+                nmcli_args[4] = "eth0"
+                result = subprocess.run(nmcli_args, capture_output=True, text=True)
+            if result.returncode == 0:
+                cfg = _load_cfg_safe()
+                cfg.setdefault("network", {})
+                cfg["network"]["eth0_ip"] = ip
+                cfg["network"]["eth0_mask"] = mask_full
+                save_config(_CONFIG_PATH, cfg)
+                QMessageBox.information(
+                    self, "Réseau", f"eth0 configurée : {address}\nRedémarrez pour appliquer."
+                )
+            else:
+                QMessageBox.warning(
+                    self, "Réseau", f"Erreur nmcli :\n{result.stderr.strip()}"
+                )
+        except Exception as e:
+            QMessageBox.warning(self, "Réseau", f"Erreur : {e}")
+
+    # ------------------------------------------------------------------
+    def _refresh_network(self) -> None:
+        import socket
+        import subprocess
+
+        # IP WiFi
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+            self._wifi_ip_lbl.setText(ip)
+        except Exception:
+            self._wifi_ip_lbl.setText("—")
+
+        # SSID
+        try:
+            res = subprocess.run(
+                ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                capture_output=True, text=True, timeout=3,
+            )
+            ssid = "—"
+            for line in res.stdout.splitlines():
+                if line.startswith("yes:"):
+                    ssid = line.split(":", 1)[1]
+                    break
+            self._wifi_ssid_lbl.setText(ssid)
+        except Exception:
+            self._wifi_ssid_lbl.setText("—")
+
+    # ------------------------------------------------------------------
+    def _refresh_sysinfo(self) -> None:
+        import shutil
+
+        # Version logiciel
+        version_file = _CONFIG_PATH.parent / "VERSION.txt"
+        try:
+            self._sys_labels["version"].setText(
+                version_file.read_text(encoding="utf-8").strip()
+            )
+        except Exception:
+            self._sys_labels["version"].setText("1.0.0")
+
+        # Modèle Pi
+        try:
+            model = Path("/proc/device-tree/model").read_bytes().rstrip(b"\x00").decode()
+            self._sys_labels["modele"].setText(model)
+        except Exception:
+            self._sys_labels["modele"].setText("—")
+
+        # OS
+        try:
+            os_info = "—"
+            for line in Path("/etc/os-release").read_text().splitlines():
+                if line.startswith("PRETTY_NAME="):
+                    os_info = line.split("=", 1)[1].strip('"')
+                    break
+            self._sys_labels["os"].setText(os_info)
+        except Exception:
+            self._sys_labels["os"].setText("—")
+
+        # Uptime
+        try:
+            up_secs = int(float(Path("/proc/uptime").read_text().split()[0]))
+            jours = up_secs // 86400
+            heures = (up_secs % 86400) // 3600
+            minutes = (up_secs % 3600) // 60
+            self._sys_labels["uptime"].setText(
+                f"{jours} j  {heures} h  {minutes} min"
+            )
+        except Exception:
+            self._sys_labels["uptime"].setText("—")
+
+        # Espace disque
+        try:
+            du = shutil.disk_usage("/")
+            used_go = du.used / 1e9
+            total_go = du.total / 1e9
+            pct = du.used / du.total * 100
+            self._sys_labels["disque"].setText(
+                f"{used_go:.1f} Go utilisés / {total_go:.1f} Go total ({pct:.0f}%)"
+            )
+        except Exception:
+            self._sys_labels["disque"].setText("—")
+
+        # RAM
+        try:
+            mem_total = mem_avail = 0
+            for line in Path("/proc/meminfo").read_text().splitlines():
+                if line.startswith("MemTotal:"):
+                    mem_total = int(line.split()[1]) // 1024
+                elif line.startswith("MemAvailable:"):
+                    mem_avail = int(line.split()[1]) // 1024
+            mem_used = mem_total - mem_avail
+            self._sys_labels["ram"].setText(
+                f"{mem_used} Mo utilisés / {mem_total} Mo total"
+            )
+        except Exception:
+            self._sys_labels["ram"].setText("—")
+
+        # Température CPU
+        try:
+            raw = int(Path("/sys/class/thermal/thermal_zone0/temp").read_text())
+            temp = raw / 1000.0
+            color = "#4caf50" if temp < 60 else ("#f57f17" if temp < 70 else "#ef5350")
+            self._sys_labels["temp"].setText(f"{temp:.1f} °C")
+            self._sys_labels["temp"].setStyleSheet(f"color: {color};")
+        except Exception:
+            self._sys_labels["temp"].setText("—")
+
+
+def _btn_set_alpha(btn: QPushButton, value: str) -> None:
+    btn.setProperty("alpha_value", value)
+    btn.setText(value or "—")
+
+
+def _btn_set_numpad(btn: QPushButton, value: str, suffix: str) -> None:
+    btn.setProperty("numpad_value", value)
+    btn.setText(f"{value}{suffix}")
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -3256,6 +3661,8 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._affichage_page)            # 10
         self._export_page = _ExportationPage(self._settings_stack, self)
         self._settings_stack.addWidget(self._export_page)               # 11
+        self._extras_page = _ExtrasPage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._extras_page)               # 12
 
         root.addWidget(self._settings_stack)
 
@@ -3371,7 +3778,7 @@ class SettingsPage(QWidget):
             ("⏱",  "Contrôle cycle", 1, 2, "cycle"),
             ("🖥",  "Affichage prod.",2, 0, "affichage"),
             ("💾", "Exportation",     2, 1, "exportation"),
-            ("⚙",  "Extras",         2, 2, None),
+            ("⚙",  "Extras",         2, 2, "extras"),
         ]
         for icon, label, row, col, action in buttons:
             btn = QPushButton(f"{icon}\n{label}")
@@ -3404,6 +3811,10 @@ class SettingsPage(QWidget):
             elif action == "exportation":
                 btn.clicked.connect(
                     lambda checked=False: self._settings_stack.setCurrentIndex(11)
+                )
+            elif action == "extras":
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(12)
                 )
             else:
                 btn.clicked.connect(
