@@ -2772,12 +2772,28 @@ class _ExportationPage(QWidget):
         super().__init__(parent)
         self._main_stack = stack
         self._detected_drives: list[str] = []
+        self._worker_usb: object | None = None
+        self._worker_pdf: object | None = None
+        self._worker_detect: object | None = None
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
 
     def showEvent(self, event) -> None:
         self._load_config()
+        self._reset_buttons_if_idle()
         super().showEvent(event)
+
+    def _reset_buttons_if_idle(self) -> None:
+        """Remet les boutons à leur état initial si aucun worker ne tourne."""
+        if not (self._worker_usb is not None and self._worker_usb.isRunning()):
+            self._btn_export.setEnabled(True)
+            self._btn_export.setText("💾  Exporter vers la clé USB")
+        if not (self._worker_pdf is not None and self._worker_pdf.isRunning()):
+            self._btn_pdf.setEnabled(True)
+            self._btn_pdf.setText("📄  Générer rapport PDF")
+        if not (self._worker_detect is not None and self._worker_detect.isRunning()):
+            self._btn_detect.setEnabled(True)
+            self._btn_detect.setText("🔍  Détecter les clés USB")
 
     def _cancel(self) -> None:
         self._main_stack.setCurrentIndex(1)
@@ -3076,6 +3092,7 @@ class _ExportationPage(QWidget):
         self._worker_detect = ExportWorker(task="detect")
         self._worker_detect.drives_detected.connect(self._on_drives_detected)
         self._worker_detect.finished.connect(self._on_detect_done)
+        self._worker_detect.finished.connect(self._worker_detect.deleteLater)
         self._worker_detect.start()
 
     def _on_drives_detected(self, drives: list) -> None:
@@ -3115,6 +3132,7 @@ class _ExportationPage(QWidget):
             filter_result=filtre,
         )
         self._worker_usb.finished.connect(self._on_export_done)
+        self._worker_usb.finished.connect(self._worker_usb.deleteLater)
         self._worker_usb.start()
 
     def _on_export_done(self, success: bool, message: str) -> None:
@@ -3153,6 +3171,7 @@ class _ExportationPage(QWidget):
             machine_name="ACM Riveteuse",
         )
         self._worker_pdf.finished.connect(self._on_pdf_done)
+        self._worker_pdf.finished.connect(self._worker_pdf.deleteLater)
         self._worker_pdf.start()
 
     def _on_pdf_done(self, success: bool, message: str) -> None:
@@ -3173,10 +3192,12 @@ def _load_cfg_safe() -> dict:
 
 
 def _build_cycles_from_csv(data_dir: Path, contenu: str) -> list[dict]:
-    """Reconstruit une liste de dicts cycles depuis les noms de fichiers CSV.
+    """Reconstruit une liste de dicts cycles depuis les fichiers CSV.
 
     Format nom : YYYYMMDD_HHMMSS_PMxx_RESULT.csv
+    Colonnes CSV : time_s, force_n, position_mm  (cf. core/storage.py)
     """
+    import csv as _csv
     cycles: list[dict] = []
     if not data_dir.exists():
         return cycles
@@ -3198,14 +3219,32 @@ def _build_cycles_from_csv(data_dir: Path, contenu: str) -> list[dict]:
             except ValueError:
                 timestamp_str = csv_file.stem[:15]
 
+        # Lire le contenu CSV pour extraire Fmax et Xmax réels
+        fmax, xmax = 0.0, 0.0
+        try:
+            with open(csv_file, newline="", encoding="utf-8") as f:
+                reader = _csv.DictReader(f)
+                for row in reader:
+                    try:
+                        force = float(row.get("force_n", 0) or 0)
+                        pos   = float(row.get("position_mm", 0) or 0)
+                        if force > fmax:
+                            fmax = force
+                        if pos > xmax:
+                            xmax = pos
+                    except (ValueError, TypeError):
+                        continue
+        except Exception as e:
+            print(f"[EXPORT] Erreur lecture {csv_file.name}: {e}")
+
         cycles.append(
             {
                 "cycle_num": i,
-                "result": result,
+                "result":    result,
                 "timestamp": timestamp_str,
-                "fmax": 0.0,
-                "xmax": 0.0,
-                "points": [],
+                "fmax":      fmax,
+                "xmax":      xmax,
+                "points":    [],
             }
         )
     return cycles
