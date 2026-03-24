@@ -2914,7 +2914,14 @@ class _ExportationPage(QWidget):
             "Contenu rapport",
             self,
         )
+        self._periode_btn = _make_choice_btn(
+            ["Aujourd'hui", "7 derniers jours", "30 derniers jours", "Tout l'historique"],
+            "Aujourd'hui",
+            "Période",
+            self,
+        )
         form_pdf.addRow("Contenu rapport :", self._contenu_btn)
+        form_pdf.addRow("Période :", self._periode_btn)
         fw_pdf = QWidget()
         fw_pdf.setLayout(form_pdf)
         v.addWidget(fw_pdf)
@@ -3092,7 +3099,6 @@ class _ExportationPage(QWidget):
         self._worker_detect = ExportWorker(task="detect")
         self._worker_detect.drives_detected.connect(self._on_drives_detected)
         self._worker_detect.finished.connect(self._on_detect_done)
-        self._worker_detect.finished.connect(self._worker_detect.deleteLater)
         self._worker_detect.start()
 
     def _on_drives_detected(self, drives: list) -> None:
@@ -3101,6 +3107,7 @@ class _ExportationPage(QWidget):
     def _on_detect_done(self, success: bool, message: str) -> None:
         self._btn_detect.setEnabled(True)
         self._btn_detect.setText("🔍  Détecter les clés USB")
+        self._worker_detect = None
         self._usb_status_lbl.setText(message)
         if success:
             self._usb_status_lbl.setStyleSheet("color: #1D9E75; font-size: 14px;")
@@ -3132,12 +3139,14 @@ class _ExportationPage(QWidget):
             filter_result=filtre,
         )
         self._worker_usb.finished.connect(self._on_export_done)
-        self._worker_usb.finished.connect(self._worker_usb.deleteLater)
         self._worker_usb.start()
 
     def _on_export_done(self, success: bool, message: str) -> None:
+        print(f"[DEBUG] _on_export_done: success={success}, msg={message}")
         self._btn_export.setEnabled(True)
         self._btn_export.setText("💾  Exporter vers la clé USB")
+        self._worker_usb = None  # nettoyage manuel
+        print("[DEBUG] Bouton export réactivé")
         if success:
             QMessageBox.information(self, "Export USB terminé", message)
         else:
@@ -3152,8 +3161,17 @@ class _ExportationPage(QWidget):
         cfg = _load_cfg_safe()
         data_dir = Path(cfg.get("storage", {}).get("data_dir", "./data"))
         contenu = self._contenu_btn.property("choice_value") or "Tous les cycles"
+        periode = self._periode_btn.property("choice_value") or "Aujourd'hui"
 
-        cycles_data = _build_cycles_from_csv(data_dir, contenu)
+        _PERIODE_TO_FILTER = {
+            "Aujourd'hui":       "today",
+            "7 derniers jours":  "last7",
+            "30 derniers jours": "last30",
+            "Tout l'historique": None,
+        }
+        date_filter = _PERIODE_TO_FILTER.get(periode, "today")
+
+        cycles_data = _build_cycles_from_csv(data_dir, contenu, date_filter)
 
         if self._detected_drives:
             output_dir = Path(self._detected_drives[0]) / "ACM_Export"
@@ -3169,14 +3187,15 @@ class _ExportationPage(QWidget):
             cycles_data=cycles_data,
             output_path=output_path,
             machine_name="ACM Riveteuse",
+            periode=periode,
         )
         self._worker_pdf.finished.connect(self._on_pdf_done)
-        self._worker_pdf.finished.connect(self._worker_pdf.deleteLater)
         self._worker_pdf.start()
 
     def _on_pdf_done(self, success: bool, message: str) -> None:
         self._btn_pdf.setEnabled(True)
         self._btn_pdf.setText("📄  Générer rapport PDF")
+        self._worker_pdf = None  # nettoyage manuel
         if success:
             QMessageBox.information(self, "Rapport PDF", message)
         else:
@@ -3191,13 +3210,36 @@ def _load_cfg_safe() -> dict:
         return {}
 
 
-def _build_cycles_from_csv(data_dir: Path, contenu: str) -> list[dict]:
+def _build_cycles_from_csv(
+    data_dir: Path,
+    contenu: str,
+    date_filter: str | None = None,
+) -> list[dict]:
     """Reconstruit une liste de dicts cycles depuis les fichiers CSV.
 
     Format nom : YYYYMMDD_HHMMSS_PMxx_RESULT.csv
     Colonnes CSV : time_s, force_n, position_mm  (cf. core/storage.py)
+
+    date_filter : "today" | "last7" | "last30" | None (tout l'historique)
     """
     import csv as _csv
+    from datetime import timedelta
+
+    # Calculer la date de coupure
+    today_str = datetime.now().strftime("%Y%m%d")
+    if date_filter == "today":
+        cutoff = today_str
+        exact = True
+    elif date_filter == "last7":
+        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
+        exact = False
+    elif date_filter == "last30":
+        cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
+        exact = False
+    else:
+        cutoff = None
+        exact = False
+
     cycles: list[dict] = []
     if not data_dir.exists():
         return cycles
@@ -3212,12 +3254,21 @@ def _build_cycles_from_csv(data_dir: Path, contenu: str) -> list[dict]:
         # Extraire timestamp depuis le nom (YYYYMMDD_HHMMSS_...)
         parts = csv_file.stem.split("_")
         timestamp_str = ""
+        date_str = ""
         if len(parts) >= 2:
             try:
                 dt = datetime.strptime(f"{parts[0]}_{parts[1]}", "%Y%m%d_%H%M%S")
                 timestamp_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+                date_str = parts[0]
             except ValueError:
                 timestamp_str = csv_file.stem[:15]
+
+        # Appliquer le filtre de date
+        if cutoff and date_str:
+            if exact and date_str != cutoff:
+                continue
+            if not exact and date_str < cutoff:
+                continue
 
         # Lire le contenu CSV pour extraire Fmax et Xmax réels
         fmax, xmax = 0.0, 0.0

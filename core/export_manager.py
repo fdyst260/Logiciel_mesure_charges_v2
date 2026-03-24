@@ -138,6 +138,7 @@ def generate_pdf_report(
     output_path: Path,
     pm_name: str = "PM-01",
     machine_name: str = "ACM Riveteuse",
+    periode: str = "Tout l'historique",
 ) -> bool:
     """Génère un rapport PDF de production.
 
@@ -188,7 +189,7 @@ def generate_pdf_report(
 
         # En-tête
         story.append(
-            Paragraph(f"Rapport de production — {machine_name}", title_style)
+            Paragraph(f"Rapport de production — {machine_name}  |  {periode}", title_style)
         )
         story.append(
             Paragraph(
