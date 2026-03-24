@@ -2,7 +2,7 @@
 
 Ce module gere :
 - L'acquisition bi-canal CH0 (Force) + CH1 (Position)
-- Le declenchement externe via la broche TRIG de la MCC 118
+- Le declenchement via Modbus TCP (D200) ou trigger materiel optionnel
 - La conversion Volts -> grandeurs physiques (N, mm)
 - L'envoi des echantillons etalonnes vers une queue partagee
 """
@@ -13,6 +13,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from config import (
@@ -32,6 +33,20 @@ if TYPE_CHECKING:
     from daqhats import HatError as HatErrorType
 else:
     HatErrorType = Exception
+
+_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+_ACQ_READ_TIMEOUT = 10.0  # secondes avant warning "aucune donnee depuis Xs"
+
+
+def _read_trigger_mode() -> str:
+    """Lit trigger_mode depuis config.yaml. Defaut: 'modbus'."""
+    try:
+        import yaml
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        return cfg.get("acquisition", {}).get("trigger_mode", "modbus")
+    except Exception:
+        return "modbus"
 
 
 class AcquisitionError(Exception):
@@ -126,7 +141,7 @@ def acquisition_loop(
     stop_event: threading.Event,
     calibrator: SensorCalibrator | None = None,
 ) -> None:
-    """Boucle producteur d'acquisition continue avec trigger externe.
+    """Boucle producteur d'acquisition continue (trigger Modbus ou hardware).
 
     Parametres:
     - data_queue: queue partagee vers le thread d'analyse
@@ -134,7 +149,7 @@ def acquisition_loop(
     - calibrator: objet d'etalonnage (si None, calibrage par defaut)
 
     Donnees poussees dans la queue:
-    - list[tuple[force_n, position_mm]]
+    - list[tuple[t, force_n, position_mm]]
       Chaque bloc correspond a CHUNK_SIZE points (si disponibles).
     """
     calibrator = calibrator or SensorCalibrator()
@@ -144,15 +159,25 @@ def acquisition_loop(
 
     hat = mcc118_cls(BOARD_NUM)
     channel_mask = _channel_mask_for_force_position()
-    options = OptionFlags.CONTINUOUS | OptionFlags.EXTTRIGGER
+
+    # Lecture du mode trigger depuis config.yaml
+    trigger_mode = _read_trigger_mode()
+    if trigger_mode == "hardware":
+        options = OptionFlags.CONTINUOUS | OptionFlags.EXTTRIGGER
+        print("[ACQ] Mode trigger : HARDWARE (broche TRIG)")
+    else:
+        # Trigger gere par Modbus TCP (D200) — pas par trigger materiel
+        options = OptionFlags.CONTINUOUS
+        print("[ACQ] Mode trigger : MODBUS (D200)")
 
     try:
-        # Selection du mode de trigger externe (front montant).
-        hat.trigger_mode(TriggerModes.RISING_EDGE)
+        if trigger_mode == "hardware":
+            hat.trigger_mode(TriggerModes.RISING_EDGE)
 
+        mode_str = "CONTINUOUS+EXTTRIGGER" if trigger_mode == "hardware" else "CONTINUOUS"
         print(
             f"[ACQ] Demarrage scan MCC118: CH{FORCE_CHANNEL}/CH{POSITION_CHANNEL}, "
-            f"{SAMPLE_RATE_HZ:.0f} Hz/canal, chunk={CHUNK_SIZE}, mode CONTINUOUS+EXTTRIGGER"
+            f"{SAMPLE_RATE_HZ:.0f} Hz/canal, chunk={CHUNK_SIZE}, mode {mode_str}"
         )
         hat.a_in_scan_start(
             channel_mask=channel_mask,
@@ -161,9 +186,12 @@ def acquisition_loop(
             options=options,
         )
 
-        _wait_until_triggered(hat, stop_event)
-        if stop_event.is_set():
-            return
+        if trigger_mode == "hardware":
+            _wait_until_triggered(hat, stop_event)
+            if stop_event.is_set():
+                return
+
+        last_data_time = time.perf_counter()
 
         while not stop_event.is_set():
             read_result = hat.a_in_scan_read(
@@ -182,7 +210,12 @@ def acquisition_loop(
 
             raw = read_result.data
             if not raw:
+                if time.perf_counter() - last_data_time > _ACQ_READ_TIMEOUT:
+                    print("[ACQ] Warning: aucune donnee depuis 10s")
+                    last_data_time = time.perf_counter()
                 continue
+
+            last_data_time = time.perf_counter()
 
             # Les donnees sont entrelacees: CH0, CH1, CH0, CH1...
             if len(raw) % 2 != 0:
@@ -210,15 +243,11 @@ def acquisition_loop(
         raise AcquisitionError(f"Erreur materielle MCC 118 (HatError): {exc}") from exc
 
     finally:
-        # Nettoyage strict, meme en cas d'erreur/interruption.
+        # Arret propre meme en cas d'erreur/interruption.
         try:
             hat.a_in_scan_stop()
-        except Exception:
-            pass
-
-        try:
             hat.a_in_scan_cleanup()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ACQ] Arret scan: {e}")
 
         print("[ACQ] Nettoyage acquisition termine.")

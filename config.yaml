@@ -1,22 +1,39 @@
-modbus:
-  enabled: true
-  host: "192.168.1.92"
-  poll_interval_ms: 50
-  port: 502
-  result_register: 0x10C9
-  trigger_register: 0x10C8
-
+access_control:
+  auto_logout: Jamais
+  enabled: false
+  pin_admin: c7f4f146491d27eed1cd4d422c9b3fec37006c606b17dabbfebef85845f3cbc1
+  pin_operateur: 9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0
+  pin_technicien: edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9
 acquisition:
   board_num: 0
   chunk_size: 250
   force_channel: 0
   position_channel: 1
   sample_rate_hz: 5000.0
+  trigger_mode: "modbus"
+affichage_prod:
+  fenetre_pleine: true
+  feu_bicolore: Texte
+  histogramme: OK-NOK en %
+  indication_es: true
+export:
+  auto_export: false
+  contenu_rapport: Tous les cycles
+  destination_auto: Dossier local
+  filtre: OK+NOK
+  nommage: PM_date_heure_résultat
 gpio:
   out_alarm: 13
   out_nok: 6
   out_ok: 5
   trigger_pin: 17
+modbus:
+  enabled: true
+  host: 192.168.1.92
+  poll_interval_ms: 50
+  port: 502
+  result_register: 4297
+  trigger_register: 4296
 programmes:
   1:
     description: Rivetage standard
