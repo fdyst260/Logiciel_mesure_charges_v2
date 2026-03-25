@@ -77,6 +77,10 @@ PM_DEFINITIONS: dict[int, ProgramMeasure] = {
     14: ProgramMeasure(14, "PM14_SERIE_B", "Production serie B", "FORCE_POSITION"),
     15: ProgramMeasure(15, "PM15_MAINT", "Maintenance / diagnostic", "FORCE_TIME"),
     16: ProgramMeasure(16, "PM16_CUSTOM", "Recette personnalisee", "FORCE_POSITION"),
+    **{
+        pm_id: ProgramMeasure(pm_id, f"PM{pm_id:02d}", "", "FORCE_POSITION")
+        for pm_id in range(17, 51)
+    },
 }
 
 
@@ -93,13 +97,15 @@ def load_pm_from_yaml() -> None:
     except Exception:
         return
     for pm_id, pm_data in cfg.get("programmes", {}).items():
-        if pm_id in PM_DEFINITIONS:
-            PM_DEFINITIONS[pm_id] = ProgramMeasure(
-                pm_id=pm_id,
-                name=pm_data.get("name", PM_DEFINITIONS[pm_id].name),
-                description=pm_data.get("description", ""),
-                view_mode=pm_data.get("view_mode", "FORCE_POSITION"),
-            )
+        if not isinstance(pm_id, int) or pm_id < 1 or pm_id > 50:
+            continue
+        default_name = PM_DEFINITIONS[pm_id].name if pm_id in PM_DEFINITIONS else f"PM{pm_id:02d}"
+        PM_DEFINITIONS[pm_id] = ProgramMeasure(
+            pm_id=pm_id,
+            name=pm_data.get("name", default_name),
+            description=pm_data.get("description", ""),
+            view_mode=pm_data.get("view_mode", "FORCE_POSITION"),
+        )
 
 
 def build_default_tools() -> list:

@@ -1,6 +1,6 @@
 access_control:
   auto_logout: Jamais
-  enabled: false
+  enabled: true
   pin_admin: 03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4
   pin_operateur: 9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0
   pin_technicien: edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9
@@ -129,6 +129,266 @@ programmes:
         enabled: false
         entry_side: left
         exit_side: left
+    view_mode: FORCE_POSITION
+  4:
+    description: ''
+    name: PM04
+    tools: &id001
+      envelope:
+        enabled: false
+        lower_curve:
+        - - 0.0
+          - 0.0
+        - - 100.0
+          - 0.0
+        upper_curve:
+        - - 0.0
+          - 0.0
+        - - 100.0
+          - 0.0
+      no_pass:
+        enabled: false
+        x_max: 0.0
+        x_min: 0.0
+        y_limit: 0.0
+      uni_box:
+        box_x_max: 0.0
+        box_x_min: 0.0
+        box_y_max: 0.0
+        box_y_min: 0.0
+        enabled: false
+        entry_side: left
+        exit_side: left
+    view_mode: FORCE_POSITION
+  5:
+    description: ''
+    name: PM05
+    tools: *id001
+    view_mode: FORCE_POSITION
+  6:
+    description: ''
+    name: PM06
+    tools: *id001
+    view_mode: FORCE_POSITION
+  7:
+    description: ''
+    name: PM07
+    tools: *id001
+    view_mode: FORCE_POSITION
+  8:
+    description: ''
+    name: PM08
+    tools: *id001
+    view_mode: FORCE_POSITION
+  9:
+    description: ''
+    name: PM09
+    tools: *id001
+    view_mode: FORCE_POSITION
+  10:
+    description: ''
+    name: PM10
+    tools: *id001
+    view_mode: FORCE_POSITION
+  11:
+    description: ''
+    name: PM11
+    tools: *id001
+    view_mode: FORCE_POSITION
+  12:
+    description: ''
+    name: PM12
+    tools: *id001
+    view_mode: FORCE_POSITION
+  13:
+    description: ''
+    name: PM13
+    tools: *id001
+    view_mode: FORCE_POSITION
+  14:
+    description: ''
+    name: PM14
+    tools: *id001
+    view_mode: FORCE_POSITION
+  15:
+    description: ''
+    name: PM15
+    tools: *id001
+    view_mode: FORCE_POSITION
+  16:
+    description: ''
+    name: PM16
+    tools: *id001
+    view_mode: FORCE_POSITION
+  17:
+    description: ''
+    name: PM17
+    tools: *id001
+    view_mode: FORCE_POSITION
+  18:
+    description: ''
+    name: PM18
+    tools: *id001
+    view_mode: FORCE_POSITION
+  19:
+    description: ''
+    name: PM19
+    tools: *id001
+    view_mode: FORCE_POSITION
+  20:
+    description: ''
+    name: PM20
+    tools: *id001
+    view_mode: FORCE_POSITION
+  21:
+    description: ''
+    name: PM21
+    tools: *id001
+    view_mode: FORCE_POSITION
+  22:
+    description: ''
+    name: PM22
+    tools: *id001
+    view_mode: FORCE_POSITION
+  23:
+    description: ''
+    name: PM23
+    tools: *id001
+    view_mode: FORCE_POSITION
+  24:
+    description: ''
+    name: PM24
+    tools: *id001
+    view_mode: FORCE_POSITION
+  25:
+    description: ''
+    name: PM25
+    tools: *id001
+    view_mode: FORCE_POSITION
+  26:
+    description: ''
+    name: PM26
+    tools: *id001
+    view_mode: FORCE_POSITION
+  27:
+    description: ''
+    name: PM27
+    tools: *id001
+    view_mode: FORCE_POSITION
+  28:
+    description: ''
+    name: PM28
+    tools: *id001
+    view_mode: FORCE_POSITION
+  29:
+    description: ''
+    name: PM29
+    tools: *id001
+    view_mode: FORCE_POSITION
+  30:
+    description: ''
+    name: PM30
+    tools: *id001
+    view_mode: FORCE_POSITION
+  31:
+    description: ''
+    name: PM31
+    tools: *id001
+    view_mode: FORCE_POSITION
+  32:
+    description: ''
+    name: PM32
+    tools: *id001
+    view_mode: FORCE_POSITION
+  33:
+    description: ''
+    name: PM33
+    tools: *id001
+    view_mode: FORCE_POSITION
+  34:
+    description: ''
+    name: PM34
+    tools: *id001
+    view_mode: FORCE_POSITION
+  35:
+    description: ''
+    name: PM35
+    tools: *id001
+    view_mode: FORCE_POSITION
+  36:
+    description: ''
+    name: PM36
+    tools: *id001
+    view_mode: FORCE_POSITION
+  37:
+    description: ''
+    name: PM37
+    tools: *id001
+    view_mode: FORCE_POSITION
+  38:
+    description: ''
+    name: PM38
+    tools: *id001
+    view_mode: FORCE_POSITION
+  39:
+    description: ''
+    name: PM39
+    tools: *id001
+    view_mode: FORCE_POSITION
+  40:
+    description: ''
+    name: PM40
+    tools: *id001
+    view_mode: FORCE_POSITION
+  41:
+    description: ''
+    name: PM41
+    tools: *id001
+    view_mode: FORCE_POSITION
+  42:
+    description: ''
+    name: PM42
+    tools: *id001
+    view_mode: FORCE_POSITION
+  43:
+    description: ''
+    name: PM43
+    tools: *id001
+    view_mode: FORCE_POSITION
+  44:
+    description: ''
+    name: PM44
+    tools: *id001
+    view_mode: FORCE_POSITION
+  45:
+    description: ''
+    name: PM45
+    tools: *id001
+    view_mode: FORCE_POSITION
+  46:
+    description: ''
+    name: PM46
+    tools: *id001
+    view_mode: FORCE_POSITION
+  47:
+    description: ''
+    name: PM47
+    tools: *id001
+    view_mode: FORCE_POSITION
+  48:
+    description: ''
+    name: PM48
+    tools: *id001
+    view_mode: FORCE_POSITION
+  49:
+    description: ''
+    name: PM49
+    tools: *id001
+    view_mode: FORCE_POSITION
+  50:
+    description: ''
+    name: PM50
+    tools: *id001
     view_mode: FORCE_POSITION
 scaling:
   force_name: Capteur piézoélectrique

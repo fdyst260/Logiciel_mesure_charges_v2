@@ -3964,12 +3964,12 @@ class SettingsPage(QWidget):
 
     def _on_pm_double_click(self, item) -> None:
         row = self._pm_list.row(item)
-        pm_id = row + 1
+        pm_id = sorted(PM_DEFINITIONS.keys())[row]
         self._pm_edit_page.load_pm(pm_id)
         self._settings_stack.setCurrentIndex(7)
 
     def _on_pm_saved(self, pm_id: int) -> None:
-        row = pm_id - 1
+        row = sorted(PM_DEFINITIONS.keys()).index(pm_id)
         item = self._pm_list.item(row)
         if item:
             item.setText(f"PM-{pm_id:02d}   ·   {PM_DEFINITIONS[pm_id].name}")
