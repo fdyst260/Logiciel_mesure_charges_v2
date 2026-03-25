@@ -52,17 +52,14 @@ class DataProcessor(threading.Thread):
                 if self._cycle_callback:
                     self._cycle_callback(final_result)
                 print(f"[PROCESSING] Resultat cycle: {final_result}")
-                if not self._sim_mode:
-                    from core.storage import save_cycle_csv
-                    csv_path = save_cycle_csv(
-                        pm_id=self._pm_id,
-                        result=final_result,
-                        points=self._points_for_csv,
-                    )
-                    self.saved_csv_path = str(csv_path)
-                    print(f"[PROCESSING] CSV: {csv_path}")
-                else:
-                    print("[PROCESSING] Mode sim — CSV non sauvegarde.")
+                from core.storage import save_cycle_csv
+                csv_path = save_cycle_csv(
+                    pm_id=self._pm_id,
+                    result=final_result,
+                    points=self._points_for_csv,
+                )
+                self.saved_csv_path = str(csv_path)
+                print(f"[PROCESSING] CSV: {csv_path}")
                 return  # Un seul cycle en mode sim ; en mode reel idem (1 cycle/thread)
 
             if first_point:
