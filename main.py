@@ -15,8 +15,16 @@ import queue
 import sys
 import threading
 
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from config import (
     ACQ_THREAD_TIMEOUT,
@@ -32,6 +40,104 @@ from core.analysis import CycleManager, DisplayMode
 from core.processing import DataProcessor
 from ihm.main_window import MainWindow
 from simulator.fake_acquisition import fake_acquisition_loop
+
+
+# ---------------------------------------------------------------------------
+# Splash screen démarrage ACM France
+# ---------------------------------------------------------------------------
+
+class SplashScreen(QWidget):
+    """Splash screen plein écran au démarrage ACM France."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.SplashScreen
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        screen = QApplication.primaryScreen().size()
+        self.setFixedSize(screen.width(), screen.height())
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        self.setStyleSheet("background-color: #2E2E2E;")
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(20)
+        layout.addStretch(2)
+
+        logo = QLabel("ACM FRANCE")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(
+            "color: #C49A3C; font-size: 64px; font-weight: bold;"
+            " letter-spacing: 12px; background: transparent;"
+        )
+        layout.addWidget(logo)
+
+        subtitle = QLabel("Système de contrôle et acquisition — Riveteuse")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet(
+            "color: #AAAAAA; font-size: 18px; background: transparent;"
+            " letter-spacing: 2px;"
+        )
+        layout.addWidget(subtitle)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFixedWidth(400)
+        sep.setStyleSheet("background-color: #C49A3C; max-height: 2px;")
+        sep_row = QHBoxLayout()
+        sep_row.addStretch()
+        sep_row.addWidget(sep)
+        sep_row.addStretch()
+        layout.addLayout(sep_row)
+
+        layout.addStretch(1)
+
+        self._msg_label = QLabel("Initialisation...")
+        self._msg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._msg_label.setStyleSheet(
+            "color: #AAAAAA; font-size: 14px; background: transparent;"
+        )
+        layout.addWidget(self._msg_label)
+
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
+        self._progress.setTextVisible(False)
+        self._progress.setFixedWidth(400)
+        self._progress.setFixedHeight(6)
+        self._progress.setStyleSheet(
+            "QProgressBar { background-color: #444444; border-radius: 3px; border: none; }"
+            "QProgressBar::chunk { background-color: #C49A3C; border-radius: 3px; }"
+        )
+        pb_row = QHBoxLayout()
+        pb_row.addStretch()
+        pb_row.addWidget(self._progress)
+        pb_row.addStretch()
+        layout.addLayout(pb_row)
+
+        version = "1.0.0"
+        try:
+            from pathlib import Path as _Path
+            version = (_Path(__file__).parent / "VERSION.txt").read_text().strip()
+        except Exception:
+            pass
+        ver_label = QLabel(f"v{version}")
+        ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ver_label.setStyleSheet(
+            "color: #666666; font-size: 12px; background: transparent;"
+        )
+        layout.addWidget(ver_label)
+        layout.addStretch(1)
+
+    def set_progress(self, value: int, message: str = "") -> None:
+        self._progress.setValue(value)
+        if message:
+            self._msg_label.setText(message)
+        QApplication.processEvents()
 
 
 # ---------------------------------------------------------------------------
@@ -73,19 +179,36 @@ class AcquisitionBridge(QObject):
 # ---------------------------------------------------------------------------
 
 def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bool = True) -> None:
+    import time as _time
+
     app = QApplication(sys.argv)
+
+    # Splash screen
+    splash = SplashScreen()
+    splash.show()
+    QApplication.processEvents()
+
+    splash.set_progress(10, "Chargement de la configuration...")
     load_pm_from_yaml()
 
     # 1. Pont AVANT les threads (doit vivre dans le thread Qt)
+    splash.set_progress(30, "Initialisation du pont de communication...")
     bridge = AcquisitionBridge()
 
     # 2. Fenêtre principale
+    splash.set_progress(50, "Chargement des programmes de mesure...")
     tools = build_tools_from_yaml(pm_id=1)
+
+    splash.set_progress(70, "Construction de l'interface...")
     window = MainWindow(pm_id=1, tools=tools, fullscreen=fullscreen)
+
+    splash.set_progress(85, "Connexion des signaux...")
     bridge.new_point.connect(window.on_new_point)
     bridge.cycle_finished.connect(window.on_cycle_finished)
     bridge.cycle_started.connect(window.on_cycle_started)
     window.set_sim_mode(use_simulator)
+
+    splash.set_progress(95, "Démarrage des threads...")
 
     # 3. Infrastructure d'acquisition initiale
     data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
@@ -180,10 +303,18 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             )
         window.set_restart_callback(_restart_sim_cycle)
 
-    # 6. Boucle événements Qt
+    # 6. Fermeture splash et démarrage
+    splash.set_progress(100, "Prêt !")
+    _time.sleep(0.5)
+    splash.close()
+    splash.deleteLater()
+    if not window.isVisible():
+        window.show()
+
+    # 7. Boucle événements Qt
     exit_code = app.exec()
 
-    # 7. Arrêt propre des threads
+    # 8. Arrêt propre des threads
     stop_event.set()
     try:
         data_queue.put_nowait(None)
