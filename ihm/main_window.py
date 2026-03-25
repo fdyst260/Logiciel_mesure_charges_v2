@@ -148,9 +148,10 @@ _LOCKOUT_SECONDS = 30
 
 class AccessLevel:
     """Niveaux d'accès utilisateur."""
-    NONE      = 0  # Machine verrouillée
-    OPERATEUR = 1  # Opérateur — production
-    ADMIN     = 3  # Admin — réglages complets
+    NONE       = 0  # Machine verrouillée
+    OPERATEUR  = 1  # Opérateur — production (lecture seule)
+    TECHNICIEN = 2  # Technicien — PM, RAZ, réglages (sauf Extras)
+    ADMIN      = 3  # Admin — accès total
 
 # ---------------------------------------------------------------------------
 # Feuille de style globale QSS
@@ -1523,6 +1524,116 @@ class _StatsWidget(QWidget):
 
 
 # ===========================================================================
+# LevelSelectorDialog — choix du niveau avant saisie PIN
+# ===========================================================================
+
+class LevelSelectorDialog(QDialog):
+    """Dialog de sélection du niveau d'accès avant saisie PIN."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog
+        )
+        self.setModal(True)
+        self.setFixedSize(400, 320)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2E2E2E;
+                border: 2px solid #C49A3C;
+                border-radius: 12px;
+            }
+        """)
+        self.selected_level: int = AccessLevel.NONE
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
+
+        title = QLabel("Sélectionner le niveau d'accès")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(
+            "color: #C49A3C; font-size: 16px; font-weight: bold; background: transparent;"
+        )
+        layout.addWidget(title)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background-color: #C49A3C; max-height: 1px;")
+        layout.addWidget(sep)
+
+        levels = [
+            (AccessLevel.OPERATEUR,  "🟢", "Opérateur",
+             "Courbes, historique",                  "#4caf50", "#1a3a1a"),
+            (AccessLevel.TECHNICIEN, "🟡", "Technicien",
+             "Opérateur + PM, RAZ, réglages",        "#FF9800", "#2a1a00"),
+            (AccessLevel.ADMIN,      "🔴", "Administrateur",
+             "Accès complet",                        "#C49A3C", "#2a1500"),
+        ]
+
+        for level, icon, name, desc, color, bg in levels:
+            btn = QPushButton()
+            btn.setFixedHeight(64)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {bg};
+                    border: 1px solid {color};
+                    border-radius: 8px;
+                    text-align: left;
+                    padding: 0 16px;
+                }}
+                QPushButton:pressed {{
+                    border: 2px solid {color};
+                    background-color: #3A3A3A;
+                }}
+            """)
+            btn_layout = QHBoxLayout(btn)
+            btn_layout.setContentsMargins(12, 8, 12, 8)
+
+            icon_lbl = QLabel(f"{icon}  {name}")
+            icon_lbl.setStyleSheet(
+                f"color: {color}; font-size: 16px; font-weight: bold; "
+                "background: transparent; border: none;"
+            )
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(
+                "color: #AAAAAA; font-size: 12px; background: transparent; border: none;"
+            )
+
+            col = QVBoxLayout()
+            col.addWidget(icon_lbl)
+            col.addWidget(desc_lbl)
+            btn_layout.addLayout(col)
+            btn_layout.addStretch()
+
+            btn.clicked.connect(lambda _, lv=level: self._select(lv))
+            layout.addWidget(btn)
+
+        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel.setFixedHeight(40)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #3a1a1a;
+                color: #ef9a9a;
+                font-size: 13px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 6px;
+            }
+            QPushButton:pressed { background-color: #c62828; }
+        """)
+        btn_cancel.clicked.connect(self.reject)
+        layout.addWidget(btn_cancel)
+
+    def _select(self, level: int) -> None:
+        self.selected_level = level
+        self.accept()
+
+
+# ===========================================================================
 # PinDialog — saisie PIN avec verrouillage
 # ===========================================================================
 
@@ -2400,9 +2511,10 @@ class MainWindow(QMainWindow):
             )
             return
         configs = {
-            AccessLevel.NONE:      ("🔒  Verrouillé",    "#ef5350", "#3a1a1a"),
-            AccessLevel.OPERATEUR: ("🟢  Opérateur",     "#4caf50", "#1a3a1a"),
-            AccessLevel.ADMIN:     ("🔴  Administrateur","#C49A3C", "#2a1a00"),
+            AccessLevel.NONE:       ("🔒  Verrouillé",    "#ef5350", "#3a1a1a"),
+            AccessLevel.OPERATEUR:  ("🟢  Opérateur",     "#4caf50", "#1a3a1a"),
+            AccessLevel.TECHNICIEN: ("🟡  Technicien",    "#FF9800", "#2a1a00"),
+            AccessLevel.ADMIN:      ("🔴  Administrateur","#C49A3C", "#2a1500"),
         }
         text, color, bg = configs.get(
             self._access_level, ("👤  Inconnu", "#AAAAAA", "#3A3A3A")
@@ -2423,47 +2535,98 @@ class MainWindow(QMainWindow):
                     btn.setEnabled(True)
             return
 
-        is_op_or_above = self._access_level >= AccessLevel.OPERATEUR
-        is_admin = self._access_level >= AccessLevel.ADMIN
-
-        self._pm_btn.setEnabled(is_op_or_above)
-        self._settings_btn.setEnabled(is_admin)
+        level = self._access_level
+        # PM et RAZ : Technicien et Admin uniquement
+        self._pm_btn.setEnabled(level >= AccessLevel.TECHNICIEN)
         for btn in self.findChildren(QPushButton):
             if "RAZ" in btn.text():
-                btn.setEnabled(is_op_or_above)
+                btn.setEnabled(level >= AccessLevel.TECHNICIEN)
+        # Bouton Réglages : Opérateur et au-dessus
+        self._settings_btn.setEnabled(level >= AccessLevel.OPERATEUR)
+        # Restrictions interne aux réglages
+        self._apply_settings_restrictions()
+
+    def _apply_settings_restrictions(self) -> None:
+        """Grise/active les boutons dans Paramètres généraux selon le niveau."""
+        settings_page = self.stack.widget(1)
+        if settings_page is None:
+            return
+
+        level = self._access_level
+
+        # Textes interdits selon niveau (substring match)
+        restricted_op = {
+            "Voie X", "Voie Y", "Contrôle cycle",
+            "Date / Heure", "Affichage prod.", "Exportation", "Extras",
+        }
+        restricted_tech = {"Extras"}
+
+        for btn in settings_page.findChildren(QPushButton):
+            label = btn.text().strip()
+            if level == AccessLevel.OPERATEUR:
+                blocked = any(r in label for r in restricted_op)
+                btn.setEnabled(not blocked)
+            elif level == AccessLevel.TECHNICIEN:
+                blocked = any(r in label for r in restricted_tech)
+                btn.setEnabled(not blocked)
+            else:
+                btn.setEnabled(True)
 
     def _on_login_clicked(self) -> None:
         """Connexion / déconnexion depuis le panneau droit."""
         import hashlib
-        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
-        ac = cfg.get("access_control", {})
 
-        if self._access_level >= AccessLevel.ADMIN:
-            # Déjà admin → déconnexion
-            self.set_access_level(AccessLevel.OPERATEUR)
+        # Si déjà connecté → déconnexion
+        if self._access_level > AccessLevel.NONE:
+            self.set_access_level(AccessLevel.NONE)
             self._login_btn.setText("🔓  Se connecter")
             return
 
-        dlg = NumpadDialog(title="Code d'accès", unit="", value="", parent=self)
+        # Étape 1 — Choisir le niveau
+        level_dlg = LevelSelectorDialog(self)
+        if level_dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        chosen_level = level_dlg.selected_level
+
+        # Étape 2 — Saisir le PIN
+        level_names = {
+            AccessLevel.OPERATEUR:  "Opérateur",
+            AccessLevel.TECHNICIEN: "Technicien",
+            AccessLevel.ADMIN:      "Administrateur",
+        }
+        dlg = NumpadDialog(
+            title=f"PIN — {level_names.get(chosen_level, '')}",
+            unit="", value="", parent=self,
+        )
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
-        pin_saisi = dlg.value()
-        pin_hash = hashlib.sha256(pin_saisi.encode()).hexdigest()
+        # Étape 3 — Vérifier le PIN
+        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        ac = cfg.get("access_control", {})
+        pin_hash = hashlib.sha256(dlg.value().encode()).hexdigest()
 
-        default_op    = hashlib.sha256("0000".encode()).hexdigest()
-        default_admin = hashlib.sha256("1234".encode()).hexdigest()
-        pin_op    = ac.get("pin_operateur",  default_op)
-        pin_admin = ac.get("pin_admin",      default_admin)
+        pin_keys = {
+            AccessLevel.OPERATEUR:  ("pin_operateur",  "0000"),
+            AccessLevel.TECHNICIEN: ("pin_technicien", "2222"),
+            AccessLevel.ADMIN:      ("pin_admin",       "1234"),
+        }
+        key, default = pin_keys[chosen_level]
+        stored = ac.get(key, hashlib.sha256(default.encode()).hexdigest())
 
-        if pin_hash == pin_admin:
-            self.set_access_level(AccessLevel.ADMIN)
-            self._login_btn.setText("🔒  Déconnexion admin")
-        elif pin_hash == pin_op:
-            self.set_access_level(AccessLevel.OPERATEUR)
-            self._login_btn.setText("👤  Opérateur connecté")
+        if pin_hash == stored:
+            self.set_access_level(chosen_level)
+            labels = {
+                AccessLevel.OPERATEUR:  "🟢  Opérateur",
+                AccessLevel.TECHNICIEN: "🟡  Technicien",
+                AccessLevel.ADMIN:      "🔴  Admin",
+            }
+            self._login_btn.setText(f"🔒  {labels.get(chosen_level, 'Connecté')}")
         else:
-            QMessageBox.warning(self, "Accès refusé", "Code incorrect.")
+            QMessageBox.warning(
+                self, "Accès refusé",
+                f"Code PIN incorrect pour {level_names.get(chosen_level, '')}.",
+            )
 
     def _load_access_settings(self) -> None:
         """Charge et applique les préférences de droits depuis config.yaml."""
@@ -2476,21 +2639,21 @@ class MainWindow(QMainWindow):
         else:
             self._login_btn.setVisible(True)
             self._level_indicator.setVisible(True)
-            self.set_access_level(AccessLevel.OPERATEUR)
+            self.set_access_level(AccessLevel.NONE)
 
     def _on_settings_clicked(self) -> None:
-        """Vérifie le PIN (si droits activés) puis navigue vers la page Réglages."""
+        """Navigue vers la page Réglages (droits vérifiés dans _update_ui_for_access_level)."""
         if not self._access_enabled:
             self.stack.setCurrentIndex(1)
             return
-        if self._access_level >= AccessLevel.ADMIN:
+        if self._access_level >= AccessLevel.OPERATEUR:
+            self._apply_settings_restrictions()
             self.stack.setCurrentIndex(1)
             return
-        dlg = PinDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.set_access_level(AccessLevel.ADMIN)
-            self._login_btn.setText("🔒  Déconnexion admin")
-            self.stack.setCurrentIndex(1)
+        QMessageBox.information(
+            self, "Accès restreint",
+            "Veuillez vous connecter avec un code PIN\navant d'accéder aux réglages.",
+        )
 
     # ------------------------------------------------------------------
     # Table de production
