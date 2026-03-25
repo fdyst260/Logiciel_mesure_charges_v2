@@ -1769,7 +1769,7 @@ class MainWindow(QMainWindow):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("France ACM — Riveteuse")
+        self.setWindowTitle("ACM FRANCE — Riveteuse")
 
         self._pm_id = pm_id
         self._tools = tools or []
@@ -2022,7 +2022,7 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(4)
-        title = QLabel("France ACM — Riveteuse")
+        title = QLabel("ACM FRANCE — Riveteuse")
         title.setObjectName("pm_section_title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFixedHeight(30)
