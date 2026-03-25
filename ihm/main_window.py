@@ -1922,15 +1922,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(10, 6, 10, 6)
         layout.setSpacing(3)
 
-        logo_label = QLabel("ACM FRANCE")
-        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_label.setFixedHeight(24)
-        logo_label.setStyleSheet(
-            "color: #C49A3C; font-size: 13px; font-weight: bold; "
-            "letter-spacing: 3px; background: transparent; "
-            "border-bottom: 1px solid #C49A3C; padding-bottom: 4px;"
-        )
-        layout.addWidget(logo_label)
+
 
         self._level_indicator = QLabel("👤  Libre")
         self._level_indicator.setObjectName("level_indicator")
