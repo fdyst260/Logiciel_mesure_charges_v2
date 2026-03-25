@@ -91,11 +91,13 @@ def export_csv_to_usb(
     usb_path: str,
     filter_result: str = "OK+NOK",
     pm_filter: int | None = None,
+    date_filter: str | None = "today",
 ) -> tuple[int, int]:
     """Copie les fichiers CSV de source_dir vers usb_path/ACM_Export/<horodatage>/.
 
     filter_result : "OK+NOK" | "OK uniquement" | "NOK uniquement"
     pm_filter     : None = tous les PM, sinon numéro PM (1-16)
+    date_filter   : "today" | "last7" | "last30" | None (tout)
 
     Retourne (nb_copiés, nb_ignorés).
     """
@@ -106,6 +108,23 @@ def export_csv_to_usb(
     )
     dest.mkdir(parents=True, exist_ok=True)
 
+    # Calcul de la date de coupure (format YYYYMMDD)
+    today = datetime.now().strftime("%Y%m%d")
+    if date_filter == "today":
+        cutoff = today
+        exact = True
+    elif date_filter == "last7":
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
+        exact = False
+    elif date_filter == "last30":
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
+        exact = False
+    else:
+        cutoff = None
+        exact = False
+
     copied, skipped = 0, 0
     source_dir = Path(source_dir)
     if not source_dir.exists():
@@ -113,6 +132,16 @@ def export_csv_to_usb(
 
     for csv_file in source_dir.glob("*.csv"):
         name = csv_file.name.upper()
+
+        # Filtrer par date (nom du fichier : YYYYMMDD_HHMMSS_...)
+        if cutoff and len(csv_file.name) >= 8:
+            file_date = csv_file.name[:8]
+            if exact and file_date != cutoff:
+                skipped += 1
+                continue
+            if not exact and file_date < cutoff:
+                skipped += 1
+                continue
 
         # Filtrer par résultat
         if filter_result == "OK uniquement" and "NOK" in name:

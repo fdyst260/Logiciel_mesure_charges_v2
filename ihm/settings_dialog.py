@@ -2886,6 +2886,15 @@ class _ExportationPage(QWidget):
             self,
         )
         form_usb.addRow("Filtre export :", self._filtre_btn)
+
+        self._periode_export_btn = _make_choice_btn(
+            ["Aujourd'hui", "7 derniers jours", "30 derniers jours", "Tout l'historique"],
+            "Aujourd'hui",
+            "Période export",
+            self,
+        )
+        form_usb.addRow("Période :", self._periode_export_btn)
+
         fw_usb = QWidget()
         fw_usb.setLayout(form_usb)
         v.addWidget(fw_usb)
@@ -3058,6 +3067,10 @@ class _ExportationPage(QWidget):
         self._filtre_btn.setProperty("choice_value", filtre)
         self._filtre_btn.setText(filtre)
 
+        periode_export = exp.get("periode_export", "Aujourd'hui")
+        self._periode_export_btn.setProperty("choice_value", periode_export)
+        self._periode_export_btn.setText(periode_export)
+
         contenu = exp.get("contenu_rapport", "Tous les cycles")
         self._contenu_btn.setProperty("choice_value", contenu)
         self._contenu_btn.setText(contenu)
@@ -3077,6 +3090,9 @@ class _ExportationPage(QWidget):
         cfg = _load_cfg_safe()
         cfg.setdefault("export", {})
         cfg["export"]["filtre"] = self._filtre_btn.property("choice_value") or "OK+NOK"
+        cfg["export"]["periode_export"] = (
+            self._periode_export_btn.property("choice_value") or "Aujourd'hui"
+        )
         cfg["export"]["contenu_rapport"] = (
             self._contenu_btn.property("choice_value") or "Tous les cycles"
         )
@@ -3131,12 +3147,22 @@ class _ExportationPage(QWidget):
         cfg = _load_cfg_safe()
         data_dir = Path(cfg.get("storage", {}).get("data_dir", "./data"))
         filtre = self._filtre_btn.property("choice_value") or "OK+NOK"
+        periode = self._periode_export_btn.property("choice_value") or "Aujourd'hui"
+
+        _PERIODE_TO_FILTER = {
+            "Aujourd'hui":       "today",
+            "7 derniers jours":  "last7",
+            "30 derniers jours": "last30",
+            "Tout l'historique": None,
+        }
+        date_filter = _PERIODE_TO_FILTER.get(periode, "today")
 
         self._worker_usb = ExportWorker(
             task="usb",
             source_dir=data_dir,
             usb_path=self._detected_drives[0],
             filter_result=filtre,
+            date_filter=date_filter,
         )
         self._worker_usb.task_done.connect(self._on_export_done)
         self._worker_usb.start()
