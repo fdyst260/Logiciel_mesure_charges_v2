@@ -3098,7 +3098,7 @@ class _ExportationPage(QWidget):
         self._btn_detect.setText("⏳  Recherche...")
         self._worker_detect = ExportWorker(task="detect")
         self._worker_detect.drives_detected.connect(self._on_drives_detected)
-        self._worker_detect.finished.connect(self._on_detect_done)
+        self._worker_detect.task_done.connect(self._on_detect_done)
         self._worker_detect.start()
 
     def _on_drives_detected(self, drives: list) -> None:
@@ -3138,7 +3138,7 @@ class _ExportationPage(QWidget):
             usb_path=self._detected_drives[0],
             filter_result=filtre,
         )
-        self._worker_usb.finished.connect(self._on_export_done)
+        self._worker_usb.task_done.connect(self._on_export_done)
         self._worker_usb.start()
 
     def _on_export_done(self, success: bool, message: str) -> None:
@@ -3189,7 +3189,7 @@ class _ExportationPage(QWidget):
             machine_name="ACM Riveteuse",
             periode=periode,
         )
-        self._worker_pdf.finished.connect(self._on_pdf_done)
+        self._worker_pdf.task_done.connect(self._on_pdf_done)
         self._worker_pdf.start()
 
     def _on_pdf_done(self, success: bool, message: str) -> None:

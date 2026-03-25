@@ -19,7 +19,7 @@ from PySide6.QtCore import QThread, Signal
 class ExportWorker(QThread):
     """Worker thread pour les opérations d'export lourdes (PDF, USB, détection)."""
 
-    finished = Signal(bool, str)  # succès, message
+    task_done = Signal(bool, str)  # succès, message
     drives_detected = Signal(list)  # liste des points de montage
 
     def __init__(self, task: str, **kwargs) -> None:
@@ -32,10 +32,10 @@ class ExportWorker(QThread):
             if self._task == "pdf":
                 ok = generate_pdf_report(**self._kwargs)
                 msg = "Rapport PDF généré." if ok else "Erreur génération PDF."
-                self.finished.emit(ok, msg)
+                self.task_done.emit(ok, msg)
             elif self._task == "usb":
                 copied, skipped = export_csv_to_usb(**self._kwargs)
-                self.finished.emit(
+                self.task_done.emit(
                     True,
                     f"{copied} fichier(s) copié(s), {skipped} ignoré(s).",
                 )
@@ -43,13 +43,13 @@ class ExportWorker(QThread):
                 drives = find_usb_drives()
                 self.drives_detected.emit(drives)
                 if drives:
-                    self.finished.emit(
+                    self.task_done.emit(
                         True, f"{len(drives)} clé(s) : {', '.join(drives)}"
                     )
                 else:
-                    self.finished.emit(False, "Aucune clé USB détectée")
+                    self.task_done.emit(False, "Aucune clé USB détectée")
         except Exception as e:
-            self.finished.emit(False, str(e))
+            self.task_done.emit(False, str(e))
 
 
 def find_usb_drives() -> list[str]:
