@@ -623,38 +623,105 @@ class _PMEditPage(QWidget):
     # ---- Onglet 2 — NO-PASS -----------------------------------------------
 
     def _build_tab_no_pass(self) -> QWidget:
+        from config import MAX_NO_PASS_ZONES
         outer = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; }")
         w = QWidget()
         v = QVBoxLayout(w)
-        v.setContentsMargins(20, 14, 20, 14)
-        v.setSpacing(14)
+        v.setContentsMargins(16, 12, 16, 12)
+        v.setSpacing(10)
         v.addWidget(self._make_desc(
-            "Zone interdite : si la courbe passe dans cette zone, le cycle est NOK.\n"
-            "Définir la plage de position (X) et la limite de force (Y) à ne pas dépasser."
+            "Zones interdites : si la courbe pénètre dans une zone active, le cycle est NOK.\n"
+            "Jusqu'à 5 zones indépendantes. Cocher 'Actif' pour activer une zone."
         ))
-        fw = QWidget()
-        form = QFormLayout(fw)
-        form.setContentsMargins(0, 0, 0, 0)
-        form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self._np_enabled = QCheckBox("Activer")
-        form.addRow("Activer NO-PASS :", self._np_enabled)
-        self._np_x_min = _make_numpad_btn("0.0", suffix=" mm", title="Position min (X)", parent=self)
-        form.addRow("Position min (X) :", self._np_x_min)
-        self._np_x_max = _make_numpad_btn("0.0", suffix=" mm", title="Position max (X)", parent=self)
-        form.addRow("Position max (X) :", self._np_x_max)
-        self._np_y_limit = _make_numpad_btn("0", suffix=" N", title="Force limite (Y)", parent=self)
-        form.addRow("Force limite (Y) :", self._np_y_limit)
-        v.addWidget(fw)
+
+        # En-tête colonnes
+        hdr = QWidget()
+        hdr_h = QHBoxLayout(hdr)
+        hdr_h.setContentsMargins(0, 0, 0, 0)
+        hdr_h.setSpacing(8)
+        for txt, w_fixed in [("Zone", 60), ("Actif", 50), ("Pos min (mm)", 110),
+                               ("Pos max (mm)", 110), ("Force max (N)", 110), ("", 28)]:
+            lbl = QLabel(txt)
+            lbl.setStyleSheet("color: #AAAAAA; font-size: 11px; font-weight: bold;")
+            if w_fixed:
+                lbl.setFixedWidth(w_fixed)
+            hdr_h.addWidget(lbl)
+        v.addWidget(hdr)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"background-color: {_C['border']}; max-height:1px;")
+        v.addWidget(sep)
+
+        self._np_enabled: list[QCheckBox]    = []
+        self._np_x_min:   list[QPushButton]  = []
+        self._np_x_max:   list[QPushButton]  = []
+        self._np_y_limit: list[QPushButton]  = []
+        self._np_preview: list[QLabel]       = []
+
+        for i in range(MAX_NO_PASS_ZONES):
+            row_w = QWidget()
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(0, 2, 0, 2)
+            row_h.setSpacing(8)
+
+            lbl_zone = QLabel(f"Zone {i + 1}")
+            lbl_zone.setFixedWidth(60)
+            lbl_zone.setStyleSheet("color: #F0F0F0; font-size: 13px;")
+            row_h.addWidget(lbl_zone)
+
+            chk = QCheckBox()
+            chk.setFixedWidth(50)
+            self._np_enabled.append(chk)
+            row_h.addWidget(chk)
+
+            btn_xmin = _make_numpad_btn("0.0", suffix=" mm",
+                                        title=f"Zone {i+1} — Position min", parent=self)
+            btn_xmin.setFixedWidth(110)
+            self._np_x_min.append(btn_xmin)
+            row_h.addWidget(btn_xmin)
+
+            btn_xmax = _make_numpad_btn("0.0", suffix=" mm",
+                                        title=f"Zone {i+1} — Position max", parent=self)
+            btn_xmax.setFixedWidth(110)
+            self._np_x_max.append(btn_xmax)
+            row_h.addWidget(btn_xmax)
+
+            btn_ylim = _make_numpad_btn("0", suffix=" N",
+                                        title=f"Zone {i+1} — Force limite", parent=self)
+            btn_ylim.setFixedWidth(110)
+            self._np_y_limit.append(btn_ylim)
+            row_h.addWidget(btn_ylim)
+
+            preview = QLabel()
+            preview.setFixedSize(24, 24)
+            preview.setStyleSheet("background-color: #555555; border-radius: 3px;")
+            self._np_preview.append(preview)
+            row_h.addWidget(preview)
+
+            # Connecter checkbox → activer/désactiver la ligne
+            chk.toggled.connect(lambda checked, idx=i: self._on_np_zone_toggled(idx, checked))
+
+            v.addWidget(row_w)
+
         v.addStretch()
         scroll.setWidget(w)
         out_v = QVBoxLayout(outer)
         out_v.setContentsMargins(0, 0, 0, 0)
         out_v.addWidget(scroll)
         return outer
+
+    def _on_np_zone_toggled(self, i: int, checked: bool) -> None:
+        self._np_x_min[i].setEnabled(checked)
+        self._np_x_max[i].setEnabled(checked)
+        self._np_y_limit[i].setEnabled(checked)
+        color = "#c62828" if checked else "#555555"
+        self._np_preview[i].setStyleSheet(
+            f"background-color: {color}; border-radius: 3px;"
+        )
 
     # ---- Onglet 3 — UNI-BOX -----------------------------------------------
 
@@ -772,18 +839,27 @@ class _PMEditPage(QWidget):
         if not cfg:
             return
         tools = cfg.get("programmes", {}).get(self._pm_id, {}).get("tools", {})
-        np_d = tools.get("no_pass", {})
-        if np_d:
-            self._np_enabled.setChecked(bool(np_d.get("enabled", False)))
-            for btn, key in [
-                (self._np_x_min, "x_min"),
-                (self._np_x_max, "x_max"),
-                (self._np_y_limit, "y_limit"),
+
+        # NO-PASS multi-zones
+        np_zones = tools.get("no_pass_zones", [])
+        # Compatibilité ancien format
+        if not np_zones and tools.get("no_pass", {}).get("enabled"):
+            old = tools["no_pass"]
+            np_zones = [{"enabled": True, "x_min": old.get("x_min", 0.0),
+                         "x_max": old.get("x_max", 0.0), "y_limit": old.get("y_limit", 0.0)}]
+        for i in range(5):
+            z = np_zones[i] if i < len(np_zones) else {}
+            checked = bool(z.get("enabled", False))
+            self._np_enabled[i].setChecked(checked)
+            for btn, key, suffix in [
+                (self._np_x_min[i],   "x_min",   " mm"),
+                (self._np_x_max[i],   "x_max",   " mm"),
+                (self._np_y_limit[i], "y_limit",  " N"),
             ]:
-                v = str(np_d.get(key, 0.0))
-                suffix = btn.property("numpad_suffix") or ""
-                btn.setProperty("numpad_value", v)
-                btn.setText(f"{v}{suffix}")
+                val = str(z.get(key, 0.0))
+                btn.setProperty("numpad_value", val)
+                btn.setText(f"{val}{suffix}")
+            self._on_np_zone_toggled(i, checked)
         ub_d = tools.get("uni_box", {})
         if ub_d:
             self._ub_enabled.setChecked(bool(ub_d.get("enabled", False)))
@@ -825,12 +901,15 @@ class _PMEditPage(QWidget):
             "description": _get_alpha_value(self._gen_desc),
             "view_mode":   self._gen_mode.currentData(),
             "tools": {
-                "no_pass": {
-                    "enabled": self._np_enabled.isChecked(),
-                    "x_min":   _get_numpad_value(self._np_x_min),
-                    "x_max":   _get_numpad_value(self._np_x_max),
-                    "y_limit": _get_numpad_value(self._np_y_limit),
-                },
+                "no_pass_zones": [
+                    {
+                        "enabled": self._np_enabled[i].isChecked(),
+                        "x_min":   _get_numpad_value(self._np_x_min[i]),
+                        "x_max":   _get_numpad_value(self._np_x_max[i]),
+                        "y_limit": _get_numpad_value(self._np_y_limit[i]),
+                    }
+                    for i in range(5)
+                ],
                 "uni_box": {
                     "enabled":    self._ub_enabled.isChecked(),
                     "box_x_min":  _get_numpad_value(self._ub_x_min),

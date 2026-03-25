@@ -44,6 +44,9 @@ POSITION_THRESHOLD_MM = 95.0
 # Dossier d'export CSV
 DATA_DIR = "./data"
 
+# Nombre maximum de zones NO-PASS par PM
+MAX_NO_PASS_ZONES = 5
+
 # Sorties GPIO (Pi 5)
 GPIO_OUT_OK = 5
 GPIO_OUT_NOK = 6
@@ -154,13 +157,30 @@ def build_tools_from_yaml(pm_id: int) -> list:
 
     tools: list = []
 
-    np_d = tools_data.get("no_pass", {})
-    if np_d.get("enabled", False):
-        tools.append(EvaluationTool(
-            name="no_pass",
-            tool_type=EvaluationType.NO_PASS,
-            x_min=np_d["x_min"], x_max=np_d["x_max"], y_limit=np_d["y_limit"],
-        ))
+    # NO-PASS multi-zones
+    np_zones = tools_data.get("no_pass_zones", [])
+
+    # Compatibilité ancien format (no_pass unique → zone 1)
+    if not np_zones:
+        old = tools_data.get("no_pass", {})
+        if old.get("enabled"):
+            np_zones = [{
+                "enabled": True,
+                "x_min":   float(old.get("x_min", 0.0)),
+                "x_max":   float(old.get("x_max", 0.0)),
+                "y_limit": float(old.get("y_limit", 0.0)),
+            }]
+
+    for i, zone in enumerate(np_zones[:MAX_NO_PASS_ZONES]):
+        if zone.get("enabled", False):
+            tools.append(EvaluationTool(
+                name=f"no_pass_{i + 1}",
+                tool_type=EvaluationType.NO_PASS,
+                zone_name=f"Zone {i + 1}",
+                x_min=float(zone["x_min"]),
+                x_max=float(zone["x_max"]),
+                y_limit=float(zone["y_limit"]),
+            ))
 
     ub_d = tools_data.get("uni_box", {})
     if ub_d.get("enabled", False):

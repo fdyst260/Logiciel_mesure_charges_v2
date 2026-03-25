@@ -43,6 +43,7 @@ class EvaluationTool:
     x_min: float | None = None
     x_max: float | None = None
     y_limit: float | None = None
+    zone_name: str = ""
 
     # UNI_BOX
     box_x_min: float | None = None
@@ -66,6 +67,21 @@ class EvaluationTool:
         self._entered = False
         self._entry_side_seen = None
         self._exit_validated = False
+
+    @staticmethod
+    def make_no_pass_zones(n: int = 5) -> "list[EvaluationTool]":
+        """Retourne n zones NO-PASS vides (toutes désactivées)."""
+        return [
+            EvaluationTool(
+                name=f"no_pass_{i + 1}",
+                tool_type=EvaluationType.NO_PASS,
+                zone_name=f"Zone {i + 1}",
+                x_min=0.0,
+                x_max=0.0,
+                y_limit=0.0,
+            )
+            for i in range(n)
+        ]
 
     def evaluate(self, x: float, y: float, previous: Point2D | None = None) -> EvaluationResult:
         if self.tool_type == EvaluationType.NO_PASS:

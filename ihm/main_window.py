@@ -480,10 +480,19 @@ class GraphWidget(QWidget):
         """Dessine les outils depuis le dict config.yaml (couleurs IEC 60073)."""
         _xr, yr = self._get_ranges()
 
-        np_d = self._tools_config.get("no_pass", {})
-        if np_d.get("enabled"):
-            x1, y1 = self._to_px(np_d["x_min"], yr, rect)
-            x2, y2 = self._to_px(np_d["x_max"], np_d["y_limit"], rect)
+        # NO-PASS multi-zones
+        np_zones = self._tools_config.get("no_pass_zones", [])
+        # Compatibilité ancien format
+        if not np_zones:
+            old = self._tools_config.get("no_pass", {})
+            if old.get("enabled"):
+                np_zones = [old]
+
+        for zone in np_zones:
+            if not zone.get("enabled"):
+                continue
+            x1, y1 = self._to_px(zone["x_min"], yr, rect)
+            x2, y2 = self._to_px(zone["x_max"], zone["y_limit"], rect)
             fill = QColor(198, 40, 40, 60)
             painter.fillRect(x1, y1, x2 - x1, y2 - y1, fill)
             painter.setPen(QPen(QColor(COLORS["nopass_border"]), 1.5, Qt.PenStyle.DashLine))
