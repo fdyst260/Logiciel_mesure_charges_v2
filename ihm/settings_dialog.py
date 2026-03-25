@@ -4218,6 +4218,7 @@ class SettingsPage(QWidget):
         cfg.setdefault("programmes", {}).setdefault(pm_id, {})["name"] = new_name
         save_config(_CONFIG_PATH, cfg)
         self._load_pm_table()
+        self._on_pm_saved(pm_id)
 
     def _pm_manager_copy(self) -> None:
         pm_id = self._pm_manager_selected_id()
@@ -4244,6 +4245,7 @@ class SettingsPage(QWidget):
             view_mode=pm_dest.view_mode,
         )
         self._load_pm_table()
+        self._on_pm_saved(dest_id)
         QMessageBox.information(
             self, "Copie effectuée",
             f"PM-{pm_id:02d} copié vers PM-{dest_id:02d}.",
