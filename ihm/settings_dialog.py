@@ -1978,9 +1978,9 @@ class _DroitsAccesPage(QWidget):
     """Page droits d'accès — 2 pages internes (QStackedWidget)."""
 
     _LEVELS = [
-        ("🟢", "Opérateur",     "pin_operateur",  "0000"),
-        ("🟡", "Technicien",    "pin_technicien", "2222"),
-        ("🔴", "Administrateur","pin_admin",       "1234"),
+        ("pin_operateur",  "🟢", "Opérateur",      "#4caf50"),
+        ("pin_technicien", "🟡", "Technicien",      "#FF9800"),
+        ("pin_admin",      "🔴", "Administrateur",  "#ef5350"),
     ]
 
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
@@ -2060,14 +2060,14 @@ class _DroitsAccesPage(QWidget):
         _ROW_STYLE = (
             "background-color: #252525; border-radius: 8px; padding: 6px;"
         )
-        for icon, name, key, _ in self._LEVELS:
+        for key, icon, name, color in self._LEVELS:
             row_w = QWidget()
             row_w.setStyleSheet(_ROW_STYLE)
             rh = QHBoxLayout(row_w)
             rh.setContentsMargins(10, 4, 10, 4)
             rh.setSpacing(12)
             lbl = QLabel(f"{icon}  {name}")
-            lbl.setStyleSheet("color: #cccccc; font-size: 14px; min-width: 160px;")
+            lbl.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold; min-width: 160px;")
             rh.addWidget(lbl)
             rh.addStretch()
             pin_lbl = QLabel("PIN : ••••")

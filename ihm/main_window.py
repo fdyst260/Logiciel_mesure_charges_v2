@@ -145,6 +145,13 @@ _PIN_CODE = "1234"
 _MAX_PIN_ATTEMPTS = 3
 _LOCKOUT_SECONDS = 30
 
+
+class AccessLevel:
+    """Niveaux d'accès utilisateur."""
+    NONE      = 0  # Machine verrouillée
+    OPERATEUR = 1  # Opérateur — production
+    ADMIN     = 3  # Admin — réglages complets
+
 # ---------------------------------------------------------------------------
 # Feuille de style globale QSS
 # ---------------------------------------------------------------------------
@@ -1580,13 +1587,22 @@ class PinDialog(QDialog):
         if self._locked:
             return
         import hashlib
-        from ihm.ui_utils import load_config
         cfg = load_config(Path(__file__).parent.parent / "config.yaml")
-        stored = cfg.get("access_control", {}).get("pin_admin", "")
-        # Fallback : hash de "1234" si rien en config
+        # Initialiser les PIN par défaut si la section est absente
+        ac = cfg.setdefault("access_control", {})
+        _defaults = {
+            "pin_operateur":  "0000",
+            "pin_technicien": "2222",
+            "pin_admin":      "1234",
+        }
+        for k, plain in _defaults.items():
+            ac.setdefault(k, hashlib.sha256(plain.encode()).hexdigest())
+        stored = ac.get("pin_admin", "")
         if not stored:
             stored = hashlib.sha256("1234".encode()).hexdigest()
         entered_hash = hashlib.sha256(self._pin_value.encode()).hexdigest()
+        print(f"[PIN] pin_admin stocké : {stored[:12]}...")
+        print(f"[PIN] PIN saisi hash   : {entered_hash[:12]}...")
         # Compatibilité plain text hérité
         valid = (
             entered_hash == stored
@@ -1673,7 +1689,7 @@ class MainWindow(QMainWindow):
         self._restart_btn = None
 
         # Droits d'accès
-        self._access_level: int = 3    # 3=Admin par défaut (sans droits activés)
+        self._access_level: int = AccessLevel.OPERATEUR
         self._access_enabled: bool = False
 
         # Préférences d'affichage
@@ -1684,6 +1700,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._apply_state_style("idle")
         self.apply_display_settings()
+        self._load_access_settings()
 
         # Charger les outils depuis config.yaml
         cfg_path = Path(__file__).parent.parent / "config.yaml"
@@ -1803,6 +1820,37 @@ class MainWindow(QMainWindow):
             "border-bottom: 1px solid #C49A3C; padding-bottom: 4px;"
         )
         layout.addWidget(logo_label)
+
+        self._level_indicator = QLabel("👤  Libre")
+        self._level_indicator.setObjectName("level_indicator")
+        self._level_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._level_indicator.setFixedHeight(28)
+        self._level_indicator.setStyleSheet(
+            "color: #AAAAAA; font-size: 12px; font-weight: bold; "
+            "background: #3A3A3A; border-radius: 4px; padding: 2px 8px;"
+        )
+        layout.addWidget(self._level_indicator)
+
+        self._login_btn = QPushButton("🔓  Se connecter")
+        self._login_btn.setObjectName("login_btn")
+        self._login_btn.setFixedHeight(32)
+        self._login_btn.setStyleSheet("""
+            QPushButton#login_btn {
+                background-color: #444444;
+                color: #C49A3C;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid #C49A3C;
+                border-radius: 4px;
+            }
+            QPushButton#login_btn:pressed {
+                background-color: #A07830;
+                color: #ffffff;
+            }
+        """)
+        self._login_btn.setVisible(False)
+        self._login_btn.clicked.connect(self._on_login_clicked)
+        layout.addWidget(self._login_btn)
 
         layout.addWidget(self._build_result_badge())
         layout.addWidget(self._build_counters_section())
@@ -2337,30 +2385,111 @@ class MainWindow(QMainWindow):
         self._histogramme_mode = dp.get("histogramme",   "OK-NOK en %")
 
     def set_access_level(self, level: int) -> None:
-        """Définit le niveau d'accès courant (1=Opérateur, 2=Technicien, 3=Admin)."""
+        """Définit le niveau d'accès courant."""
         self._access_level = level
+        self._update_level_indicator()
         self._update_ui_for_access_level()
+
+    def _update_level_indicator(self) -> None:
+        """Met à jour le label indicateur de niveau visible."""
+        if not self._access_enabled:
+            self._level_indicator.setText("👤  Libre")
+            self._level_indicator.setStyleSheet(
+                "color: #AAAAAA; font-size: 12px; font-weight: bold; "
+                "background: #3A3A3A; border-radius: 4px; padding: 2px 8px;"
+            )
+            return
+        configs = {
+            AccessLevel.NONE:      ("🔒  Verrouillé",    "#ef5350", "#3a1a1a"),
+            AccessLevel.OPERATEUR: ("🟢  Opérateur",     "#4caf50", "#1a3a1a"),
+            AccessLevel.ADMIN:     ("🔴  Administrateur","#C49A3C", "#2a1a00"),
+        }
+        text, color, bg = configs.get(
+            self._access_level, ("👤  Inconnu", "#AAAAAA", "#3A3A3A")
+        )
+        self._level_indicator.setText(text)
+        self._level_indicator.setStyleSheet(
+            f"color: {color}; font-size: 12px; font-weight: bold; "
+            f"background: {bg}; border-radius: 4px; padding: 2px 8px;"
+        )
 
     def _update_ui_for_access_level(self) -> None:
         """Active/désactive les boutons selon le niveau d'accès courant."""
-        is_tech = self._access_level >= 2
-        is_admin = self._access_level >= 3
+        if not self._access_enabled:
+            self._pm_btn.setEnabled(True)
+            self._settings_btn.setEnabled(True)
+            for btn in self.findChildren(QPushButton):
+                if "RAZ" in btn.text():
+                    btn.setEnabled(True)
+            return
 
-        self._pm_btn.setEnabled(is_tech)
+        is_op_or_above = self._access_level >= AccessLevel.OPERATEUR
+        is_admin = self._access_level >= AccessLevel.ADMIN
+
+        self._pm_btn.setEnabled(is_op_or_above)
         self._settings_btn.setEnabled(is_admin)
-
         for btn in self.findChildren(QPushButton):
             if "RAZ" in btn.text():
-                btn.setEnabled(is_tech)
+                btn.setEnabled(is_op_or_above)
+
+    def _on_login_clicked(self) -> None:
+        """Connexion / déconnexion depuis le panneau droit."""
+        import hashlib
+        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        ac = cfg.get("access_control", {})
+
+        if self._access_level >= AccessLevel.ADMIN:
+            # Déjà admin → déconnexion
+            self.set_access_level(AccessLevel.OPERATEUR)
+            self._login_btn.setText("🔓  Se connecter")
+            return
+
+        dlg = NumpadDialog(title="Code d'accès", unit="", value="", parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        pin_saisi = dlg.value()
+        pin_hash = hashlib.sha256(pin_saisi.encode()).hexdigest()
+
+        default_op    = hashlib.sha256("0000".encode()).hexdigest()
+        default_admin = hashlib.sha256("1234".encode()).hexdigest()
+        pin_op    = ac.get("pin_operateur",  default_op)
+        pin_admin = ac.get("pin_admin",      default_admin)
+
+        if pin_hash == pin_admin:
+            self.set_access_level(AccessLevel.ADMIN)
+            self._login_btn.setText("🔒  Déconnexion admin")
+        elif pin_hash == pin_op:
+            self.set_access_level(AccessLevel.OPERATEUR)
+            self._login_btn.setText("👤  Opérateur connecté")
+        else:
+            QMessageBox.warning(self, "Accès refusé", "Code incorrect.")
+
+    def _load_access_settings(self) -> None:
+        """Charge et applique les préférences de droits depuis config.yaml."""
+        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        ac = cfg.get("access_control", {})
+        self._access_enabled = bool(ac.get("enabled", False))
+        if not self._access_enabled:
+            self._login_btn.setVisible(False)
+            self._level_indicator.setVisible(False)
+        else:
+            self._login_btn.setVisible(True)
+            self._level_indicator.setVisible(True)
+            self.set_access_level(AccessLevel.OPERATEUR)
 
     def _on_settings_clicked(self) -> None:
         """Vérifie le PIN (si droits activés) puis navigue vers la page Réglages."""
         if not self._access_enabled:
             self.stack.setCurrentIndex(1)
             return
+        if self._access_level >= AccessLevel.ADMIN:
+            self.stack.setCurrentIndex(1)
+            return
         dlg = PinDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.set_access_level(3)
+            self.set_access_level(AccessLevel.ADMIN)
+            self._login_btn.setText("🔒  Déconnexion admin")
             self.stack.setCurrentIndex(1)
 
     # ------------------------------------------------------------------
