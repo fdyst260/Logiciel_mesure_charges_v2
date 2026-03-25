@@ -3901,6 +3901,149 @@ class _CopyDestDialog(QDialog):
 
 
 # ===========================================================================
+# _LanguePage — sélection de la langue (index 13)
+# ===========================================================================
+
+class _LanguePage(QWidget):
+    """Page de sélection de la langue de l'interface (index 13)."""
+
+    _FLAGS = {
+        "fr": "🇫🇷", "en": "🇬🇧", "it": "🇮🇹",
+        "es": "🇪🇸", "pt": "🇵🇹", "ro": "🇷🇴",
+    }
+
+    def __init__(self, stack: QStackedWidget, parent=None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self._current = "fr"
+        self._lang_buttons: dict[str, QPushButton] = {}
+        self._build_ui()
+        self._load_config()
+
+    def _build_ui(self) -> None:
+        from ihm.translations import LANGUAGES
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header.setFixedHeight(50)
+        header.setStyleSheet(
+            f"background-color: {_C['header_bg']}; "
+            f"border-bottom: 1px solid {_C['border']};"
+        )
+        hh = QHBoxLayout(header)
+        hh.setContentsMargins(16, 0, 16, 0)
+        lbl = QLabel("🌐   Langue / Language")
+        lbl.setStyleSheet(
+            f"color: {_C['text']}; font-size: 18px; font-weight: bold;"
+        )
+        hh.addWidget(lbl)
+        hh.addStretch()
+        btn_back = QPushButton("←  Retour")
+        btn_back.setObjectName("btn_nav")
+        btn_back.setFixedHeight(36)
+        btn_back.clicked.connect(
+            lambda: self._main_stack.setCurrentIndex(1)
+        )
+        hh.addWidget(btn_back)
+        layout.addWidget(header)
+
+        # Grille 2 colonnes de tuiles langue
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+        inner = QWidget()
+        grid = QGridLayout(inner)
+        grid.setContentsMargins(30, 30, 30, 30)
+        grid.setSpacing(16)
+
+        _btn_style = f"""
+            QPushButton {{
+                background-color: {_C['card']};
+                color: {_C['text']};
+                font-size: 18px;
+                font-weight: bold;
+                border: 2px solid {_C['border']};
+                border-radius: 10px;
+            }}
+            QPushButton:checked {{
+                background-color: #2a1500;
+                border: 3px solid #C49A3C;
+                color: #C49A3C;
+            }}
+            QPushButton:pressed {{
+                background-color: #A07830;
+                color: #ffffff;
+            }}
+        """
+
+        for idx, (code, name) in enumerate(LANGUAGES.items()):
+            row, col = divmod(idx, 2)
+            flag = self._FLAGS.get(code, "🌐")
+            btn = QPushButton(f"{flag}   {name}")
+            btn.setFixedHeight(70)
+            btn.setCheckable(True)
+            btn.setStyleSheet(_btn_style)
+            btn.clicked.connect(lambda _, c=code: self._select_lang(c))
+            grid.addWidget(btn, row, col)
+            self._lang_buttons[code] = btn
+
+        scroll.setWidget(inner)
+        layout.addWidget(scroll, stretch=1)
+
+        # Footer
+        footer = QWidget()
+        footer.setFixedHeight(60)
+        footer.setStyleSheet(
+            f"background-color: {_C['header_bg']}; "
+            f"border-top: 1px solid {_C['border']};"
+        )
+        fh = QHBoxLayout(footer)
+        fh.setContentsMargins(24, 8, 24, 8)
+        fh.addStretch()
+        btn_apply = QPushButton("✓  Appliquer")
+        btn_apply.setObjectName("btn_save")
+        btn_apply.setFixedHeight(44)
+        btn_apply.clicked.connect(self._apply)
+        fh.addWidget(btn_apply)
+        layout.addWidget(footer)
+
+    def _load_config(self) -> None:
+        cfg = load_config(_CONFIG_PATH)
+        lang = cfg.get("language", "fr")
+        self._current = lang
+        self._update_buttons(lang)
+
+    def showEvent(self, event) -> None:  # noqa: ANN001
+        self._load_config()
+        super().showEvent(event)
+
+    def _update_buttons(self, lang: str) -> None:
+        for code, btn in self._lang_buttons.items():
+            btn.setChecked(code == lang)
+
+    def _select_lang(self, lang: str) -> None:
+        self._current = lang
+        self._update_buttons(lang)
+
+    def _apply(self) -> None:
+        from ihm.translations import set_language
+        cfg = load_config(_CONFIG_PATH)
+        cfg["language"] = self._current
+        save_config(_CONFIG_PATH, cfg)
+        set_language(self._current)
+
+        main_win = self._main_stack.window()
+        if hasattr(main_win, "apply_language"):
+            main_win.apply_language()
+
+        QMessageBox.information(self, "Langue", "✓ Langue appliquée.")
+        self._main_stack.setCurrentIndex(1)
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -3947,6 +4090,8 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._export_page)               # 11
         self._extras_page = _ExtrasPage(self._settings_stack, self)
         self._settings_stack.addWidget(self._extras_page)               # 12
+        self._langue_page = _LanguePage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._langue_page)               # 13
 
         root.addWidget(self._settings_stack)
 
@@ -4054,7 +4199,7 @@ class SettingsPage(QWidget):
         """
 
         buttons = [
-            ("🌐", "Langue",          0, 0, None),
+            ("🌐", "Langue",          0, 0, "langue"),
             ("🔒", "Droits d'accès",  0, 1, "droits"),
             ("📅", "Date / Heure",    0, 2, "date_heure"),
             ("📊", "Voie X",          1, 0, "voie_x"),
@@ -4100,10 +4245,14 @@ class SettingsPage(QWidget):
                 btn.clicked.connect(
                     lambda checked=False: self._settings_stack.setCurrentIndex(12)
                 )
+            elif action == "langue":
+                btn.clicked.connect(
+                    lambda checked=False: self._settings_stack.setCurrentIndex(13)
+                )
             else:
                 btn.clicked.connect(
-                    lambda checked=False, t=label: QMessageBox.information(
-                        self, "Réglages", f"{t} — À implémenter."
+                    lambda checked=False, lbl=label: QMessageBox.information(
+                        self, "Réglages", f"{lbl} — À implémenter."
                     )
                 )
             grid.addWidget(btn, row, col)

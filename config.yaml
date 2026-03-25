@@ -28,6 +28,7 @@ gpio:
   out_nok: 6
   out_ok: 5
   trigger_pin: 17
+language: fr
 modbus:
   enabled: true
   host: 192.168.1.92
@@ -54,17 +55,17 @@ programmes:
           - 5000.0
       no_pass_zones:
       - enabled: true
-        x_max: 80.0
-        x_min: 20.0
-        y_limit: 4200.0
-      - enabled: false
-        x_max: 0.0
+        x_max: 20.0
         x_min: 0.0
-        y_limit: 0.0
-      - enabled: false
-        x_max: 0.0
-        x_min: 0.0
-        y_limit: 0.0
+        y_limit: 1500.0
+      - enabled: true
+        x_max: 50.0
+        x_min: 25.0
+        y_limit: 3500.0
+      - enabled: true
+        x_max: 75.0
+        x_min: 65.0
+        y_limit: 4500.0
       - enabled: false
         x_max: 0.0
         x_min: 0.0

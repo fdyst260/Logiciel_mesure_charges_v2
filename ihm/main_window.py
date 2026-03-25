@@ -1822,6 +1822,13 @@ class MainWindow(QMainWindow):
         self.apply_display_settings()
         self._load_access_settings()
 
+        # Langue
+        from ihm.translations import set_language as _set_lang
+        _set_lang(load_config(
+            Path(__file__).parent.parent / "config.yaml"
+        ).get("language", "fr"))
+        self.apply_language()
+
         # Charger les outils depuis config.yaml
         cfg_path = Path(__file__).parent.parent / "config.yaml"
         cfg = load_config(cfg_path)
@@ -2495,6 +2502,25 @@ class MainWindow(QMainWindow):
         dp = cfg.get("affichage_prod", {})
         self._badge_style      = dp.get("feu_bicolore",  "Texte")
         self._histogramme_mode = dp.get("histogramme",   "OK-NOK en %")
+
+    def apply_language(self) -> None:
+        """Applique la langue courante aux chaînes traduisibles de l'IHM."""
+        from ihm.translations import t
+        # Bouton Réglages
+        self._settings_btn.setText(f"⚙   {t('btn_settings')}")
+        # Bouton login
+        if hasattr(self, "_login_btn"):
+            if self._access_level == AccessLevel.NONE:
+                self._login_btn.setText(f"🔓  {t('btn_login')}")
+        # Indicateur Modbus
+        if hasattr(self, "_modbus_indicator"):
+            text = self._modbus_indicator.text()
+            connected_words = ("Connecté", "Connected", "Connesso",
+                               "Conectado", "Conectat")
+            if any(w in text for w in connected_words):
+                self._modbus_indicator.setText(f"⬤  {t('modbus_connected')}")
+            else:
+                self._modbus_indicator.setText(f"⬤  {t('modbus_disconnected')}")
 
     def set_access_level(self, level: int) -> None:
         """Définit le niveau d'accès courant."""
