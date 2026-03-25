@@ -1974,6 +1974,7 @@ class MainWindow(QMainWindow):
             btn.setObjectName(obj_name)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             btn.clicked.connect(callback)
+            btn.clicked.connect(lambda checked=False, b=btn: self._flash_nav_button(b))
             if obj_name == "nav_btn":
                 btn.setCheckable(True)
                 btn.setChecked(checked)
@@ -1981,6 +1982,12 @@ class MainWindow(QMainWindow):
             h.addWidget(btn, stretch=1)
 
         return bar
+
+    def _flash_nav_button(self, btn: QPushButton) -> None:
+        """Flash doré bref sur le bouton nav cliqué."""
+        original = btn.styleSheet()
+        btn.setStyleSheet(original + "background-color: #A07830; color: #ffffff;")
+        QTimer.singleShot(150, lambda: btn.setStyleSheet(original))
 
     def _build_data_table(self) -> QTableWidget:
         table = QTableWidget(0, 5)
@@ -2036,6 +2043,7 @@ class MainWindow(QMainWindow):
                 "font-size: 44px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("ok")
+            self._flash_badge()
         elif status == "nok":
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['nok_bg']}; color: {COLORS['nok_text']}; "
@@ -2043,6 +2051,7 @@ class MainWindow(QMainWindow):
                 "font-size: 44px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("nok")
+            self._flash_badge()
         elif status == "running":
             self._result_badge.setStyleSheet(
                 f"background-color: {COLORS['running_bg']}; color: {COLORS['blue']}; "
@@ -2057,6 +2066,27 @@ class MainWindow(QMainWindow):
                 "font-size: 36px; font-weight: bold; padding: 10px;"
             )
             self._apply_state_style("idle")
+
+    def _flash_badge(self) -> None:
+        """Clignote 2 fois rapidement pour attirer l'attention."""
+        original_style = self._result_badge.styleSheet()
+
+        def _step1() -> None:
+            self._result_badge.setStyleSheet(original_style + "opacity: 0.3;")
+
+        def _step2() -> None:
+            self._result_badge.setStyleSheet(original_style)
+
+        def _step3() -> None:
+            self._result_badge.setStyleSheet(original_style + "opacity: 0.3;")
+
+        def _step4() -> None:
+            self._result_badge.setStyleSheet(original_style)
+
+        QTimer.singleShot(0,   _step1)
+        QTimer.singleShot(100, _step2)
+        QTimer.singleShot(200, _step3)
+        QTimer.singleShot(300, _step4)
 
     # ------------------------------------------------------------------
     # Slots de données (connectés depuis main.py via AcquisitionBridge)
@@ -2205,11 +2235,28 @@ class MainWindow(QMainWindow):
         self._content_stack.setCurrentIndex(2)
         self._stats_widget.refresh(self._production_log)
 
+    def _animate_counter(self, label: QLabel) -> None:
+        """Grossit brièvement le compteur pour signaler l'incrémentation."""
+        obj = label.objectName()
+        if obj == "counter_ok":
+            color = COLORS["ok_text"]
+        elif obj == "counter_nok":
+            color = COLORS["nok_text"]
+        else:
+            color = COLORS["text_primary"]
+        original_style = label.styleSheet()
+        label.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {color};")
+        QTimer.singleShot(200, lambda: label.setStyleSheet(original_style))
+
     def _update_counters(self) -> None:
         total = self._count_ok + self._count_nok
         self._ok_count_label.setText(f"✓  {self._count_ok}")
         self._nok_count_label.setText(f"✗  {self._count_nok}")
         self._total_count_label.setText(f"Σ  {total}")
+        if self._count_ok > 0:
+            self._animate_counter(self._ok_count_label)
+        if self._count_nok > 0:
+            self._animate_counter(self._nok_count_label)
 
     def _update_datetime(self) -> None:
         self._datetime_label.setText(datetime.now().strftime("%d/%m/%y   %H:%M:%S"))
