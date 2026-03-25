@@ -931,61 +931,152 @@ QPushButton#btn_cancel:hover {{
 
 
 class PmSelectorDialog(QDialog):
-    """Sélecteur de Programme de Mesure — grille 2 colonnes."""
+    """Sélecteur PM — grille de tuiles colorées."""
+
+    _PM_COLORS = [
+        ("#1a3a4a", "#2196F3"),  # bleu
+        ("#1a3a1a", "#4CAF50"),  # vert
+        ("#3a2a1a", "#FF9800"),  # orange
+        ("#2a1a3a", "#9C27B0"),  # violet
+        ("#3a1a1a", "#F44336"),  # rouge
+        ("#1a3a3a", "#00BCD4"),  # cyan
+        ("#3a3a1a", "#FFEB3B"),  # jaune
+        ("#2a2a1a", "#C49A3C"),  # or ACM
+    ]
 
     def __init__(self, current_pm_id: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Sélection du programme")
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog
+        )
         self.setModal(True)
-        self.setFixedSize(520, 400)
-        self.setStyleSheet(_PM_SELECTOR_STYLE)
-
+        self.setFixedSize(700, 500)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2E2E2E;
+                border: 2px solid #C49A3C;
+                border-radius: 12px;
+            }
+        """)
         self.selected_pm_id: int | None = None
         self._current_pm_id = current_pm_id
         self._build_ui()
 
     def _build_ui(self) -> None:
-        from PySide6.QtWidgets import QGridLayout, QScrollArea
+        from PySide6.QtWidgets import QGridLayout
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(12)
 
-        title = QLabel("Choisir un programme de mesure")
-        title.setObjectName("title")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        # Header
+        header_row = QHBoxLayout()
+        title = QLabel("Sélection du Programme de Mesure")
+        title.setStyleSheet(
+            "color: #C49A3C; font-size: 18px; font-weight: bold; background: transparent;"
+        )
+        header_row.addWidget(title)
+        header_row.addStretch()
 
-        # Zone scrollable pour la grille de PM
+        current_pm = PM_DEFINITIONS.get(self._current_pm_id)
+        current_name = current_pm.name if current_pm else "—"
+        active_lbl = QLabel(f"Actif : PM-{self._current_pm_id:02d} · {current_name}")
+        active_lbl.setStyleSheet(
+            "color: #4caf50; font-size: 13px;"
+            " background: #1a3a1a; border-radius: 4px; padding: 4px 8px;"
+        )
+        header_row.addWidget(active_lbl)
+        root.addLayout(header_row)
+
+        # Séparateur doré
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background-color: #C49A3C; max-height: 1px;")
+        root.addWidget(sep)
+
+        # Grille de PM — 3 colonnes
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
-
+        scroll.setStyleSheet("QScrollArea { border: none; }")
         grid_widget = QWidget()
-        grid_widget.setStyleSheet("background: transparent;")
         grid = QGridLayout(grid_widget)
-        grid.setSpacing(12)
-        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(10)
 
-        pms = sorted(PM_DEFINITIONS.items())
-        for idx, (pm_id, pm_def) in enumerate(pms):
-            row, col = divmod(idx, 2)
+        pm_ids = sorted(PM_DEFINITIONS.keys())
+        for idx, pm_id in enumerate(pm_ids):
+            pm = PM_DEFINITIONS[pm_id]
+            row, col = divmod(idx, 3)
+            bg, accent = self._PM_COLORS[idx % len(self._PM_COLORS)]
             is_active = (pm_id == self._current_pm_id)
-            btn = QPushButton(f"PM-{pm_id:02d}\n{pm_def.name}")
-            btn.setObjectName("pm_item_active" if is_active else "pm_item")
-            btn.setFixedHeight(80)
-            btn.clicked.connect(lambda checked=False, pid=pm_id: self._select(pid))
-            grid.addWidget(btn, row, col)
+            border_width = "3px" if is_active else "1px"
+            border_color = "#4caf50" if is_active else accent
+            bg_hover = bg.replace("1a", "2a")
+
+            tile = QFrame()
+            tile.setFixedHeight(90)
+            tile.setCursor(Qt.CursorShape.PointingHandCursor)
+            tile.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {bg};
+                    border: {border_width} solid {border_color};
+                    border-radius: 8px;
+                }}
+                QFrame:hover {{
+                    border: 2px solid {accent};
+                    background-color: {bg_hover};
+                }}
+            """)
+
+            tile_layout = QVBoxLayout(tile)
+            tile_layout.setContentsMargins(12, 8, 12, 8)
+            tile_layout.setSpacing(4)
+
+            top_row = QHBoxLayout()
+            pm_num = QLabel(f"PM-{pm_id:02d}")
+            pm_num.setStyleSheet(
+                f"color: {accent}; font-size: 16px;"
+                f" font-weight: bold; background: transparent;"
+            )
+            top_row.addWidget(pm_num)
+            top_row.addStretch()
+            if is_active:
+                badge = QLabel("● ACTIF")
+                badge.setStyleSheet(
+                    "color: #4caf50; font-size: 11px;"
+                    " background: transparent; font-weight: bold;"
+                )
+                top_row.addWidget(badge)
+            tile_layout.addLayout(top_row)
+
+            pm_name_lbl = QLabel(pm.name)
+            pm_name_lbl.setStyleSheet(
+                "color: #F0F0F0; font-size: 13px; background: transparent;"
+            )
+            pm_name_lbl.setWordWrap(True)
+            tile_layout.addWidget(pm_name_lbl)
+
+            tile.mousePressEvent = lambda e, pid=pm_id: self._select(pid)
+            grid.addWidget(tile, row, col)
 
         scroll.setWidget(grid_widget)
-        layout.addWidget(scroll, stretch=1)
+        root.addWidget(scroll, stretch=1)
 
-        cancel_btn = QPushButton("Annuler")
-        cancel_btn.setObjectName("btn_cancel")
-        cancel_btn.setFixedHeight(44)
-        cancel_btn.clicked.connect(self.reject)
-        layout.addWidget(cancel_btn)
+        # Footer
+        btn_cancel = QPushButton("✕   Annuler")
+        btn_cancel.setFixedHeight(44)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #3a1a1a;
+                color: #ef9a9a;
+                font-size: 14px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 6px;
+            }
+            QPushButton:pressed { background-color: #c62828; }
+        """)
+        btn_cancel.clicked.connect(self.reject)
+        root.addWidget(btn_cancel)
 
     def _select(self, pm_id: int) -> None:
         self.selected_pm_id = pm_id
