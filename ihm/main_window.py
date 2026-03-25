@@ -1704,13 +1704,13 @@ class PinDialog(QDialog):
         _defaults = {
             "pin_operateur":  "0000",
             "pin_technicien": "2222",
-            "pin_admin":      "1234",
+            "pin_admin":      "1111",
         }
         for k, plain in _defaults.items():
             ac.setdefault(k, hashlib.sha256(plain.encode()).hexdigest())
         stored = ac.get("pin_admin", "")
         if not stored:
-            stored = hashlib.sha256("1234".encode()).hexdigest()
+            stored = hashlib.sha256("1111".encode()).hexdigest()
         entered_hash = hashlib.sha256(self._pin_value.encode()).hexdigest()
         print(f"[PIN] pin_admin stocké : {stored[:12]}...")
         print(f"[PIN] PIN saisi hash   : {entered_hash[:12]}...")
@@ -1920,7 +1920,7 @@ class MainWindow(QMainWindow):
         )
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         logo_label = QLabel("ACM FRANCE")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1935,7 +1935,7 @@ class MainWindow(QMainWindow):
         self._level_indicator = QLabel("👤  Libre")
         self._level_indicator.setObjectName("level_indicator")
         self._level_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._level_indicator.setFixedHeight(28)
+        self._level_indicator.setFixedHeight(22)
         self._level_indicator.setStyleSheet(
             "color: #AAAAAA; font-size: 12px; font-weight: bold; "
             "background: #3A3A3A; border-radius: 4px; padding: 2px 8px;"
@@ -1944,7 +1944,7 @@ class MainWindow(QMainWindow):
 
         self._login_btn = QPushButton("🔓  Se connecter")
         self._login_btn.setObjectName("login_btn")
-        self._login_btn.setFixedHeight(32)
+        self._login_btn.setFixedHeight(26)
         self._login_btn.setStyleSheet("""
             QPushButton#login_btn {
                 background-color: #444444;
