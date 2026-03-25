@@ -1203,8 +1203,7 @@ class _StatsWidget(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
 
-    @staticmethod
-    def _card_section(title: str, inner: QWidget) -> QWidget:
+    def _card_section(self, title: str, inner: QWidget) -> tuple[QWidget, QLabel]:
         box = QWidget()
         box.setStyleSheet("background-color: #1e1e1e; border-radius: 8px;")
         v = QVBoxLayout(box)
@@ -1219,7 +1218,7 @@ class _StatsWidget(QWidget):
         v.addWidget(lbl)
         v.addWidget(sep)
         v.addWidget(inner)
-        return box
+        return box, lbl
 
     def _build_summary_section(self) -> QWidget:
         w = QWidget()
@@ -1227,37 +1226,43 @@ class _StatsWidget(QWidget):
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(8)
         specs = [
-            ("total", "Total",   "#1e1e1e", "#e0e0e0"),
-            ("ok",    "OK",      "#1a3a1a", "#4caf50"),
-            ("nok",   "NOK",     "#3a1a1a", "#ef5350"),
-            ("taux",  "Taux OK", "#1a2a3a", "#42a5f5"),
+            ("total", "Total",   "#1e1e1e", "#e0e0e0", "📊"),
+            ("ok",    "OK",      "#1a3a1a", "#4caf50", "✅"),
+            ("nok",   "NOK",     "#3a1a1a", "#ef5350", "❌"),
+            ("taux",  "Taux OK", "#1a2a3a", "#42a5f5", "📈"),
         ]
         self._card_lbls: dict[str, QLabel] = {}
-        for key, name, bg, fg in specs:
+        for key, name, bg, fg, icon in specs:
             frame = QFrame()
-            frame.setFixedSize(140, 80)
+            frame.setFixedSize(140, 100)
             frame.setStyleSheet(
                 f"QFrame {{ background-color: {bg}; border-radius: 8px;"
-                f" border: 1px solid #333; }}"
+                f" border-top: none; border-left: none; border-right: none;"
+                f" border-bottom: 4px solid {fg}; }}"
             )
             fv = QVBoxLayout(frame)
-            fv.setContentsMargins(6, 4, 6, 4)
+            fv.setContentsMargins(6, 6, 6, 6)
             fv.setSpacing(2)
+            ico = QLabel(icon)
+            ico.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ico.setStyleSheet("font-size: 20px; background: transparent; border: none;")
             val = QLabel("—")
             val.setAlignment(Qt.AlignmentFlag.AlignCenter)
             val.setStyleSheet(
-                f"font-size: 28px; font-weight: bold; color: {fg};"
+                f"font-size: 32px; font-weight: bold; color: {fg};"
                 " background: transparent; border: none;"
             )
             sub = QLabel(name)
             sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            sub.setStyleSheet("font-size: 12px; color: #9e9e9e; background: transparent; border: none;")
+            sub.setStyleSheet("font-size: 13px; color: #9e9e9e; background: transparent; border: none;")
+            fv.addWidget(ico)
             fv.addWidget(val)
             fv.addWidget(sub)
             self._card_lbls[key] = val
             h.addWidget(frame)
         h.addStretch()
-        return self._card_section("Résumé global", w)
+        section, _ = self._card_section("Résumé global", w)
+        return section
 
     def _build_histogram_section(self) -> QWidget:
         wrapper = QWidget()
@@ -1291,18 +1296,23 @@ class _StatsWidget(QWidget):
         rh.addWidget(self._n_btn)
         v.addWidget(row)
 
-        return self._card_section(f"Historique des {self._n_histo} derniers cycles", wrapper)
+        section, self._histo_title_lbl = self._card_section(
+            f"Historique des {self._n_histo} derniers cycles", wrapper
+        )
+        return section
 
     def _build_tendance_section(self) -> QWidget:
         self._tendance = _TendanceWidget()
-        return self._card_section("Tendance Fmax", self._tendance)
+        section, self._tendance_title_lbl = self._card_section("Tendance Fmax", self._tendance)
+        return section
 
     def _build_rebut_section(self) -> QWidget:
         self._rebut_inner = QWidget()
         self._rebut_layout = QVBoxLayout(self._rebut_inner)
         self._rebut_layout.setContentsMargins(0, 0, 0, 0)
         self._rebut_layout.setSpacing(4)
-        return self._card_section("Taux de rebut par heure", self._rebut_inner)
+        section, _ = self._card_section("Taux de rebut par heure", self._rebut_inner)
+        return section
 
     def _build_nok_table_section(self) -> QWidget:
         self._nok_table = QTableWidget(0, 5)
@@ -1318,7 +1328,8 @@ class _StatsWidget(QWidget):
             " border: none; padding: 4px; }"
         )
         self._nok_table.horizontalHeader().setDefaultSectionSize(110)
-        return self._card_section("Détail des cycles NOK", self._nok_table)
+        section, self._nok_title_lbl = self._card_section("Détail des cycles NOK", self._nok_table)
+        return section
 
     # ------------------------------------------------------------------
     # Interactions
@@ -1328,6 +1339,10 @@ class _StatsWidget(QWidget):
         idx = self._N_OPTIONS.index(self._n_histo) if self._n_histo in self._N_OPTIONS else 1
         self._n_histo = self._N_OPTIONS[(idx + 1) % len(self._N_OPTIONS)]
         self._n_btn.setText(f"{self._n_histo} cycles")
+        n_displayed = len(self._last_log[-self._n_histo:])
+        self._histo_title_lbl.setText(
+            f"Historique des {self._n_histo} derniers cycles ({n_displayed})"
+        )
         self._update_histogram(self._last_log)
 
     # ------------------------------------------------------------------
@@ -1339,6 +1354,13 @@ class _StatsWidget(QWidget):
         production_log : liste de tuples (cycle_num, fmax, xmax, result, heure)
         """
         self._last_log = production_log
+        n_displayed = len(production_log[-self._n_histo:])
+        nb_nok = sum(1 for e in production_log if e[3] != "PASS")
+        self._histo_title_lbl.setText(
+            f"Historique des {self._n_histo} derniers cycles ({n_displayed})"
+        )
+        self._tendance_title_lbl.setText(f"Tendance Fmax ({n_displayed} points)")
+        self._nok_title_lbl.setText(f"Détail des cycles NOK ({nb_nok})")
         self._update_summary(production_log)
         self._update_histogram(production_log)
         self._update_tendance(production_log)
@@ -1364,7 +1386,7 @@ class _StatsWidget(QWidget):
         else:
             taux_color = "#ef5350"
         self._card_lbls["taux"].setStyleSheet(
-            f"font-size: 28px; font-weight: bold; color: {taux_color};"
+            f"font-size: 32px; font-weight: bold; color: {taux_color};"
             " background: transparent; border: none;"
         )
 
@@ -1380,7 +1402,8 @@ class _StatsWidget(QWidget):
 
         bar_h = self._bar_container.height() - 8  # marges
 
-        for _, fmax, _, result, _ in subset:
+        for entry in subset:
+            cycle_num, fmax, _, result, _ = entry
             color = "#4caf50" if result == "PASS" else "#ef5350"
             height = max(4, int(min(fmax, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * bar_h))
 
@@ -1396,6 +1419,7 @@ class _StatsWidget(QWidget):
             bar.setStyleSheet(
                 f"QFrame {{ background-color: {color}; border-radius: 2px; border: none; }}"
             )
+            bar.setToolTip(f"Cycle {cycle_num}\n{result}\nFmax: {fmax:.0f} N")
             sv.addWidget(bar)
             self._bar_layout.addWidget(slot)
 
@@ -1437,8 +1461,8 @@ class _StatsWidget(QWidget):
             rh.setSpacing(8)
 
             lbl = QLabel(f"{key}")
-            lbl.setFixedWidth(50)
-            lbl.setStyleSheet("font-size: 12px; color: #9e9e9e;")
+            lbl.setFixedWidth(40)
+            lbl.setStyleSheet("font-size: 14px; color: #FFFFFF; font-weight: bold;")
             rh.addWidget(lbl)
 
             pb = QProgressBar()
@@ -1458,7 +1482,7 @@ class _StatsWidget(QWidget):
             )
             rh.addWidget(pb, stretch=1)
 
-            info = QLabel(f"{nb_nok} NOK / {nb_total}  ({pct:.1f} %)")
+            info = QLabel(f"{nb_nok} NOK / {nb_total} cycles")
             info.setFixedWidth(170)
             info.setStyleSheet("font-size: 12px; color: #9e9e9e;")
             rh.addWidget(info)
@@ -1474,6 +1498,12 @@ class _StatsWidget(QWidget):
         for _, (cycle_num, fmax, xmax, result, heure) in nok_entries:
             row = self._nok_table.rowCount()
             self._nok_table.insertRow(row)
+            if fmax > FORCE_THRESHOLD_N:
+                fmax_color = "#ef5350"
+            elif fmax > FORCE_THRESHOLD_N * 0.8:
+                fmax_color = "#FF9800"
+            else:
+                fmax_color = "#F0F0F0"
             for col, text in enumerate(
                 [str(cycle_num), heure, f"{fmax:.0f}", f"{xmax:.1f}", "—"]
             ):
@@ -1481,7 +1511,7 @@ class _StatsWidget(QWidget):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 item.setBackground(QColor("#1a0808"))
                 if col == 2:
-                    item.setForeground(QColor("#ef5350"))
+                    item.setForeground(QColor(fmax_color))
                 self._nok_table.setItem(row, col, item)
 
 
