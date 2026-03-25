@@ -3733,6 +3733,95 @@ def _btn_set_numpad(btn: QPushButton, value: str, suffix: str) -> None:
 
 
 # ===========================================================================
+# _CopyDestDialog — sélection du PM destination pour la copie
+# ===========================================================================
+
+class _CopyDestDialog(QDialog):
+    """Sélection du PM destination pour la copie."""
+
+    def __init__(self, source_pm_id: int, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog
+        )
+        self.setModal(True)
+        self.setFixedSize(340, 500)
+        self.setStyleSheet(
+            "QDialog { background-color: #2E2E2E; "
+            "border: 2px solid #C49A3C; border-radius: 10px; }"
+        )
+        self.dest_pm_id: int | None = None
+        self._source = source_pm_id
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+
+        title = QLabel(f"Copier PM-{self._source:02d} vers :")
+        title.setStyleSheet(
+            "color: #C49A3C; font-size: 15px; font-weight: bold; background: transparent;"
+        )
+        layout.addWidget(title)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+        inner = QWidget()
+        inner_layout = QVBoxLayout(inner)
+        inner_layout.setSpacing(6)
+
+        for pm_id in sorted(PM_DEFINITIONS.keys()):
+            if pm_id == self._source:
+                continue
+            pm = PM_DEFINITIONS[pm_id]
+            btn = QPushButton(f"PM-{pm_id:02d}  ·  {pm.name}")
+            btn.setFixedHeight(44)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3A3A3A;
+                    color: #F0F0F0;
+                    border: 1px solid #555555;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    text-align: left;
+                    padding: 0 12px;
+                }
+                QPushButton:pressed {
+                    background-color: #A07830;
+                    color: #ffffff;
+                }
+            """)
+            btn.clicked.connect(lambda _, pid=pm_id: self._select(pid))
+            inner_layout.addWidget(btn)
+
+        inner_layout.addStretch()
+        scroll.setWidget(inner)
+        layout.addWidget(scroll, stretch=1)
+
+        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel.setFixedHeight(40)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #3a1a1a;
+                color: #ef9a9a;
+                border: 1px solid #c62828;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:pressed { background-color: #c62828; }
+        """)
+        btn_cancel.clicked.connect(self.reject)
+        layout.addWidget(btn_cancel)
+
+    def _select(self, pm_id: int) -> None:
+        self.dest_pm_id = pm_id
+        self.accept()
+
+
+# ===========================================================================
 # SettingsPage — fenêtre de réglages principale
 # ===========================================================================
 
@@ -3980,41 +4069,216 @@ class SettingsPage(QWidget):
 
     def _build_page3_pm_manager(self) -> QWidget:
         page = QWidget()
+        page.showEvent = self._pm_manager_show_event  # type: ignore[method-assign]
         v = QVBoxLayout(page)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
         v.addWidget(self._make_header("📁   Gestionnaire PM"))
 
-        table = QTableWidget(len(PM_DEFINITIONS), 3)
-        table.setHorizontalHeaderLabels(["N°", "Nom", "Actif"])
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setDefaultSectionSize(50)
-        table.verticalHeader().setVisible(False)
-        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        # Corps : tableau à gauche + actions à droite
+        body = QWidget()
+        body_h = QHBoxLayout(body)
+        body_h.setContentsMargins(8, 8, 8, 8)
+        body_h.setSpacing(10)
 
-        for row, (pm_id, pm) in enumerate(PM_DEFINITIONS.items()):
+        # ── Tableau PM ──────────────────────────────────────────────
+        self._pm_table = QTableWidget(0, 3)
+        self._pm_table.setHorizontalHeaderLabels(["N°", "Nom", "Outils actifs"])
+        self._pm_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        self._pm_table.horizontalHeader().setDefaultSectionSize(50)
+        self._pm_table.setColumnWidth(0, 50)
+        self._pm_table.setColumnWidth(2, 200)
+        self._pm_table.verticalHeader().setVisible(False)
+        self._pm_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._pm_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._pm_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._pm_table.itemSelectionChanged.connect(self._on_pm_table_selection)
+        body_h.addWidget(self._pm_table, stretch=1)
+
+        # ── Panneau d'actions ────────────────────────────────────────
+        actions = QWidget()
+        actions.setFixedWidth(180)
+        av = QVBoxLayout(actions)
+        av.setContentsMargins(0, 0, 0, 0)
+        av.setSpacing(6)
+
+        self._btn_rename = QPushButton("✏  Renommer")
+        self._btn_copy   = QPushButton("📋  Copier vers...")
+        self._btn_raz    = QPushButton("🔄  RAZ")
+        for btn in (self._btn_rename, self._btn_copy, self._btn_raz):
+            btn.setFixedHeight(44)
+            btn.setObjectName("btn_nav")
+            btn.setEnabled(False)
+            av.addWidget(btn)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"background-color: {_C['border']}; max-height:1px;")
+        av.addWidget(sep)
+
+        btn_close = QPushButton("✓  Fermer")
+        btn_close.setFixedHeight(44)
+        btn_close.setObjectName("btn_save")
+        btn_close.clicked.connect(
+            lambda: self._settings_stack.setCurrentIndex(1)
+        )
+        av.addWidget(btn_close)
+        av.addStretch()
+        body_h.addWidget(actions)
+
+        v.addWidget(body, stretch=1)
+
+        # Connexions actions
+        self._btn_rename.clicked.connect(self._pm_manager_rename)
+        self._btn_copy.clicked.connect(self._pm_manager_copy)
+        self._btn_raz.clicked.connect(self._pm_manager_raz)
+
+        self._load_pm_table()
+        return page
+
+    def _pm_manager_show_event(self, event) -> None:  # noqa: ANN001
+        self._load_pm_table()
+        event.__class__.showEvent(self._pm_table.parent(), event)  # type: ignore[arg-type]
+
+    def _load_pm_table(self) -> None:
+        self._pm_table.setRowCount(0)
+        cfg = load_config(_CONFIG_PATH)
+        programmes = cfg.get("programmes", {})
+
+        for pm_id in sorted(PM_DEFINITIONS.keys()):
+            pm = PM_DEFINITIONS[pm_id]
+            tools = programmes.get(pm_id, {}).get("tools", {})
+
+            active: list[str] = []
+            if tools.get("no_pass", {}).get("enabled"):
+                active.append("NO-PASS")
+            if tools.get("uni_box", {}).get("enabled"):
+                active.append("UNI-BOX")
+            if tools.get("envelope", {}).get("enabled"):
+                active.append("ENV")
+            outils_str = ", ".join(active) if active else "—"
+
+            row = self._pm_table.rowCount()
+            self._pm_table.insertRow(row)
+
             n_item = QTableWidgetItem(f"{pm_id:02d}")
             n_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            table.setItem(row, 0, n_item)
-            table.setItem(row, 1, QTableWidgetItem(pm.name))
-            actif_item = QTableWidgetItem("✓" if row == 0 else "")
-            actif_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            actif_item.setForeground(QColor(_C["ok_green"]))
-            table.setItem(row, 2, actif_item)
+            n_item.setData(Qt.ItemDataRole.UserRole, pm_id)
+            self._pm_table.setItem(row, 0, n_item)
+            self._pm_table.setItem(row, 1, QTableWidgetItem(pm.name))
 
-        v.addWidget(table, stretch=1)
+            outils_item = QTableWidgetItem(outils_str)
+            outils_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if active:
+                outils_item.setForeground(QColor(_C["blue"]))
+            self._pm_table.setItem(row, 2, outils_item)
 
-        btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(10, 6, 10, 6)
-        btn_row.setSpacing(6)
-        for lbl in ["✓  Valider", "✗  Annuler"]:
-            btn = QPushButton(lbl)
-            btn.setObjectName("action_btn")
-            btn_row.addWidget(btn)
-        v.addLayout(btn_row)
-        return page
+    def _pm_manager_selected_id(self) -> int | None:
+        rows = self._pm_table.selectedItems()
+        if not rows:
+            return None
+        row = self._pm_table.row(rows[0])
+        item = self._pm_table.item(row, 0)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _on_pm_table_selection(self) -> None:
+        enabled = self._pm_manager_selected_id() is not None
+        self._btn_rename.setEnabled(enabled)
+        self._btn_copy.setEnabled(enabled)
+        self._btn_raz.setEnabled(enabled)
+
+    def _pm_manager_rename(self) -> None:
+        pm_id = self._pm_manager_selected_id()
+        if pm_id is None:
+            return
+        from ihm.main_window import AlphaNumpadDialog
+        current_name = PM_DEFINITIONS[pm_id].name
+        dlg = AlphaNumpadDialog(
+            title=f"Renommer PM-{pm_id:02d}",
+            value=current_name,
+            parent=self,
+        )
+        if not dlg.exec():
+            return
+        new_name = dlg.value().strip()
+        if not new_name:
+            return
+        # Mettre à jour PM_DEFINITIONS
+        from config import ProgramMeasure
+        pm = PM_DEFINITIONS[pm_id]
+        PM_DEFINITIONS[pm_id] = ProgramMeasure(
+            pm_id=pm_id, name=new_name,
+            description=pm.description, view_mode=pm.view_mode,
+        )
+        # Mettre à jour config.yaml
+        cfg = load_config(_CONFIG_PATH)
+        cfg.setdefault("programmes", {}).setdefault(pm_id, {})["name"] = new_name
+        save_config(_CONFIG_PATH, cfg)
+        self._load_pm_table()
+
+    def _pm_manager_copy(self) -> None:
+        pm_id = self._pm_manager_selected_id()
+        if pm_id is None:
+            return
+        dlg = _CopyDestDialog(source_pm_id=pm_id, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted or dlg.dest_pm_id is None:
+            return
+        dest_id = dlg.dest_pm_id
+        cfg = load_config(_CONFIG_PATH)
+        progs = cfg.setdefault("programmes", {})
+        src_tools = progs.get(pm_id, {}).get("tools", {})
+        import copy
+        progs.setdefault(dest_id, {})["tools"] = copy.deepcopy(src_tools)
+        progs[dest_id]["name"] = f"Copie de {PM_DEFINITIONS[pm_id].name}"
+        save_config(_CONFIG_PATH, cfg)
+        # Mettre à jour PM_DEFINITIONS pour le nom
+        from config import ProgramMeasure
+        pm_dest = PM_DEFINITIONS[dest_id]
+        PM_DEFINITIONS[dest_id] = ProgramMeasure(
+            pm_id=dest_id,
+            name=progs[dest_id]["name"],
+            description=pm_dest.description,
+            view_mode=pm_dest.view_mode,
+        )
+        self._load_pm_table()
+        QMessageBox.information(
+            self, "Copie effectuée",
+            f"PM-{pm_id:02d} copié vers PM-{dest_id:02d}.",
+        )
+
+    def _pm_manager_raz(self) -> None:
+        pm_id = self._pm_manager_selected_id()
+        if pm_id is None:
+            return
+        reply = QMessageBox.question(
+            self, "Remise à zéro",
+            f"Remettre PM-{pm_id:02d} à zéro ?\n"
+            "Tous les outils seront désactivés et les\n"
+            "valeurs remises à 0.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        default_tools = {
+            "no_pass":  {"enabled": False, "x_min": 0.0, "x_max": 0.0, "y_limit": 0.0},
+            "uni_box":  {
+                "enabled": False, "box_x_min": 0.0, "box_x_max": 0.0,
+                "box_y_min": 0.0, "box_y_max": 0.0,
+                "entry_side": "left", "exit_side": "left",
+            },
+            "envelope": {
+                "enabled": False,
+                "lower_curve": [[0.0, 0.0], [100.0, 0.0]],
+                "upper_curve": [[0.0, 0.0], [100.0, 0.0]],
+            },
+        }
+        cfg = load_config(_CONFIG_PATH)
+        cfg.setdefault("programmes", {}).setdefault(pm_id, {})["tools"] = default_tools
+        save_config(_CONFIG_PATH, cfg)
+        self._load_pm_table()
 
     # ------------------------------------------------------------------
     # Footer (page 0 uniquement)
