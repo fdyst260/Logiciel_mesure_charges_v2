@@ -231,6 +231,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
     acq_fn = fake_acquisition_loop if use_simulator else acquisition_loop
     acq_kwargs: dict = {"inject_fault": inject_fault} if use_simulator else {"start_event": start_event}
+    # Note: ici start_event est capturé par référence directe, pas via closure — OK
     acq_thread = threading.Thread(
         target=acq_fn,
         kwargs={"data_queue": data_queue, "stop_event": stop_event, **acq_kwargs},
@@ -240,7 +241,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
     acq_thread.start()
 
     # 4. Helper — recrée DataProcessor + acq_thread (réutilisé par sim et Modbus)
-    def _start_cycle(fn, kwargs: dict, sim_mode: bool) -> None:
+    def _start_cycle(fn, extra_kwargs: dict, sim_mode: bool) -> None:
         nonlocal data_queue, stop_event, start_event, processor, acq_thread
         stop_event.set()
         stop_event = threading.Event()
@@ -260,11 +261,16 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             cycle_started_callback=bridge.emit_cycle_started,
             sim_mode=sim_mode,
         )
+        # DataProcessor doit tourner AVANT que start_event.set() soit appelé
         new_proc.start()
         bridge.emit_cycle_started()
+        # Construire kwargs avec le NOUVEAU start_event (pas celui du caller)
+        thread_kwargs = {"data_queue": data_queue, "stop_event": stop_event, **extra_kwargs}
+        if not sim_mode:
+            thread_kwargs["start_event"] = start_event
         new_thread = threading.Thread(
             target=fn,
-            kwargs={"data_queue": data_queue, "stop_event": stop_event, **kwargs},
+            kwargs=thread_kwargs,
             name="AcquisitionThread",
             daemon=True,
         )
@@ -279,7 +285,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         from pathlib import Path as _Path
 
         def _on_modbus_cycle_start() -> None:
-            _start_cycle(acquisition_loop, {"start_event": start_event}, sim_mode=False)
+            _start_cycle(acquisition_loop, {}, sim_mode=False)
             start_event.set()
 
         def _on_modbus_cycle_stop() -> None:
@@ -297,7 +303,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         modbus_controller.start()
 
         def _restart_real_cycle() -> None:
-            _start_cycle(acquisition_loop, {"start_event": start_event}, sim_mode=False)
+            _start_cycle(acquisition_loop, {}, sim_mode=False)
             start_event.set()
 
         window.set_restart_callback(_restart_real_cycle)

@@ -174,6 +174,8 @@ def acquisition_loop(
         if stop_event.is_set():
             print("[ACQ] Arret demande avant demarrage du scan.")
             return
+        # Laisser le temps au DataProcessor de demarrer
+        time.sleep(0.1)
 
     channel_mask = _channel_mask_for_force_position()
 
@@ -251,10 +253,9 @@ def acquisition_loop(
 
             try:
                 data_queue.put(calibrated_block, timeout=0.2)
-            except queue.Full as exc:
-                raise AcquisitionError(
-                    "Queue pleine: le thread d'analyse n'absorbe plus le flux temps reel."
-                ) from exc
+            except queue.Full:
+                print("[ACQ] Warning: queue pleine, chunk ignore")
+                continue
 
     except HatError as exc:
         raise AcquisitionError(f"Erreur materielle MCC 118 (HatError): {exc}") from exc
