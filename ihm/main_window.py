@@ -49,6 +49,7 @@ from config import (
 )
 from core.analysis import DisplayMode
 from core.models import EvaluationTool, EvaluationType
+from ihm.translations import set_language, t
 from ihm.ui_utils import (
     RIGHT_PANEL_WIDTH,
     load_config,
@@ -140,6 +141,96 @@ COLORS: dict[str, str] = {
     "tool_unibox":    "#C49A3C",
     "tool_envelope":  "#A07830",
 }
+
+COLORS_LIGHT: dict[str, str] = {
+    # Fonds
+    "bg_main":        "#F5F5F5",
+    "bg_panel":       "#EEEEEE",
+    "bg_button":      "#E0E0E0",
+    "bg_graph":       "#FFFFFF",
+
+    # Textes
+    "text_primary":   "#212121",
+    "text_secondary": "#757575",
+
+    # Séparateurs
+    "border":         "#BDBDBD",
+    "separator":      "#BDBDBD",
+    "grid":           "#E0E0E0",
+    "axis_text":      "#9E9E9E",
+
+    # Accent ACM Or — identique aux deux thèmes
+    "nav_active":     "#A07830",
+    "blue":           "#C49A3C",
+
+    # États machine — inchangés (IEC 60073)
+    "ok_bg":          "#E8F5E9",
+    "ok_border":      "#2d7a2d",
+    "ok_text":        "#2E7D32",
+    "nok_bg":         "#FFEBEE",
+    "nok_border":     "#c62828",
+    "nok_text":       "#C62828",
+
+    # Running — or ACM
+    "running_bg":     "#FFF8E1",
+    "running_border": "#C49A3C",
+
+    # Idle
+    "idle_bg":        "#F5F5F5",
+    "idle_text":      "#757575",
+
+    # Fond fenêtre dynamique
+    "win_idle":       "#F5F5F5",
+    "win_running":    "#FFFDE7",
+    "win_ok":         "#F1F8E9",
+    "win_nok":        "#FFEBEE",
+
+    # Alarme
+    "alarm":          "#E65100",
+    "alarm_bg":       "#FFF3E0",
+
+    # Courbes
+    "curve_running":  "#C49A3C",
+    "curve_ok":       "#2E7D32",
+    "curve_nok":      "#C62828",
+    "curve_history":  "#9E9E9E",
+    "curve_live":     "#C49A3C",
+
+    # Outils graphique
+    "nopass_fill":    "#c62828",
+    "nopass_border":  "#ef5350",
+    "unibox_border":  "#C49A3C",
+    "envelope_border":"#A07830",
+    "envelope_fill":  "#A07830",
+
+    # Boutons navigation
+    "settings_btn":   "#A07830",
+    "export_btn":     "#E8F5E9",
+    "raz_btn":        "#FFEBEE",
+
+    # Résultat
+    "result_ok":      "#E8F5E9",
+    "result_nok":     "#FFEBEE",
+    "result_idle":    "#F5F5F5",
+
+    # Aliases
+    "panel_bg":       "#EEEEEE",
+    "progress_ok":    "#4caf50",
+    "progress_warn":  "#ef5350",
+
+    # Compatibilité outils graphique
+    "tool_no_pass":   "#c62828",
+    "tool_unibox":    "#C49A3C",
+    "tool_envelope":  "#A07830",
+}
+
+_current_theme: str = "dark"  # "dark" ou "light"
+
+
+def get_colors() -> dict[str, str]:
+    """Retourne la palette active selon le thème courant."""
+    return COLORS_LIGHT if _current_theme == "light" else COLORS
+
 
 _PIN_CODE = "1234"
 _MAX_PIN_ATTEMPTS = 3
@@ -380,6 +471,16 @@ class GraphWidget(QWidget):
         py = rect.bottom() - yd / yr * rect.height()
         return int(px), int(py)
 
+    def set_theme(self, colors: dict) -> None:
+        """Met à jour les couleurs du graphique."""
+        self._colors = colors
+        self.update()
+
+    def _get_color(self, key: str) -> str:
+        if hasattr(self, "_colors") and self._colors:
+            return self._colors.get(key, COLORS.get(key, "#000000"))
+        return COLORS.get(key, "#000000")
+
     # ------------------------------------------------------------------
     # paintEvent
     # ------------------------------------------------------------------
@@ -389,7 +490,7 @@ class GraphWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Fond global
-        painter.fillRect(self.rect(), QColor(COLORS["bg_graph"]))
+        painter.fillRect(self.rect(), QColor(self._get_color("bg_graph")))
 
         rect = self._plot_rect()
 
@@ -404,18 +505,18 @@ class GraphWidget(QWidget):
 
         if self._history_mode:
             for pts, _ in list(self._history)[:-1]:
-                self._draw_curve(painter, pts, QColor(COLORS["curve_history"]), rect)
+                self._draw_curve(painter, pts, QColor(self._get_color("curve_history")), rect)
             if self._history:
                 pts, res = self._history[-1]
-                c = COLORS["curve_ok"] if res == "PASS" else COLORS["curve_nok"]
+                c = self._get_color("curve_ok") if res == "PASS" else self._get_color("curve_nok")
                 self._draw_curve(painter, pts, QColor(c), rect)
         elif self._current_points:
             if self._current_result == "PASS":
-                color = QColor(COLORS["curve_ok"])
+                color = QColor(self._get_color("curve_ok"))
             elif self._current_result == "NOK":
-                color = QColor(COLORS["curve_nok"])
+                color = QColor(self._get_color("curve_nok"))
             else:
-                color = QColor(COLORS["curve_live"])
+                color = QColor(self._get_color("curve_live"))
             self._draw_curve(painter, self._current_points, color, rect)
 
         painter.restore()
@@ -432,7 +533,7 @@ class GraphWidget(QWidget):
         painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
 
     def _draw_grid(self, painter: QPainter, rect: QRect) -> None:
-        pen = QPen(QColor(COLORS["grid"]))
+        pen = QPen(QColor(self._get_color("grid")))
         pen.setWidth(1)
         painter.setPen(pen)
         for i in range(1, self._GRID_DIVS):
@@ -495,7 +596,7 @@ class GraphWidget(QWidget):
             x2, y2 = self._to_px(zone["x_max"], zone["y_limit"], rect)
             fill = QColor(198, 40, 40, 60)
             painter.fillRect(x1, y1, x2 - x1, y2 - y1, fill)
-            painter.setPen(QPen(QColor(COLORS["nopass_border"]), 1.5, Qt.PenStyle.DashLine))
+            painter.setPen(QPen(QColor(self._get_color("nopass_border")), 1.5, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(x1, y1, x2 - x1, y2 - y1)
 
@@ -504,7 +605,7 @@ class GraphWidget(QWidget):
             x1, y1 = self._to_px(ub_d["box_x_min"], ub_d["box_y_max"], rect)
             x2, y2 = self._to_px(ub_d["box_x_max"], ub_d["box_y_min"], rect)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(QColor(COLORS["unibox_border"]), 2, Qt.PenStyle.DashLine))
+            painter.setPen(QPen(QColor(self._get_color("unibox_border")), 2, Qt.PenStyle.DashLine))
             painter.drawRect(x1, y1, x2 - x1, y2 - y1)
 
         env_d = self._tools_config.get("envelope", {})
@@ -524,7 +625,7 @@ class GraphWidget(QWidget):
                 painter.setPen(QPen(Qt.PenStyle.NoPen))
                 painter.drawPolygon(poly)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
-                pen_env = QPen(QColor(COLORS["envelope_border"]), 1.5, Qt.PenStyle.DashLine)
+                pen_env = QPen(QColor(self._get_color("envelope_border")), 1.5, Qt.PenStyle.DashLine)
                 painter.setPen(pen_env)
                 for curve in (lower, upper):
                     for i in range(len(curve) - 1):
@@ -538,14 +639,14 @@ class GraphWidget(QWidget):
         _xr, yr = self._get_ranges()
         x1, y1 = self._to_px(tool.x_min, yr, rect)
         x2, y2 = self._to_px(tool.x_max, tool.y_limit, rect)
-        color = QColor(COLORS["tool_no_pass"])
+        color = QColor(self._get_color("tool_no_pass"))
         color.setAlpha(80)
         painter.fillRect(x1, y1, x2 - x1, y2 - y1, color)
 
     def _draw_unibox(self, painter: QPainter, tool: EvaluationTool, rect: QRect) -> None:
         if None in (tool.box_x_min, tool.box_x_max, tool.box_y_min, tool.box_y_max):
             return
-        pen = QPen(QColor(COLORS["tool_unibox"]))
+        pen = QPen(QColor(self._get_color("tool_unibox")))
         pen.setWidth(2)
         pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
@@ -555,7 +656,7 @@ class GraphWidget(QWidget):
         painter.drawRect(x1, y1, x2 - x1, y2 - y1)
 
     def _draw_envelope(self, painter: QPainter, tool: EvaluationTool, rect: QRect) -> None:
-        pen = QPen(QColor(COLORS["tool_envelope"]))
+        pen = QPen(QColor(self._get_color("tool_envelope")))
         pen.setWidth(2)
         pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
@@ -574,7 +675,7 @@ class GraphWidget(QWidget):
         _axis_font = QFont("monospace", 11)
         _axis_font.setBold(True)
         painter.setFont(_axis_font)
-        painter.setPen(QColor(COLORS["axis_text"]))
+        painter.setPen(QColor(self._get_color("axis_text")))
 
         # 6 valeurs (GRID_DIVS + 1)
         for i in range(self._GRID_DIVS + 1):
@@ -715,7 +816,7 @@ class NumpadDialog(QDialog):
             btn.clicked.connect(lambda _, c=label: self._key_press(c))
             grid.addWidget(btn, row, col)
 
-        btn_back = QPushButton("⌫")
+        btn_back = QPushButton(t("btn_backspace"))
         btn_back.setObjectName("numpad_backspace")
         btn_back.clicked.connect(self._backspace)
         grid.addWidget(btn_back, 3, 2)
@@ -724,10 +825,10 @@ class NumpadDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_x"))
         btn_cancel.setObjectName("numpad_cancel")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✓  OK")
+        btn_ok = QPushButton(t("btn_ok_check"))
         btn_ok.setObjectName("numpad_ok")
         btn_ok.clicked.connect(self.accept)
         btn_row.addWidget(btn_cancel)
@@ -864,7 +965,7 @@ class AlphaNumpadDialog(QDialog):
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.clicked.connect(lambda _, c=ch: self._key_press(c))
             num_row.addWidget(btn)
-        btn_back = QPushButton("⌫")
+        btn_back = QPushButton(t("btn_backspace"))
         btn_back.setObjectName("alpha_special")
         btn_back.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         btn_back.clicked.connect(self._backspace)
@@ -873,10 +974,10 @@ class AlphaNumpadDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_x"))
         btn_cancel.setObjectName("alpha_cancel")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✓  OK")
+        btn_ok = QPushButton(t("btn_ok_check"))
         btn_ok.setObjectName("alpha_ok")
         btn_ok.clicked.connect(self.accept)
         btn_row.addWidget(btn_cancel)
@@ -988,7 +1089,7 @@ class PmSelectorDialog(QDialog):
 
         # Header
         header_row = QHBoxLayout()
-        title = QLabel("Sélection du Programme de Mesure")
+        title = QLabel(t("dlg_pm_selection_title"))
         title.setStyleSheet(
             "color: #C49A3C; font-size: 18px; font-weight: bold; background: transparent;"
         )
@@ -1057,7 +1158,7 @@ class PmSelectorDialog(QDialog):
             top_row.addWidget(pm_num)
             top_row.addStretch()
             if is_active:
-                badge = QLabel("● ACTIF")
+                badge = QLabel(t("badge_active"))
                 badge.setStyleSheet(
                     "color: #4caf50; font-size: 11px;"
                     " background: transparent; font-weight: bold;"
@@ -1079,7 +1180,7 @@ class PmSelectorDialog(QDialog):
         root.addWidget(scroll, stretch=1)
 
         # Footer
-        btn_cancel = QPushButton("✕   Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_x_wide"))
         btn_cancel.setFixedHeight(44)
         btn_cancel.setStyleSheet("""
             QPushButton {
@@ -1128,7 +1229,7 @@ class _TendanceWidget(QWidget):
 
         if len(self._data) < 2:
             p.setPen(QPen(QColor("#9e9e9e")))
-            p.drawText(QRect(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, "Pas assez de données")
+            p.drawText(QRect(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, t("lbl_not_enough_data"))
             return
 
         # Grille horizontale
@@ -1197,6 +1298,14 @@ class _StatsWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
+        existing = self.layout()
+        if existing is not None:
+            while existing.count():
+                item = existing.takeAt(0)
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
+
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -1216,7 +1325,7 @@ class _StatsWidget(QWidget):
         v.addStretch()
 
         scroll.setWidget(content)
-        outer = QVBoxLayout(self)
+        outer = existing if existing is not None else QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
 
@@ -1243,10 +1352,10 @@ class _StatsWidget(QWidget):
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(8)
         specs = [
-            ("total", "Total",   "#1e1e1e", "#e0e0e0", "📊"),
-            ("ok",    "OK",      "#1a3a1a", "#4caf50", "✅"),
-            ("nok",   "NOK",     "#3a1a1a", "#ef5350", "❌"),
-            ("taux",  "Taux OK", "#1a2a3a", "#42a5f5", "📈"),
+            ("total", t("stats_total"),   "#1e1e1e", "#e0e0e0", "📊"),
+            ("ok",    t("status_ok"),   "#1a3a1a", "#4caf50", "✅"),
+            ("nok",   t("status_nok"),  "#3a1a1a", "#ef5350", "❌"),
+            ("taux",  t("stats_ok_rate"), "#1a2a3a", "#42a5f5", "📈"),
         ]
         self._card_lbls: dict[str, QLabel] = {}
         for key, name, bg, fg, icon in specs:
@@ -1278,7 +1387,7 @@ class _StatsWidget(QWidget):
             self._card_lbls[key] = val
             h.addWidget(frame)
         h.addStretch()
-        section, _ = self._card_section("Résumé global", w)
+        section, _ = self._card_section(t("stats_summary_title"), w)
         return section
 
     def _build_histogram_section(self) -> QWidget:
@@ -1302,11 +1411,11 @@ class _StatsWidget(QWidget):
         row = QWidget()
         rh = QHBoxLayout(row)
         rh.setContentsMargins(0, 0, 0, 0)
-        self._histo_info = QLabel("0 cycles affichés")
+        self._histo_info = QLabel(t("lbl_cycles_shown_zero"))
         self._histo_info.setStyleSheet("font-size: 12px; color: #9e9e9e;")
         rh.addWidget(self._histo_info)
         rh.addStretch()
-        self._n_btn = QPushButton(f"{self._n_histo} cycles")
+        self._n_btn = QPushButton(t("lbl_cycles_count").format(n=self._n_histo))
         self._n_btn.setObjectName("nav_btn")
         self._n_btn.setFixedSize(120, 32)
         self._n_btn.clicked.connect(self._cycle_n_histo)
@@ -1314,13 +1423,13 @@ class _StatsWidget(QWidget):
         v.addWidget(row)
 
         section, self._histo_title_lbl = self._card_section(
-            f"Historique des {self._n_histo} derniers cycles", wrapper
+            t("stats_history_title").format(n=self._n_histo), wrapper
         )
         return section
 
     def _build_tendance_section(self) -> QWidget:
         self._tendance = _TendanceWidget()
-        section, self._tendance_title_lbl = self._card_section("Tendance Fmax", self._tendance)
+        section, self._tendance_title_lbl = self._card_section(t("stats_trend_title"), self._tendance)
         return section
 
     def _build_rebut_section(self) -> QWidget:
@@ -1328,13 +1437,19 @@ class _StatsWidget(QWidget):
         self._rebut_layout = QVBoxLayout(self._rebut_inner)
         self._rebut_layout.setContentsMargins(0, 0, 0, 0)
         self._rebut_layout.setSpacing(4)
-        section, _ = self._card_section("Taux de rebut par heure", self._rebut_inner)
+        section, _ = self._card_section(t("stats_scrap_hour_title"), self._rebut_inner)
         return section
 
     def _build_nok_table_section(self) -> QWidget:
         self._nok_table = QTableWidget(0, 5)
         self._nok_table.setHorizontalHeaderLabels(
-            ["Cycle", "Heure", "Fmax (N)", "Xmax (mm)", "PM"]
+            [
+                t("table_col_cycle"),
+                t("lbl_time"),
+                t("table_col_fmax_n"),
+                t("table_col_xmax_mm"),
+                t("table_col_pm"),
+            ]
         )
         self._nok_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._nok_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -1345,8 +1460,12 @@ class _StatsWidget(QWidget):
             " border: none; padding: 4px; }"
         )
         self._nok_table.horizontalHeader().setDefaultSectionSize(110)
-        section, self._nok_title_lbl = self._card_section("Détail des cycles NOK", self._nok_table)
+        section, self._nok_title_lbl = self._card_section(t("stats_nok_details_title"), self._nok_table)
         return section
+
+    def apply_language(self) -> None:
+        self._build_ui()
+        self.refresh(self._last_log)
 
     # ------------------------------------------------------------------
     # Interactions
@@ -1355,10 +1474,10 @@ class _StatsWidget(QWidget):
     def _cycle_n_histo(self) -> None:
         idx = self._N_OPTIONS.index(self._n_histo) if self._n_histo in self._N_OPTIONS else 1
         self._n_histo = self._N_OPTIONS[(idx + 1) % len(self._N_OPTIONS)]
-        self._n_btn.setText(f"{self._n_histo} cycles")
+        self._n_btn.setText(t("lbl_cycles_count").format(n=self._n_histo))
         n_displayed = len(self._last_log[-self._n_histo:])
         self._histo_title_lbl.setText(
-            f"Historique des {self._n_histo} derniers cycles ({n_displayed})"
+            t("stats_history_title_count").format(n=self._n_histo, shown=n_displayed)
         )
         self._update_histogram(self._last_log)
 
@@ -1374,10 +1493,10 @@ class _StatsWidget(QWidget):
         n_displayed = len(production_log[-self._n_histo:])
         nb_nok = sum(1 for e in production_log if e[3] != "PASS")
         self._histo_title_lbl.setText(
-            f"Historique des {self._n_histo} derniers cycles ({n_displayed})"
+            t("stats_history_title_count").format(n=self._n_histo, shown=n_displayed)
         )
-        self._tendance_title_lbl.setText(f"Tendance Fmax ({n_displayed} points)")
-        self._nok_title_lbl.setText(f"Détail des cycles NOK ({nb_nok})")
+        self._tendance_title_lbl.setText(t("stats_trend_title_points").format(n=n_displayed))
+        self._nok_title_lbl.setText(t("stats_nok_details_title_count").format(n=nb_nok))
         self._update_summary(production_log)
         self._update_histogram(production_log)
         self._update_tendance(production_log)
@@ -1415,7 +1534,7 @@ class _StatsWidget(QWidget):
                 item.widget().deleteLater()
 
         subset = log[-self._n_histo:]
-        self._histo_info.setText(f"{len(subset)} cycles affichés")
+        self._histo_info.setText(t("lbl_cycles_shown").format(n=len(subset)))
 
         bar_h = self._bar_container.height() - 8  # marges
 
@@ -1461,7 +1580,7 @@ class _StatsWidget(QWidget):
             hours.setdefault(key, []).append(entry)
 
         if not hours:
-            lbl = QLabel("Aucune donnée")
+            lbl = QLabel(t("lbl_no_data"))
             lbl.setStyleSheet("color: #9e9e9e;")
             self._rebut_layout.addWidget(lbl)
             return
@@ -1499,7 +1618,7 @@ class _StatsWidget(QWidget):
             )
             rh.addWidget(pb, stretch=1)
 
-            info = QLabel(f"{nb_nok} NOK / {nb_total} cycles")
+            info = QLabel(t("stats_hour_row_info").format(nok=nb_nok, total=nb_total))
             info.setFixedWidth(170)
             info.setStyleSheet("font-size: 12px; color: #9e9e9e;")
             rh.addWidget(info)
@@ -1561,7 +1680,7 @@ class LevelSelectorDialog(QDialog):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
-        title = QLabel("Sélectionner le niveau d'accès")
+        title = QLabel(t("dlg_level_select_title"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
             "color: #C49A3C; font-size: 16px; font-weight: bold; background: transparent;"
@@ -1574,12 +1693,12 @@ class LevelSelectorDialog(QDialog):
         layout.addWidget(sep)
 
         levels = [
-            (AccessLevel.OPERATEUR,  "🟢", "Opérateur",
-             "Courbes, historique",                  "#4caf50", "#1a3a1a"),
-            (AccessLevel.TECHNICIEN, "🟡", "Technicien",
-             "Opérateur + PM, RAZ, réglages",        "#FF9800", "#2a1a00"),
-            (AccessLevel.ADMIN,      "🔴", "Administrateur",
-             "Accès complet",                        "#C49A3C", "#2a1500"),
+            (AccessLevel.OPERATEUR,  "🟢", t("level_operator"),
+               t("level_desc_operator"),               "#4caf50", "#1a3a1a"),
+            (AccessLevel.TECHNICIEN, "🟡", t("level_tech"),
+               t("level_desc_tech"),                   "#FF9800", "#2a1a00"),
+            (AccessLevel.ADMIN,      "🔴", t("level_admin"),
+               t("level_desc_admin"),                  "#C49A3C", "#2a1500"),
         ]
 
         for level, icon, name, desc, color, bg in levels:
@@ -1621,7 +1740,7 @@ class LevelSelectorDialog(QDialog):
             btn.clicked.connect(lambda _, lv=level: self._select(lv))
             layout.addWidget(btn)
 
-        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_x"))
         btn_cancel.setFixedHeight(40)
         btn_cancel.setStyleSheet("""
             QPushButton {
@@ -1651,7 +1770,7 @@ class PinDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Accès réglages")
+        self.setWindowTitle(t("dlg_access_settings_title"))
         self.setModal(True)
         self.setFixedSize(360, 300)
         self.setStyleSheet(PINSTYLE)
@@ -1668,17 +1787,17 @@ class PinDialog(QDialog):
         layout.setSpacing(12)
         layout.setContentsMargins(24, 24, 24, 24)
 
-        self._label = QLabel("Entrez le code PIN (4 chiffres) :")
+        self._label = QLabel(t("lbl_enter_pin"))
         layout.addWidget(self._label)
 
         self._pin_edit = QLineEdit()
         self._pin_edit.setReadOnly(True)
-        self._pin_edit.setPlaceholderText("••••")
+        self._pin_edit.setPlaceholderText(t("pin_placeholder"))
         self._pin_edit.setMinimumHeight(56)
         self._pin_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._pin_edit)
 
-        btn_kbd = QPushButton("⌨   Saisir le code")
+        btn_kbd = QPushButton(t("btn_enter_code"))
         btn_kbd.setMinimumHeight(52)
         btn_kbd.clicked.connect(self._open_numpad)
         layout.addWidget(btn_kbd)
@@ -1753,7 +1872,7 @@ class PinDialog(QDialog):
             self._lockout_timer.stop()
             self._locked = False
             self._attempts = 0
-            self._error_label.setText("Vous pouvez réessayer.")
+            self._error_label.setText(t("lbl_pin_retry"))
         else:
             self._update_lockout_label()
 
@@ -1778,7 +1897,7 @@ class MainWindow(QMainWindow):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("ACM FRANCE — Riveteuse")
+        self.setWindowTitle(t("app_title"))
 
         self._pm_id = pm_id
         self._tools = tools or []
@@ -1823,11 +1942,18 @@ class MainWindow(QMainWindow):
         self._load_access_settings()
 
         # Langue
-        from ihm.translations import set_language as _set_lang
-        _set_lang(load_config(
+        set_language(load_config(
             Path(__file__).parent.parent / "config.yaml"
         ).get("language", "fr"))
         self.apply_language()
+
+        # Thème
+        global _current_theme
+        _theme_cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        _current_theme = _theme_cfg.get("theme", "dark")
+        if _current_theme == "light":
+            self._theme_btn.setText("🌙  Thème sombre")
+        self.apply_theme()
 
         # Charger les outils depuis config.yaml
         cfg_path = Path(__file__).parent.parent / "config.yaml"
@@ -1931,8 +2057,8 @@ class MainWindow(QMainWindow):
     def _build_right_panel(self) -> QWidget:
         panel = QWidget()
         panel.setStyleSheet(
-            f"background-color: {COLORS['panel_bg']}; "
-            f"border-left: 1px solid {COLORS['separator']};"
+            f"background-color: {get_colors()['panel_bg']}; "
+            f"border-left: 1px solid {get_colors()['separator']};"
         )
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 6, 10, 6)
@@ -1940,7 +2066,7 @@ class MainWindow(QMainWindow):
 
 
 
-        self._level_indicator = QLabel("👤  Libre")
+        self._level_indicator = QLabel(t("level_free_icon"))
         self._level_indicator.setObjectName("level_indicator")
         self._level_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._level_indicator.setFixedHeight(22)
@@ -1950,7 +2076,7 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(self._level_indicator)
 
-        self._login_btn = QPushButton("🔓  Se connecter")
+        self._login_btn = QPushButton(t("btn_login_unlock"))
         self._login_btn.setObjectName("login_btn")
         self._login_btn.setFixedHeight(26)
         self._login_btn.setStyleSheet("""
@@ -1974,24 +2100,43 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._build_result_badge())
         layout.addWidget(self._build_counters_section())
         layout.addWidget(self._build_datetime_section())
-        layout.addWidget(make_hseparator(COLORS["separator"]))
+        layout.addWidget(make_hseparator(get_colors()["separator"]))
         layout.addWidget(self._build_pm_section())
-        layout.addWidget(make_hseparator(COLORS["separator"]))
+        layout.addWidget(make_hseparator(get_colors()["separator"]))
         layout.addWidget(self._build_peaks_section())
-        layout.addWidget(make_hseparator(COLORS["separator"]))
+        layout.addWidget(make_hseparator(get_colors()["separator"]))
         self._build_live_section(layout)
         layout.addStretch()
         layout.addWidget(self._build_modbus_indicator())
+        self._theme_btn = QPushButton("☀  Thème clair")
+        self._theme_btn.setObjectName("theme_btn")
+        self._theme_btn.setFixedHeight(32)
+        self._theme_btn.setStyleSheet("""
+            QPushButton#theme_btn {
+                background-color: #444444;
+                color: #F0F0F0;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid #666666;
+                border-radius: 4px;
+            }
+            QPushButton#theme_btn:pressed {
+                background-color: #C49A3C;
+                color: #ffffff;
+            }
+        """)
+        self._theme_btn.clicked.connect(self._toggle_theme)
+        layout.addWidget(self._theme_btn)
         layout.addWidget(self._build_settings_button())
         return panel
 
     def _build_result_badge(self) -> QLabel:
-        self._result_badge = QLabel("ATTENTE")
+        self._result_badge = QLabel(t("status_idle"))
         self._result_badge.setObjectName("result_label")
         self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._result_badge.setFixedHeight(120)
         self._result_badge.setStyleSheet(
-            f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
+            f"background-color: {get_colors()['idle_bg']}; color: {get_colors()['idle_text']}; "
             "border: 2px solid #333; border-radius: 10px; "
             "font-size: 36px; font-weight: bold; padding: 10px;"
         )
@@ -2006,19 +2151,19 @@ class MainWindow(QMainWindow):
         h = QHBoxLayout(w)
         h.setContentsMargins(10, 4, 10, 4)
         h.setSpacing(0)
-        self._ok_count_label = QLabel("✓  0")
+        self._ok_count_label = QLabel(t("counter_ok_zero"))
         self._ok_count_label.setObjectName("counter_ok")
         self._ok_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._nok_count_label = QLabel("✗  0")
+        self._nok_count_label = QLabel(t("counter_nok_zero"))
         self._nok_count_label.setObjectName("counter_nok")
         self._nok_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._total_count_label = QLabel("Σ  0")
+        self._total_count_label = QLabel(t("counter_total_zero"))
         self._total_count_label.setObjectName("counter_tot")
         self._total_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         h.addWidget(self._ok_count_label, stretch=1)
-        h.addWidget(make_vseparator(COLORS["separator"]))
+        h.addWidget(make_vseparator(get_colors()["separator"]))
         h.addWidget(self._nok_count_label, stretch=1)
-        h.addWidget(make_vseparator(COLORS["separator"]))
+        h.addWidget(make_vseparator(get_colors()["separator"]))
         h.addWidget(self._total_count_label, stretch=1)
         return w
 
@@ -2038,11 +2183,11 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(4)
-        title = QLabel("ACM FRANCE — Riveteuse")
-        title.setObjectName("pm_section_title")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setFixedHeight(30)
-        v.addWidget(title)
+        self._pm_title_label = QLabel(t("app_title"))
+        self._pm_title_label.setObjectName("pm_section_title")
+        self._pm_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._pm_title_label.setFixedHeight(30)
+        v.addWidget(self._pm_title_label)
         pm = PM_DEFINITIONS.get(self._pm_id)
         self._pm_btn = QPushButton(f"PM-{self._pm_id:02d}  ·  {pm.name if pm else '—'}")
         self._pm_btn.setObjectName("btn_pm")
@@ -2056,13 +2201,15 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
+        self._peak_name_labels: list[QLabel] = []
         for attr, lbl_text, init_text in [
-            ("_fmax_label", "Fmax", "0 N"),
-            ("_xmax_label", "Xmax", "0.0 mm"),
+            ("_fmax_label", t("fmax_label"), "0 N"),
+            ("_xmax_label", t("xmax_label"), "0.0 mm"),
         ]:
             row = QHBoxLayout()
             lbl = QLabel(lbl_text)
             lbl.setObjectName("peak_label")
+            self._peak_name_labels.append(lbl)
             val = QLabel(init_text)
             val.setObjectName("peak_value")
             val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -2076,12 +2223,14 @@ class MainWindow(QMainWindow):
         return w
 
     def _build_live_section(self, layout: QVBoxLayout) -> None:
+        self._live_name_labels: list[QLabel] = []
         for attr_val, attr_bar, lbl_text, max_val in [
-            ("_force_value", "_force_bar", "Force",    int(FORCE_NEWTON_MAX)),
-            ("_pos_value",   "_pos_bar",   "Position", int(POSITION_MM_MAX)),
+            ("_force_value", "_force_bar", t("force_label"),    int(FORCE_NEWTON_MAX)),
+            ("_pos_value",   "_pos_bar",   t("position_label"), int(POSITION_MM_MAX)),
         ]:
             lbl = QLabel(lbl_text)
             lbl.setObjectName("live_label")
+            self._live_name_labels.append(lbl)
             layout.addWidget(lbl)
             row = QHBoxLayout()
             val_lbl = QLabel("0 N" if "force" in attr_val else "0.0 mm")
@@ -2098,13 +2247,13 @@ class MainWindow(QMainWindow):
             layout.addLayout(row)
 
     def _build_modbus_indicator(self) -> QLabel:
-        self._modbus_indicator = QLabel("⬤  Modbus : --")
+        self._modbus_indicator = QLabel(t("modbus_unknown"))
         self._modbus_indicator.setStyleSheet("color: #9e9e9e; font-size: 12px; padding: 4px;")
         self._modbus_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return self._modbus_indicator
 
     def _build_settings_button(self) -> QPushButton:
-        self._settings_btn = QPushButton("⚙   RÉGLAGES")
+        self._settings_btn = QPushButton(t("btn_settings_icon_upper"))
         self._settings_btn.setObjectName("btn_settings")
         self._settings_btn.setMinimumHeight(60)
         self._settings_btn.clicked.connect(self._on_settings_clicked)
@@ -2118,8 +2267,8 @@ class MainWindow(QMainWindow):
         bar = QWidget()
         bar.setFixedHeight(70)
         bar.setStyleSheet(
-            f"background-color: {COLORS['panel_bg']}; "
-            f"border-top: 1px solid {COLORS['separator']};"
+            f"background-color: {get_colors()['panel_bg']}; "
+            f"border-top: 1px solid {get_colors()['separator']};"
         )
         h = QHBoxLayout(bar)
         h.setContentsMargins(6, 6, 6, 6)
@@ -2128,20 +2277,22 @@ class MainWindow(QMainWindow):
         btn_group = QButtonGroup(bar)
         btn_group.setExclusive(True)
 
+        self._nav_buttons: dict[str, QPushButton] = {}
         specs = [
-            ("📈  Courbe actuelle", "nav_btn",       self._show_current_curve, True),
-            ("🕐  Historique",      "nav_btn",        self._show_history,       False),
-            ("📊  Données",         "nav_btn",        self._show_data_table,    False),
-            ("📊  Statistiques",    "nav_btn",        self._show_stats,         False),
-            ("🔄  RAZ",             "nav_btn_red",    self._reset_counters,     False),
+            ("current", f"📈  {t('nav_current')}", "nav_btn",    self._show_current_curve, True),
+            ("history", f"🕐  {t('nav_history')}", "nav_btn",    self._show_history,       False),
+            ("data",    f"📊  {t('nav_data')}",    "nav_btn",    self._show_data_table,    False),
+            ("stats",   f"📊  {t('nav_stats')}",   "nav_btn",    self._show_stats,         False),
+            ("raz",     f"🔄  {t('nav_raz')}",     "nav_btn_red", self._reset_counters,     False),
         ]
 
-        for label, obj_name, callback, checked in specs:
+        for key, label, obj_name, callback, checked in specs:
             btn = QPushButton(label)
             btn.setObjectName(obj_name)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             btn.clicked.connect(callback)
             btn.clicked.connect(lambda checked=False, b=btn: self._flash_nav_button(b))
+            self._nav_buttons[key] = btn
             if obj_name == "nav_btn":
                 btn.setCheckable(True)
                 btn.setChecked(checked)
@@ -2158,7 +2309,13 @@ class MainWindow(QMainWindow):
 
     def _build_data_table(self) -> QTableWidget:
         table = QTableWidget(0, 5)
-        table.setHorizontalHeaderLabels(["Cycle", "Fmax (N)", "Xmax (mm)", "Résultat", "Heure"])
+        table.setHorizontalHeaderLabels([
+            t("table_col_cycle"),
+            t("table_col_fmax_n"),
+            t("table_col_xmax_mm"),
+            t("table_col_result"),
+            t("lbl_time"),
+        ])
         table.setStyleSheet(
             "background-color: #181818; color: #e0e0e0; "
             "gridline-color: #333; alternate-background-color: #1e1e1e;"
@@ -2175,11 +2332,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _make_separator() -> QFrame:
-        return make_hseparator(COLORS["separator"])
+        return make_hseparator(get_colors()["separator"])
 
     @staticmethod
     def _make_vsep() -> QFrame:
-        return make_vseparator(COLORS["separator"])
+        return make_vseparator(get_colors()["separator"])
 
     # ------------------------------------------------------------------
     # Fond de fenêtre dynamique
@@ -2188,48 +2345,64 @@ class MainWindow(QMainWindow):
     def _apply_state_style(self, state: str) -> None:
         """Modifie le fond de la page production sans écraser STYLESHEET."""
         color_map = {
-            "idle":      COLORS["win_idle"],
-            "acquiring": COLORS["win_running"],
-            "ok":        COLORS["win_ok"],
-            "nok":       COLORS["win_nok"],
+            "idle":      get_colors()["win_idle"],
+            "acquiring": get_colors()["win_running"],
+            "ok":        get_colors()["win_ok"],
+            "nok":       get_colors()["win_nok"],
         }
-        bg = color_map.get(state, COLORS["win_idle"])
+        bg = color_map.get(state, get_colors()["win_idle"])
         self.centralWidget().setStyleSheet(f"background-color: {bg};")
+
+    @staticmethod
+    def _badge_content() -> dict[str, dict[str, str]]:
+        return {
+            "Smiley": {"ok": "😊", "nok": "😞", "running": "⏳", "idle": "—"},
+            "Coche":  {"ok": "✓",  "nok": "✗",  "running": "⏳", "idle": "—"},
+            "Pouce":  {"ok": "👍", "nok": "👎", "running": "⏳", "idle": "—"},
+            "Texte":  {
+                "ok": t("status_ok"),
+                "nok": t("status_nok"),
+                "running": t("status_running"),
+                "idle": t("status_idle"),
+            },
+            "Vide":   {"ok": "",   "nok": "",    "running": "",  "idle": ""},
+        }
 
     def _update_result_display(self, status: str) -> None:
         """Met à jour badge résultat + fond fenêtre selon l'état."""
-        content = self._BADGE_CONTENT.get(
-            self._badge_style, self._BADGE_CONTENT["Texte"]
+        badge_content = self._badge_content()
+        content = badge_content.get(
+            self._badge_style, badge_content["Texte"]
         )
         self._result_badge.setText(content[status])
 
         if status == "ok":
             self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['ok_bg']}; color: {COLORS['ok_text']}; "
-                f"border: 2px solid {COLORS['ok_border']}; border-radius: 10px; "
+                f"background-color: {get_colors()['ok_bg']}; color: {get_colors()['ok_text']}; "
+                f"border: 2px solid {get_colors()['ok_border']}; border-radius: 10px; "
                 "font-size: 44px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("ok")
             self._flash_badge()
         elif status == "nok":
             self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['nok_bg']}; color: {COLORS['nok_text']}; "
-                f"border: 2px solid {COLORS['nok_border']}; border-radius: 10px; "
+                f"background-color: {get_colors()['nok_bg']}; color: {get_colors()['nok_text']}; "
+                f"border: 2px solid {get_colors()['nok_border']}; border-radius: 10px; "
                 "font-size: 44px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("nok")
             self._flash_badge()
         elif status == "running":
             self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['running_bg']}; color: {COLORS['blue']}; "
-                f"border: 2px solid {COLORS['running_border']}; border-radius: 10px; "
+                f"background-color: {get_colors()['running_bg']}; color: {get_colors()['blue']}; "
+                f"border: 2px solid {get_colors()['running_border']}; border-radius: 10px; "
                 "font-size: 36px; font-weight: bold; padding: 10px;"
             )
             self._apply_state_style("acquiring")
         else:  # idle
             self._result_badge.setStyleSheet(
-                f"background-color: {COLORS['idle_bg']}; color: {COLORS['idle_text']}; "
-                f"border: 2px solid {COLORS['border']}; border-radius: 10px; "
+                f"background-color: {get_colors()['idle_bg']}; color: {get_colors()['idle_text']}; "
+                f"border: 2px solid {get_colors()['border']}; border-radius: 10px; "
                 "font-size: 36px; font-weight: bold; padding: 10px;"
             )
             self._apply_state_style("idle")
@@ -2308,7 +2481,7 @@ class MainWindow(QMainWindow):
             self._restart_btn.show()
             self._center_restart_btn()
             return
-        self._restart_btn = QPushButton("▶   NOUVEAU CYCLE", self._graph)
+        self._restart_btn = QPushButton(f"▶   {t('btn_new_cycle')}", self._graph)
         self._restart_btn.setStyleSheet("""
             QPushButton {
                 background-color: #1565c0;
@@ -2406,11 +2579,11 @@ class MainWindow(QMainWindow):
         """Grossit brièvement le compteur pour signaler l'incrémentation."""
         obj = label.objectName()
         if obj == "counter_ok":
-            color = COLORS["ok_text"]
+            color = get_colors()["ok_text"]
         elif obj == "counter_nok":
-            color = COLORS["nok_text"]
+            color = get_colors()["nok_text"]
         else:
-            color = COLORS["text_primary"]
+            color = get_colors()["text_primary"]
         original_style = label.styleSheet()
         label.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {color};")
         QTimer.singleShot(200, lambda: label.setStyleSheet(original_style))
@@ -2431,8 +2604,8 @@ class MainWindow(QMainWindow):
     def _reset_counters(self) -> None:
         reply = QMessageBox.question(
             self,
-            "RAZ compteurs",
-            "Remettre les compteurs OK/NOK à zéro ?",
+            t("dlg_raz_counters_title"),
+            t("dlg_raz_counters_msg"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
@@ -2448,12 +2621,12 @@ class MainWindow(QMainWindow):
 
     def set_modbus_status(self, connected: bool) -> None:
         if connected:
-            self._modbus_indicator.setText("⬤  Modbus : Connecté")
+            self._modbus_indicator.setText(f"⬤  {t('modbus_connected')}")
             self._modbus_indicator.setStyleSheet(
                 "color: #4caf50; font-size: 12px; padding: 4px;"
             )
         else:
-            self._modbus_indicator.setText("⬤  Modbus : Déconnecté")
+            self._modbus_indicator.setText(f"⬤  {t('modbus_disconnected')}")
             self._modbus_indicator.setStyleSheet(
                 "color: #ef5350; font-size: 12px; padding: 4px;"
             )
@@ -2488,13 +2661,127 @@ class MainWindow(QMainWindow):
         self._xmax_label.setText("0.0 mm")
         self._update_result_display("idle")
 
-    _BADGE_CONTENT: dict[str, dict[str, str]] = {
-        "Smiley": {"ok": "😊", "nok": "😞", "running": "⏳", "idle": "—"},
-        "Coche":  {"ok": "✓",  "nok": "✗",  "running": "⏳", "idle": "—"},
-        "Pouce":  {"ok": "👍", "nok": "👎", "running": "⏳", "idle": "—"},
-        "Texte":  {"ok": "OK", "nok": "NOK", "running": "EN COURS", "idle": "ATTENTE"},
-        "Vide":   {"ok": "",   "nok": "",    "running": "",  "idle": ""},
-    }
+    def apply_theme(self) -> None:
+        """Régénère et applique le stylesheet selon le thème."""
+        global _current_theme
+        c = get_colors()
+
+        new_stylesheet = f"""
+QMainWindow, QWidget#central {{
+    background-color: {c['bg_main']};
+    color: {c['text_primary']};
+    font-family: 'Segoe UI', Arial, sans-serif;
+}}
+QLabel {{
+    background-color: transparent;
+    font-size: 15px;
+    font-weight: 500;
+}}
+QLabel#result_label {{
+    font-size: 44px;
+    font-weight: bold;
+    border-radius: 10px;
+    padding: 8px;
+}}
+QLabel#counter_ok   {{ color: {c['ok_text']}; font-size: 22px; font-weight: bold; }}
+QLabel#counter_nok  {{ color: {c['nok_text']}; font-size: 22px; font-weight: bold; }}
+QLabel#counter_tot  {{ color: {c['text_primary']}; font-size: 22px; font-weight: bold; }}
+QLabel#datetime_label {{ font-size: 12px; color: {c['text_secondary']}; }}
+QLabel#pm_section_title {{ font-size: 13px; font-weight: bold; color: {c['blue']}; }}
+QLabel#pm_btn_label {{ font-size: 17px; font-weight: bold; color: {c['text_primary']}; }}
+QLabel#live_label   {{ font-size: 15px; font-weight: 600; color: {c['text_secondary']}; }}
+QLabel#live_value   {{ font-size: 26px; font-weight: bold; color: {c['text_primary']}; }}
+QLabel#peak_label   {{ font-size: 15px; font-weight: 600; color: {c['text_secondary']}; }}
+QLabel#peak_value   {{ font-size: 22px; font-weight: bold; color: {c['blue']}; }}
+QProgressBar {{
+    border: none; border-radius: 4px;
+    background-color: {c['bg_button']};
+    max-height: 10px;
+}}
+QProgressBar::chunk {{
+    border-radius: 4px;
+    background-color: {c['ok_text']};
+}}
+QPushButton#btn_pm {{
+    background-color: {c['bg_button']};
+    color: {c['text_primary']};
+    font-size: 14px; font-weight: bold;
+    border: 1px solid {c['border']};
+    border-radius: 6px; padding: 6px;
+}}
+QPushButton#btn_settings {{
+    background-color: {c['settings_btn']};
+    color: #ffffff; font-size: 16px; font-weight: bold;
+    border-radius: 8px; border: 1px solid #d97706;
+    min-height: 60px;
+}}
+QPushButton#nav_btn {{
+    background-color: {c['bg_button']};
+    color: {c['text_secondary']};
+    font-size: 15px; font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid {c['border']};
+    min-height: 58px;
+}}
+QPushButton#nav_btn:checked {{
+    background-color: {c['nav_active']};
+    color: #ffffff;
+    border-color: #E0B554;
+}}
+QPushButton#nav_btn_green {{
+    background-color: {c['export_btn']};
+    color: {c['ok_text']};
+    font-size: 15px; font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid {c['ok_border']};
+    min-height: 58px;
+}}
+QPushButton#nav_btn_red {{
+    background-color: {c['raz_btn']};
+    color: {c['nok_text']};
+    font-size: 15px; font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid {c['nok_border']};
+    min-height: 58px;
+}}
+QFrame#separator {{
+    background-color: {c['border']};
+    max-height: 1px;
+}}
+"""
+        self.setStyleSheet(new_stylesheet)
+
+        right_panel = self.findChild(QWidget, "right_panel")
+        if right_panel:
+            right_panel.setStyleSheet(
+                f"background-color: {c['panel_bg']}; "
+                f"border-left: 1px solid {c['separator']};"
+            )
+
+        self._graph.set_theme(c)
+
+        self._update_result_display(
+            "ok" if hasattr(self, "_count_ok") and self._count_ok > 0 else "idle"
+        )
+
+    def _toggle_theme(self) -> None:
+        global _current_theme
+        from pathlib import Path
+
+        if _current_theme == "dark":
+            _current_theme = "light"
+            self._theme_btn.setText("🌙  Thème sombre")
+        else:
+            _current_theme = "dark"
+            self._theme_btn.setText("☀  Thème clair")
+
+        cfg_path = Path(__file__).parent.parent / "config.yaml"
+        cfg = load_config(cfg_path)
+        cfg["theme"] = _current_theme
+        from ihm.ui_utils import save_config
+        save_config(cfg_path, cfg)
+
+        self.apply_theme()
 
     def apply_display_settings(self) -> None:
         """Recharge les préférences d'affichage depuis config.yaml."""
@@ -2505,7 +2792,6 @@ class MainWindow(QMainWindow):
 
     def apply_language(self) -> None:
         """Applique la langue courante aux chaînes traduisibles de l'IHM."""
-        from ihm.translations import t
         # Bouton Réglages
         self._settings_btn.setText(f"⚙   {t('btn_settings')}")
         # Bouton login
@@ -2522,6 +2808,48 @@ class MainWindow(QMainWindow):
             else:
                 self._modbus_indicator.setText(f"⬤  {t('modbus_disconnected')}")
 
+        if hasattr(self, "_pm_title_label"):
+            self._pm_title_label.setText(t("app_title"))
+
+        if hasattr(self, "_peak_name_labels") and len(self._peak_name_labels) >= 2:
+            self._peak_name_labels[0].setText(t("fmax_label"))
+            self._peak_name_labels[1].setText(t("xmax_label"))
+
+        if hasattr(self, "_live_name_labels") and len(self._live_name_labels) >= 2:
+            self._live_name_labels[0].setText(t("force_label"))
+            self._live_name_labels[1].setText(t("position_label"))
+
+        if hasattr(self, "_data_table"):
+            self._data_table.setHorizontalHeaderLabels([
+                t("table_col_cycle"),
+                t("table_col_fmax_n"),
+                t("table_col_xmax_mm"),
+                t("table_col_result"),
+                t("lbl_time"),
+            ])
+
+        if hasattr(self, "_nav_buttons"):
+            self._nav_buttons.get("current") and self._nav_buttons["current"].setText(f"📈  {t('nav_current')}")
+            self._nav_buttons.get("history") and self._nav_buttons["history"].setText(f"🕐  {t('nav_history')}")
+            self._nav_buttons.get("data") and self._nav_buttons["data"].setText(f"📊  {t('nav_data')}")
+            self._nav_buttons.get("stats") and self._nav_buttons["stats"].setText(f"📊  {t('nav_stats')}")
+            self._nav_buttons.get("raz") and self._nav_buttons["raz"].setText(f"🔄  {t('nav_raz')}")
+
+        if hasattr(self, "_restart_btn") and self._restart_btn is not None:
+            self._restart_btn.setText(f"▶   {t('btn_new_cycle')}")
+
+        if hasattr(self, "_stats_widget"):
+            self._stats_widget.apply_language()
+
+        settings_page = self.stack.widget(1) if hasattr(self, "stack") else None
+        if settings_page is not None and hasattr(settings_page, "apply_language"):
+            settings_page.apply_language()
+            self._apply_settings_restrictions()
+
+        self._update_level_indicator()
+
+        self._result_badge.setText(t("status_idle"))
+
     def set_access_level(self, level: int) -> None:
         """Définit le niveau d'accès courant."""
         self._access_level = level
@@ -2531,20 +2859,20 @@ class MainWindow(QMainWindow):
     def _update_level_indicator(self) -> None:
         """Met à jour le label indicateur de niveau visible."""
         if not self._access_enabled:
-            self._level_indicator.setText("👤  Libre")
+            self._level_indicator.setText(t("level_free_icon"))
             self._level_indicator.setStyleSheet(
                 "color: #AAAAAA; font-size: 12px; font-weight: bold; "
                 "background: #3A3A3A; border-radius: 4px; padding: 2px 8px;"
             )
             return
         configs = {
-            AccessLevel.NONE:       ("🔒  Verrouillé",    "#ef5350", "#3a1a1a"),
-            AccessLevel.OPERATEUR:  ("🟢  Opérateur",     "#4caf50", "#1a3a1a"),
-            AccessLevel.TECHNICIEN: ("🟡  Technicien",    "#FF9800", "#2a1a00"),
-            AccessLevel.ADMIN:      ("🔴  Administrateur","#C49A3C", "#2a1500"),
+            AccessLevel.NONE:       (f"🔒  {t('level_locked')}",   "#ef5350", "#3a1a1a"),
+            AccessLevel.OPERATEUR:  (f"🟢  {t('level_operator')}", "#4caf50", "#1a3a1a"),
+            AccessLevel.TECHNICIEN: (f"🟡  {t('level_tech')}",     "#FF9800", "#2a1a00"),
+            AccessLevel.ADMIN:      (f"🔴  {t('level_admin')}",    "#C49A3C", "#2a1500"),
         }
         text, color, bg = configs.get(
-            self._access_level, ("👤  Inconnu", "#AAAAAA", "#3A3A3A")
+            self._access_level, (f"👤  {t('level_free')}", "#AAAAAA", "#3A3A3A")
         )
         self._level_indicator.setText(text)
         self._level_indicator.setStyleSheet(
@@ -2558,7 +2886,7 @@ class MainWindow(QMainWindow):
             self._pm_btn.setEnabled(True)
             self._settings_btn.setEnabled(True)
             for btn in self.findChildren(QPushButton):
-                if "RAZ" in btn.text():
+                if btn.objectName() == "nav_btn_red":
                     btn.setEnabled(True)
             return
 
@@ -2566,7 +2894,7 @@ class MainWindow(QMainWindow):
         # PM et RAZ : Technicien et Admin uniquement
         self._pm_btn.setEnabled(level >= AccessLevel.TECHNICIEN)
         for btn in self.findChildren(QPushButton):
-            if "RAZ" in btn.text():
+            if btn.objectName() == "nav_btn_red":
                 btn.setEnabled(level >= AccessLevel.TECHNICIEN)
         # Bouton Réglages : Opérateur et au-dessus
         self._settings_btn.setEnabled(level >= AccessLevel.OPERATEUR)
@@ -2581,20 +2909,21 @@ class MainWindow(QMainWindow):
 
         level = self._access_level
 
-        # Textes interdits selon niveau (substring match)
         restricted_op = {
-            "Voie X", "Voie Y", "Contrôle cycle",
-            "Date / Heure", "Affichage prod.", "Exportation", "Extras",
+            "voie_x", "voie_y", "cycle",
+            "date_heure", "affichage", "exportation", "extras",
         }
-        restricted_tech = {"Extras"}
+        restricted_tech = {"extras"}
 
         for btn in settings_page.findChildren(QPushButton):
-            label = btn.text().strip()
+            action = btn.property("settings_action")
+            if not action:
+                continue
             if level == AccessLevel.OPERATEUR:
-                blocked = any(r in label for r in restricted_op)
+                blocked = action in restricted_op
                 btn.setEnabled(not blocked)
             elif level == AccessLevel.TECHNICIEN:
-                blocked = any(r in label for r in restricted_tech)
+                blocked = action in restricted_tech
                 btn.setEnabled(not blocked)
             else:
                 btn.setEnabled(True)
@@ -2606,7 +2935,7 @@ class MainWindow(QMainWindow):
         # Si déjà connecté → déconnexion
         if self._access_level > AccessLevel.NONE:
             self.set_access_level(AccessLevel.NONE)
-            self._login_btn.setText("🔓  Se connecter")
+            self._login_btn.setText(f"🔓  {t('btn_login')}")
             return
 
         # Étape 1 — Choisir le niveau
@@ -2617,9 +2946,9 @@ class MainWindow(QMainWindow):
 
         # Étape 2 — Saisir le PIN
         level_names = {
-            AccessLevel.OPERATEUR:  "Opérateur",
-            AccessLevel.TECHNICIEN: "Technicien",
-            AccessLevel.ADMIN:      "Administrateur",
+            AccessLevel.OPERATEUR:  t("level_operator"),
+            AccessLevel.TECHNICIEN: t("level_tech"),
+            AccessLevel.ADMIN:      t("level_admin"),
         }
         dlg = NumpadDialog(
             title=f"PIN — {level_names.get(chosen_level, '')}",
@@ -2644,15 +2973,18 @@ class MainWindow(QMainWindow):
         if pin_hash == stored:
             self.set_access_level(chosen_level)
             labels = {
-                AccessLevel.OPERATEUR:  "🟢  Opérateur",
-                AccessLevel.TECHNICIEN: "🟡  Technicien",
-                AccessLevel.ADMIN:      "🔴  Admin",
+                AccessLevel.OPERATEUR:  f"🟢  {t('level_operator')}",
+                AccessLevel.TECHNICIEN: f"🟡  {t('level_tech')}",
+                AccessLevel.ADMIN:      f"🔴  {t('level_admin')}",
             }
-            self._login_btn.setText(f"🔒  {labels.get(chosen_level, 'Connecté')}")
+            self._login_btn.setText(f"🔒  {labels.get(chosen_level, t('level_locked'))}")
         else:
             QMessageBox.warning(
-                self, "Accès refusé",
-                f"Code PIN incorrect pour {level_names.get(chosen_level, '')}.",
+                self,
+                t("dlg_access_denied_title"),
+                t("dlg_pin_incorrect_msg").format(
+                    level=level_names.get(chosen_level, "")
+                ) + ".",
             )
 
     def _load_access_settings(self) -> None:
@@ -2678,8 +3010,9 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentIndex(1)
             return
         QMessageBox.information(
-            self, "Accès restreint",
-            "Veuillez vous connecter avec un code PIN\navant d'accéder aux réglages.",
+            self,
+            t("dlg_access_restricted_title"),
+            t("dlg_access_restricted_msg"),
         )
 
     # ------------------------------------------------------------------
@@ -2696,7 +3029,7 @@ class MainWindow(QMainWindow):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if col == 3:
                 item.setForeground(
-                    QColor(COLORS["curve_ok"] if result == "PASS" else COLORS["curve_nok"])
+                    QColor(get_colors()["curve_ok"] if result == "PASS" else get_colors()["curve_nok"])
                 )
             self._data_table.setItem(row, col, item)
         self._data_table.scrollToBottom()
