@@ -33,13 +33,13 @@ GO_POLL_INTERVAL_SEC = 0.001
 
 # Echelles de conversion
 FORCE_VOLT_MAX = 10.0
-FORCE_NEWTON_MAX = 5000.0
+FORCE_NEWTON_MAX = 15000.0
 POSITION_VOLT_MAX = 10.0
-POSITION_MM_MAX = 100.0
+POSITION_MM_MAX = 20.0
 
 # Seuils d'alarme (temps reel)
-FORCE_THRESHOLD_N = 4500.0
-POSITION_THRESHOLD_MM = 95.0
+FORCE_THRESHOLD_N = 13000.0
+POSITION_THRESHOLD_MM = 18.0
 
 # Dossier d'export CSV
 DATA_DIR = "./data"
@@ -249,3 +249,7 @@ def volts_to_force(voltage: float) -> float:
 def volts_to_position(voltage: float) -> float:
     """Convertit une tension CH1 (0-10V) en mm."""
     return (voltage / POSITION_VOLT_MAX) * POSITION_MM_MAX
+
+
+# Chargement automatique depuis config.yaml à l'import
+load_scaling_config()
