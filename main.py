@@ -242,8 +242,20 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
     # 4. Helper — recrée DataProcessor + acq_thread (réutilisé par sim et Modbus)
     def _start_cycle(fn, extra_kwargs: dict, sim_mode: bool) -> None:
+        import time as _t
         nonlocal data_queue, stop_event, start_event, processor, acq_thread
+
+        # Arrêter proprement les anciens threads
         stop_event.set()
+        try:
+            data_queue.put_nowait(None)
+        except queue.Full:
+            pass
+        processor.join(timeout=2.0)
+        acq_thread.join(timeout=2.0)
+        print("[MAIN] Anciens threads arrêtés")
+
+        # Créer de nouvelles ressources
         stop_event = threading.Event()
         start_event = threading.Event()
         data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
@@ -251,7 +263,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             tools=build_tools_from_yaml(pm_id=window._pm_id),
             mode=DisplayMode.FORCE_POSITION,
         )
-        new_proc = DataProcessor(
+        processor = DataProcessor(
             data_queue=data_queue,
             stop_event=stop_event,
             cycle_manager=new_manager,
@@ -261,22 +273,24 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             cycle_started_callback=bridge.emit_cycle_started,
             sim_mode=sim_mode,
         )
-        # DataProcessor doit tourner AVANT que start_event.set() soit appelé
-        new_proc.start()
+        processor.start()
         bridge.emit_cycle_started()
-        # Construire kwargs avec le NOUVEAU start_event (pas celui du caller)
+
         thread_kwargs = {"data_queue": data_queue, "stop_event": stop_event, **extra_kwargs}
         if not sim_mode:
             thread_kwargs["start_event"] = start_event
-        new_thread = threading.Thread(
+        acq_thread = threading.Thread(
             target=fn,
             kwargs=thread_kwargs,
             name="AcquisitionThread",
             daemon=True,
         )
-        new_thread.start()
-        processor = new_proc
-        acq_thread = new_thread
+        acq_thread.start()
+
+        # Laisser les threads démarrer avant de signaler start_event
+        _t.sleep(0.2)
+        start_event.set()
+        print("[MAIN] Nouveau cycle démarré, start_event set")
 
     # 5. Modbus (mode réel) ou bouton relance (mode sim)
     modbus_controller = None
@@ -286,7 +300,6 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
         def _on_modbus_cycle_start() -> None:
             _start_cycle(acquisition_loop, {}, sim_mode=False)
-            start_event.set()
 
         def _on_modbus_cycle_stop() -> None:
             try:
@@ -304,7 +317,6 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
         def _restart_real_cycle() -> None:
             _start_cycle(acquisition_loop, {}, sim_mode=False)
-            start_event.set()
 
         window.set_restart_callback(_restart_real_cycle)
         window.set_manual_cycle_enabled(True)

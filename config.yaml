@@ -9,7 +9,7 @@ acquisition:
   chunk_size: 100
   force_channel: 0
   position_channel: 1
-  sample_rate_hz: 1000.0
+  sample_rate_hz: 500.0
   trigger_mode: modbus
 affichage_prod:
   fenetre_pleine: true

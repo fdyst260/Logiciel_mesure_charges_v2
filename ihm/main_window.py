@@ -2690,7 +2690,10 @@ class MainWindow(QMainWindow):
         if not self._cycle_started:
             self._cycle_started = True
             self._update_result_display("running")
+            print(f"[DEBUG] on_new_point: cycle_started=True, premier point")
         self._point_buffer.append((t, force_n, pos_mm))
+        if len(self._point_buffer) % 50 == 1:
+            print(f"[DEBUG] on_new_point: force={force_n:.1f} pos={pos_mm:.1f} buffer={len(self._point_buffer)}")
         self._last_force = force_n
         self._last_pos = pos_mm
         if force_n > self._cycle_fmax:
@@ -2783,6 +2786,8 @@ class MainWindow(QMainWindow):
 
     def _flush_buffer(self) -> None:
         if self._point_buffer:
+            n = len(self._point_buffer)
+            print(f"[DEBUG] flush_buffer: {n} points -> graph")
             self._graph.add_points(self._point_buffer)
             self._point_buffer.clear()
             self._update_live_values(self._last_force, self._last_pos)
