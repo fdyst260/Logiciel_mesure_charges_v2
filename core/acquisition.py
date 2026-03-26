@@ -219,13 +219,11 @@ def acquisition_loop(
             )
 
             if read_result.hardware_overrun:
-                raise AcquisitionError(
-                    "Hardware overrun detecte: le debit depasse les capacites de la carte."
-                )
+                print("[ACQ] Warning: hardware overrun, chunk ignore")
+                continue
             if read_result.buffer_overrun:
-                raise AcquisitionError(
-                    "Buffer overrun detecte: le consommateur est trop lent ou la queue sature."
-                )
+                print("[ACQ] Warning: buffer overrun, chunk ignore")
+                continue
 
             raw = read_result.data
             if not raw:
@@ -238,9 +236,8 @@ def acquisition_loop(
 
             # Les donnees sont entrelacees: CH0, CH1, CH0, CH1...
             if len(raw) % 2 != 0:
-                raise AcquisitionError(
-                    "Bloc d'acquisition incoherent: nombre impair d'echantillons entrelaces."
-                )
+                print("[ACQ] Warning: bloc incoherent (nombre impair), chunk ignore")
+                continue
 
             t_start = time.perf_counter()
             calibrated_block: list[tuple[float, float, float]] = []
