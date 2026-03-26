@@ -34,6 +34,7 @@ from config import (
     THREAD_JOIN_TIMEOUT,
     build_tools_from_yaml,
     load_pm_from_yaml,
+    load_scaling_config,
 )
 from core.acquisition import AcquisitionError, acquisition_loop
 from core.analysis import CycleManager, DisplayMode
@@ -189,6 +190,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
     QApplication.processEvents()
 
     splash.set_progress(10, "Chargement de la configuration...")
+    load_scaling_config()
     load_pm_from_yaml()
 
     # 1. Pont AVANT les threads (doit vivre dans le thread Qt)

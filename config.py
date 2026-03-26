@@ -87,6 +87,43 @@ PM_DEFINITIONS: dict[int, ProgramMeasure] = {
 }
 
 
+def load_scaling_config() -> None:
+    """Charge les valeurs de scaling et acquisition depuis config.yaml."""
+    import yaml
+    global FORCE_NEWTON_MAX, POSITION_MM_MAX, FORCE_THRESHOLD_N, POSITION_THRESHOLD_MM
+    global SAMPLE_RATE_HZ, CHUNK_SIZE
+
+    cfg_path = Path(__file__).parent / "config.yaml"
+    if not cfg_path.exists():
+        return
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        return
+
+    # Charger scaling
+    scaling = cfg.get("scaling", {})
+    if scaling.get("force_newton_max"):
+        FORCE_NEWTON_MAX = float(scaling["force_newton_max"])
+    if scaling.get("position_mm_max"):
+        POSITION_MM_MAX = float(scaling["position_mm_max"])
+
+    # Charger thresholds
+    thresholds = cfg.get("thresholds", {})
+    if thresholds.get("force_max_n"):
+        FORCE_THRESHOLD_N = float(thresholds["force_max_n"])
+    if thresholds.get("position_max_mm"):
+        POSITION_THRESHOLD_MM = float(thresholds["position_max_mm"])
+
+    # Charger acquisition parameters
+    acq = cfg.get("acquisition", {})
+    if acq.get("sample_rate_hz"):
+        SAMPLE_RATE_HZ = float(acq["sample_rate_hz"])
+    if acq.get("chunk_size"):
+        CHUNK_SIZE = int(acq["chunk_size"])
+
+
 def load_pm_from_yaml() -> None:
     """Charge les PM depuis config.yaml si la section 'programmes' existe."""
     import yaml
