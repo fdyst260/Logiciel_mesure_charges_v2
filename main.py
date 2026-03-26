@@ -213,6 +213,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
     # 3. Infrastructure d'acquisition initiale
     data_queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
     stop_event = threading.Event()
+    start_event = threading.Event()  # MCC 118 attend ce signal avant de scanner
 
     cycle_manager = CycleManager(tools=tools, mode=DisplayMode.FORCE_POSITION)
     processor = DataProcessor(
@@ -225,10 +226,11 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         cycle_started_callback=bridge.emit_cycle_started,
         sim_mode=use_simulator,
     )
+
     processor.start()
 
     acq_fn = fake_acquisition_loop if use_simulator else acquisition_loop
-    acq_kwargs: dict = {"inject_fault": inject_fault} if use_simulator else {}
+    acq_kwargs: dict = {"inject_fault": inject_fault} if use_simulator else {"start_event": start_event}
     acq_thread = threading.Thread(
         target=acq_fn,
         kwargs={"data_queue": data_queue, "stop_event": stop_event, **acq_kwargs},
@@ -239,9 +241,10 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
     # 4. Helper — recrée DataProcessor + acq_thread (réutilisé par sim et Modbus)
     def _start_cycle(fn, kwargs: dict, sim_mode: bool) -> None:
-        nonlocal data_queue, stop_event, processor, acq_thread
+        nonlocal data_queue, stop_event, start_event, processor, acq_thread
         stop_event.set()
         stop_event = threading.Event()
+        start_event = threading.Event()
         data_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
         new_manager = CycleManager(
             tools=build_tools_from_yaml(pm_id=window._pm_id),
@@ -258,6 +261,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             sim_mode=sim_mode,
         )
         new_proc.start()
+        bridge.emit_cycle_started()
         new_thread = threading.Thread(
             target=fn,
             kwargs={"data_queue": data_queue, "stop_event": stop_event, **kwargs},
@@ -275,8 +279,8 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         from pathlib import Path as _Path
 
         def _on_modbus_cycle_start() -> None:
-            _start_cycle(acquisition_loop, {}, sim_mode=False)
-            bridge.emit_cycle_started()
+            _start_cycle(acquisition_loop, {"start_event": start_event}, sim_mode=False)
+            start_event.set()
 
         def _on_modbus_cycle_stop() -> None:
             try:
@@ -291,6 +295,15 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         )
         modbus_controller.set_status_callback(window.set_modbus_status)
         modbus_controller.start()
+
+        def _restart_real_cycle() -> None:
+            _start_cycle(acquisition_loop, {"start_event": start_event}, sim_mode=False)
+            start_event.set()
+
+        window.set_restart_callback(_restart_real_cycle)
+        window.set_manual_cycle_enabled(True)
+        window.set_modbus_status(modbus_controller._connected)
+
         bridge.cycle_finished.connect(
             lambda result: modbus_controller.write_result(result)
         )
@@ -302,6 +315,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
                 sim_mode=True,
             )
         window.set_restart_callback(_restart_sim_cycle)
+        window.set_manual_cycle_enabled(False)
 
     # 6. Fermeture splash et démarrage
     splash.set_progress(100, "Prêt !")

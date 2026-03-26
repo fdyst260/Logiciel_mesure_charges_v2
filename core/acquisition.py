@@ -139,13 +139,19 @@ def _wait_until_triggered(hat: Any, stop_event: threading.Event) -> None:
 def acquisition_loop(
     data_queue: queue.Queue,
     stop_event: threading.Event,
+    start_event: threading.Event | None = None,
     calibrator: SensorCalibrator | None = None,
 ) -> None:
-    """Boucle producteur d'acquisition continue (trigger Modbus ou hardware).
+    """Boucle producteur d'acquisition a la demande (trigger Modbus ou hardware).
+
+    Le scan MCC 118 ne demarre PAS immediatement. Il attend que start_event
+    soit set avant de lancer le scan. Cela evite de remplir la queue au
+    demarrage de l'application.
 
     Parametres:
     - data_queue: queue partagee vers le thread d'analyse
     - stop_event: evenement d'arret global
+    - start_event: evenement de demarrage du scan (si None, demarre immediatement)
     - calibrator: objet d'etalonnage (si None, calibrage par defaut)
 
     Donnees poussees dans la queue:
@@ -158,6 +164,17 @@ def acquisition_loop(
     _check_mcc118_available(BOARD_NUM, hat_list_fn=hat_list_fn, hat_ids=HatIDs)
 
     hat = mcc118_cls(BOARD_NUM)
+    print("[ACQ] MCC 118 initialisee, scan PAS demarre (attente start_event).")
+
+    # Attente du signal de demarrage
+    if start_event is not None:
+        while not stop_event.is_set():
+            if start_event.wait(timeout=0.2):
+                break
+        if stop_event.is_set():
+            print("[ACQ] Arret demande avant demarrage du scan.")
+            return
+
     channel_mask = _channel_mask_for_force_position()
 
     # Lecture du mode trigger depuis config.yaml

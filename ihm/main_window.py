@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QPoint, QRect, QTimer, Slot
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygon, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygon, QKeySequence, QShortcut, QBrush
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -401,6 +401,11 @@ class GraphWidget(QWidget):
         self._tools: list[EvaluationTool] = []
         self._tools_config: dict = {}
         self._current_result: str | None = None
+        self._edit_mode: bool = False
+        self._edit_handles: list[dict] = []
+        self._dragging_handle: dict | None = None
+        self._drag_start_px: tuple[int, int] = (0, 0)
+        self._tools_config_backup = None
 
     # ------------------------------------------------------------------
     # API publique
@@ -413,6 +418,8 @@ class GraphWidget(QWidget):
     def set_tools_config(self, tools_config: dict) -> None:
         """Charge la configuration des outils depuis config.yaml (dict brut)."""
         self._tools_config = tools_config
+        if self._edit_mode:
+            self._compute_handles()
         self.update()
 
     def set_display_mode(self, mode: DisplayMode) -> None:
@@ -423,6 +430,78 @@ class GraphWidget(QWidget):
     def set_history_mode(self, enabled: bool) -> None:
         self._history_mode = enabled
         self.update()
+
+    def set_edit_mode(self, enabled: bool) -> None:
+        self._edit_mode = enabled
+        self.setMouseTracking(enabled)
+        if enabled:
+            import copy
+            self._tools_config_backup = copy.deepcopy(self._tools_config)
+            self._compute_handles()
+        else:
+            self._edit_handles.clear()
+            self._dragging_handle = None
+            self._tools_config_backup = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if not self._edit_mode:
+            return
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+
+        px = event.position().x()
+        py = event.position().y()
+
+        handle_radius = 12
+        for handle in self._edit_handles:
+            dist = ((handle["px"] - px) ** 2 + (handle["py"] - py) ** 2) ** 0.5
+            if dist <= handle_radius:
+                self._dragging_handle = handle
+                self._drag_start_px = (int(px), int(py))
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                break
+
+    def mouseMoveEvent(self, event) -> None:
+        if not self._edit_mode:
+            return
+
+        px = int(event.position().x())
+        py = int(event.position().y())
+
+        if self._dragging_handle is None:
+            for handle in self._edit_handles:
+                dist = ((handle["px"] - px) ** 2 + (handle["py"] - py) ** 2) ** 0.5
+                if dist <= 12:
+                    self.setCursor(Qt.CursorShape.OpenHandCursor)
+                    return
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            return
+
+        rect = self._plot_rect()
+        xr, yr = self._get_ranges()
+
+        px = max(rect.left(), min(px, rect.right()))
+        py = max(rect.top(), min(py, rect.bottom()))
+
+        new_x = (px - rect.left()) / rect.width() * xr
+        new_y = yr - (py - rect.top()) / rect.height() * yr
+        new_x = max(0.0, round(new_x, 1))
+        new_y = max(0.0, round(new_y, 0))
+
+        h = self._dragging_handle
+        self._apply_handle_drag(h, new_x, new_y)
+
+        self._compute_handles()
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if not self._edit_mode:
+            return
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging_handle = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def add_points(self, points: list[tuple[float, float, float]]) -> None:
         """Ajoute les points du buffer (appelé par le timer 30 fps)."""
@@ -487,43 +566,47 @@ class GraphWidget(QWidget):
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Fond global
-        painter.fillRect(self.rect(), QColor(self._get_color("bg_graph")))
+            # Fond global
+            painter.fillRect(self.rect(), QColor(self._get_color("bg_graph")))
 
-        rect = self._plot_rect()
+            rect = self._plot_rect()
 
-        # Lignes d'axes (hors clip)
-        self._draw_axis_lines(painter, rect)
+            # Lignes d'axes (hors clip)
+            self._draw_axis_lines(painter, rect)
 
-        # Grille + outils + courbes (clippés dans rect)
-        painter.save()
-        painter.setClipRect(rect)
-        self._draw_grid(painter, rect)
-        self._draw_tool_overlays(painter, rect)
+            # Grille + outils + courbes (clippés dans rect)
+            painter.save()
+            painter.setClipRect(rect)
+            self._draw_grid(painter, rect)
+            self._draw_tool_overlays(painter, rect)
 
-        if self._history_mode:
-            for pts, _ in list(self._history)[:-1]:
-                self._draw_curve(painter, pts, QColor(self._get_color("curve_history")), rect)
-            if self._history:
-                pts, res = self._history[-1]
-                c = self._get_color("curve_ok") if res == "PASS" else self._get_color("curve_nok")
-                self._draw_curve(painter, pts, QColor(c), rect)
-        elif self._current_points:
-            if self._current_result == "PASS":
-                color = QColor(self._get_color("curve_ok"))
-            elif self._current_result == "NOK":
-                color = QColor(self._get_color("curve_nok"))
-            else:
-                color = QColor(self._get_color("curve_live"))
-            self._draw_curve(painter, self._current_points, color, rect)
+            if self._history_mode:
+                for pts, _ in list(self._history)[:-1]:
+                    self._draw_curve(painter, pts, QColor(self._get_color("curve_history")), rect)
+                if self._history:
+                    pts, res = self._history[-1]
+                    c = self._get_color("curve_ok") if res == "PASS" else self._get_color("curve_nok")
+                    self._draw_curve(painter, pts, QColor(c), rect)
+            elif self._current_points:
+                if self._current_result == "PASS":
+                    color = QColor(self._get_color("curve_ok"))
+                elif self._current_result == "NOK":
+                    color = QColor(self._get_color("curve_nok"))
+                else:
+                    color = QColor(self._get_color("curve_live"))
+                self._draw_curve(painter, self._current_points, color, rect)
 
-        painter.restore()
+            painter.restore()
 
-        # Labels axes (hors clip)
-        self._draw_axes(painter, rect)
-        painter.end()
+            # Labels axes (hors clip)
+            self._draw_axes(painter, rect)
+        except Exception as e:
+            print(f"[GRAPH] paintEvent error: {e}")
+        finally:
+            painter.end()
 
     def _draw_axis_lines(self, painter: QPainter, rect: QRect) -> None:
         pen = QPen(QColor("#445566"))
@@ -555,12 +638,18 @@ class GraphWidget(QWidget):
         pen.setWidthF(2.5)
         painter.setPen(pen)
         prev: tuple[int, int] | None = None
-        for t, f, x in points:
-            xd, yd = self._pt_to_data(t, f, x)
-            px, py = self._to_px(xd, yd, rect)
-            if prev is not None:
-                painter.drawLine(prev[0], prev[1], px, py)
-            prev = (px, py)
+        for point in points:
+            try:
+                if len(point) != 3:
+                    continue
+                t, f, x = float(point[0]), float(point[1]), float(point[2])
+                xd, yd = self._pt_to_data(t, f, x)
+                px, py = self._to_px(xd, yd, rect)
+                if prev is not None:
+                    painter.drawLine(prev[0], prev[1], px, py)
+                prev = (px, py)
+            except (TypeError, ValueError, ZeroDivisionError):
+                continue
 
     def _draw_tool_overlays(self, painter: QPainter, rect: QRect) -> None:
         if self._display_mode != DisplayMode.FORCE_POSITION:
@@ -576,6 +665,114 @@ class GraphWidget(QWidget):
                     self._draw_unibox(painter, tool, rect)
                 elif tool.tool_type == EvaluationType.ENVELOPE:
                     self._draw_envelope(painter, tool, rect)
+
+        if self._edit_mode:
+            for handle in self._edit_handles:
+                px, py = self._to_px(handle["x_data"], handle["y_data"], rect)
+                handle["px"] = px
+                handle["py"] = py
+                painter.setPen(QPen(QColor("#C49A3C"), 2))
+                painter.setBrush(QBrush(QColor("#FFFFFF")))
+                painter.drawEllipse(px - 6, py - 6, 12, 12)
+
+    def _compute_handles(self) -> None:
+        self._edit_handles.clear()
+
+        no_pass_zones = self._tools_config.get("no_pass_zones", [])
+        if not no_pass_zones:
+            old_no_pass = self._tools_config.get("no_pass", {})
+            if old_no_pass.get("enabled"):
+                no_pass_zones = [old_no_pass]
+
+        for zone_idx, zone in enumerate(no_pass_zones):
+            if not zone.get("enabled"):
+                continue
+
+            x1, x2 = float(zone["x_min"]), float(zone["x_max"])
+            y1 = float(zone["y_limit"])
+            y2 = 0.0
+
+            for handle_id, x_data, y_data in [
+                ("tl", x1, y1),
+                ("tr", x2, y1),
+                ("bl", x1, y2),
+                ("br", x2, y2),
+                ("tm", (x1 + x2) / 2.0, y1),
+                ("bm", (x1 + x2) / 2.0, y2),
+                ("lm", x1, y1 / 2.0),
+                ("rm", x2, y1 / 2.0),
+            ]:
+                self._edit_handles.append(
+                    {
+                        "zone_type": "no_pass",
+                        "zone_idx": zone_idx,
+                        "handle_id": handle_id,
+                        "x_data": x_data,
+                        "y_data": y_data,
+                        "px": 0,
+                        "py": 0,
+                    }
+                )
+
+        uni_box = self._tools_config.get("uni_box", {})
+        if uni_box.get("enabled"):
+            x1, x2 = float(uni_box["box_x_min"]), float(uni_box["box_x_max"])
+            y1, y2 = float(uni_box["box_y_max"]), float(uni_box["box_y_min"])
+
+            for handle_id, x_data, y_data in [
+                ("tl", x1, y1),
+                ("tr", x2, y1),
+                ("bl", x1, y2),
+                ("br", x2, y2),
+                ("tm", (x1 + x2) / 2.0, y1),
+                ("bm", (x1 + x2) / 2.0, y2),
+                ("lm", x1, (y1 + y2) / 2.0),
+                ("rm", x2, (y1 + y2) / 2.0),
+            ]:
+                self._edit_handles.append(
+                    {
+                        "zone_type": "uni_box",
+                        "zone_idx": 0,
+                        "handle_id": handle_id,
+                        "x_data": x_data,
+                        "y_data": y_data,
+                        "px": 0,
+                        "py": 0,
+                    }
+                )
+
+    def _apply_handle_drag(self, handle: dict, new_x: float, new_y: float) -> None:
+        """Met à jour _tools_config selon la poignée draguée."""
+        zone_type = handle["zone_type"]
+        zone_idx = handle["zone_idx"]
+        hid = handle["handle_id"]
+
+        if zone_type == "no_pass":
+            zones = self._tools_config.get("no_pass_zones", [])
+            if zone_idx >= len(zones):
+                return
+            z = zones[zone_idx]
+
+            if hid in ("tl", "bl", "lm"):
+                z["x_min"] = min(new_x, z["x_max"] - 1.0)
+            if hid in ("tr", "br", "rm"):
+                z["x_max"] = max(new_x, z["x_min"] + 1.0)
+            if hid in ("tl", "tr", "tm"):
+                z["y_limit"] = max(new_y, 1.0)
+
+        elif zone_type == "uni_box":
+            ub = self._tools_config.get("uni_box", {})
+            if not ub:
+                return
+
+            if hid in ("tl", "bl", "lm"):
+                ub["box_x_min"] = min(new_x, ub["box_x_max"] - 1.0)
+            if hid in ("tr", "br", "rm"):
+                ub["box_x_max"] = max(new_x, ub["box_x_min"] + 1.0)
+            if hid in ("tl", "tr", "tm"):
+                ub["box_y_max"] = max(new_y, ub["box_y_min"] + 1.0)
+            if hid in ("bl", "br", "bm"):
+                ub["box_y_min"] = min(new_y, ub["box_y_max"] - 1.0)
 
     def _draw_overlays_from_config(self, painter: QPainter, rect: QRect) -> None:
         """Dessine les outils depuis le dict config.yaml (couleurs IEC 60073)."""
@@ -1222,60 +1419,63 @@ class _TendanceWidget(QWidget):
 
     def paintEvent(self, event) -> None:  # noqa: N802
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        ml, mr, mt, mb = self._ML, self._MR, self._MT, self._MB
-        pw, ph = w - ml - mr, h - mt - mb
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            w, h = self.width(), self.height()
+            ml, mr, mt, mb = self._ML, self._MR, self._MT, self._MB
+            pw, ph = w - ml - mr, h - mt - mb
 
-        if len(self._data) < 2:
-            p.setPen(QPen(QColor("#9e9e9e")))
-            p.drawText(QRect(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, t("lbl_not_enough_data"))
-            return
+            if len(self._data) < 2:
+                p.setPen(QPen(QColor("#9e9e9e")))
+                p.drawText(QRect(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, t("lbl_not_enough_data"))
+                return
 
-        # Grille horizontale
-        p.setPen(QPen(QColor("#222222"), 1))
-        for i in range(5):
-            y = mt + int(ph * i / 4)
-            p.drawLine(ml, y, w - mr, y)
+            # Grille horizontale
+            p.setPen(QPen(QColor("#222222"), 1))
+            for i in range(5):
+                y = mt + int(ph * i / 4)
+                p.drawLine(ml, y, w - mr, y)
 
-        # Labels Y
-        font = QFont()
-        font.setPointSize(8)
-        p.setFont(font)
-        p.setPen(QPen(QColor("#556677")))
-        p.drawText(2, mt + 8, f"{FORCE_NEWTON_MAX:.0f}N")
-        p.drawText(2, h - mb + 5, "0N")
+            # Labels Y
+            font = QFont()
+            font.setPointSize(8)
+            p.setFont(font)
+            p.setPen(QPen(QColor("#556677")))
+            p.drawText(2, mt + 8, f"{FORCE_NEWTON_MAX:.0f}N")
+            p.drawText(2, h - mb + 5, "0N")
 
-        # Axes
-        p.setPen(QPen(QColor("#444444"), 1))
-        p.drawLine(ml, mt, ml, h - mb)
-        p.drawLine(ml, h - mb, w - mr, h - mb)
+            # Axes
+            p.setPen(QPen(QColor("#444444"), 1))
+            p.drawLine(ml, mt, ml, h - mb)
+            p.drawLine(ml, h - mb, w - mr, h - mb)
 
-        # Points
-        n = len(self._data)
-        pts = []
-        for i, fmax in enumerate(self._data):
-            x = ml + int(i * pw / max(n - 1, 1))
-            raw_y = mt + ph - int(min(fmax, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * ph)
-            pts.append((x, max(mt, min(mt + ph, raw_y))))
+            # Points
+            n = len(self._data)
+            pts = []
+            for i, fmax in enumerate(self._data):
+                x = ml + int(i * pw / max(n - 1, 1))
+                raw_y = mt + ph - int(min(fmax, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * ph)
+                pts.append((x, max(mt, min(mt + ph, raw_y))))
 
-        # Moyenne
-        avg = sum(self._data) / n
-        avg_y = mt + ph - int(min(avg, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * ph)
-        avg_y = max(mt, min(mt + ph, avg_y))
-        p.setPen(QPen(QColor("#ef5350"), 1, Qt.PenStyle.DashLine))
-        p.drawLine(ml, avg_y, w - mr, avg_y)
+            # Moyenne
+            avg = sum(self._data) / n
+            avg_y = mt + ph - int(min(avg, FORCE_NEWTON_MAX) / FORCE_NEWTON_MAX * ph)
+            avg_y = max(mt, min(mt + ph, avg_y))
+            p.setPen(QPen(QColor("#ef5350"), 1, Qt.PenStyle.DashLine))
+            p.drawLine(ml, avg_y, w - mr, avg_y)
 
-        # Courbe Fmax
-        p.setPen(QPen(QColor("#42a5f5"), 2))
-        for i in range(len(pts) - 1):
-            p.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
+            # Courbe Fmax
+            p.setPen(QPen(QColor("#42a5f5"), 2))
+            for i in range(len(pts) - 1):
+                p.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
 
-        # Labels X (premier et dernier cycle)
-        p.setPen(QPen(QColor("#556677")))
-        p.drawText(ml, h - 4, "1")
-        last_x = pts[-1][0]
-        p.drawText(max(ml, last_x - 20), h - 4, str(n))
+            # Labels X (premier et dernier cycle)
+            p.setPen(QPen(QColor("#556677")))
+            p.drawText(ml, h - 4, "1")
+            last_x = pts[-1][0]
+            p.drawText(max(ml, last_x - 20), h - 4, str(n))
+        finally:
+            p.end()
 
 
 # ===========================================================================
@@ -1926,6 +2126,8 @@ class MainWindow(QMainWindow):
         self._sim_mode: bool = False
         self._restart_callback = None
         self._restart_btn = None
+        self._manual_cycle_enabled: bool = False
+        self._modbus_connected: bool = False
 
         # Droits d'accès
         self._access_level: int = AccessLevel.OPERATEUR
@@ -1937,6 +2139,50 @@ class MainWindow(QMainWindow):
 
         self.setStyleSheet(STYLESHEET)
         self._build_ui()
+
+        self._edit_bar = QWidget(self._graph)
+        edit_layout = QHBoxLayout(self._edit_bar)
+        edit_layout.setContentsMargins(10, 6, 10, 6)
+        edit_layout.setSpacing(10)
+
+        self._btn_apply_zones = QPushButton("✓  Appliquer")
+        self._btn_apply_zones.setFixedHeight(44)
+        self._btn_apply_zones.setStyleSheet("""
+            QPushButton {
+                background-color: #1a3a1a;
+                color: #4caf50;
+                font-size: 15px;
+                font-weight: bold;
+                border: 2px solid #2d7a2d;
+                border-radius: 8px;
+                padding: 0 20px;
+            }
+            QPushButton:pressed { background-color: #2d7a2d; }
+        """)
+        self._btn_apply_zones.clicked.connect(self._apply_zone_edits)
+
+        self._btn_cancel_zones = QPushButton("✗  Annuler")
+        self._btn_cancel_zones.setFixedHeight(44)
+        self._btn_cancel_zones.setStyleSheet("""
+            QPushButton {
+                background-color: #3a1a1a;
+                color: #ef9a9a;
+                font-size: 15px;
+                font-weight: bold;
+                border: 1px solid #c62828;
+                border-radius: 8px;
+                padding: 0 20px;
+            }
+            QPushButton:pressed { background-color: #c62828; }
+        """)
+        self._btn_cancel_zones.clicked.connect(self._cancel_zone_edits)
+
+        edit_layout.addStretch()
+        edit_layout.addWidget(self._btn_cancel_zones)
+        edit_layout.addWidget(self._btn_apply_zones)
+
+        self._edit_bar.setVisible(False)
+
         self._apply_state_style("idle")
         self.apply_display_settings()
         self._load_access_settings()
@@ -2061,7 +2307,7 @@ class MainWindow(QMainWindow):
             f"border-left: 1px solid {get_colors()['separator']};"
         )
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setContentsMargins(10, 4, 10, 4)
         layout.setSpacing(3)
 
 
@@ -2069,7 +2315,7 @@ class MainWindow(QMainWindow):
         self._level_indicator = QLabel(t("level_free_icon"))
         self._level_indicator.setObjectName("level_indicator")
         self._level_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._level_indicator.setFixedHeight(22)
+        self._level_indicator.setFixedHeight(20)
         self._level_indicator.setStyleSheet(
             "color: #AAAAAA; font-size: 12px; font-weight: bold; "
             "background: #3A3A3A; border-radius: 4px; padding: 2px 8px;"
@@ -2078,7 +2324,7 @@ class MainWindow(QMainWindow):
 
         self._login_btn = QPushButton(t("btn_login_unlock"))
         self._login_btn.setObjectName("login_btn")
-        self._login_btn.setFixedHeight(26)
+        self._login_btn.setFixedHeight(24)
         self._login_btn.setStyleSheet("""
             QPushButton#login_btn {
                 background-color: #444444;
@@ -2110,7 +2356,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._build_modbus_indicator())
         self._theme_btn = QPushButton("☀  Thème clair")
         self._theme_btn.setObjectName("theme_btn")
-        self._theme_btn.setFixedHeight(32)
+        self._theme_btn.setFixedHeight(24)
         self._theme_btn.setStyleSheet("""
             QPushButton#theme_btn {
                 background-color: #444444;
@@ -2134,7 +2380,7 @@ class MainWindow(QMainWindow):
         self._result_badge = QLabel(t("status_idle"))
         self._result_badge.setObjectName("result_label")
         self._result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._result_badge.setFixedHeight(120)
+        self._result_badge.setFixedHeight(110)
         self._result_badge.setStyleSheet(
             f"background-color: {get_colors()['idle_bg']}; color: {get_colors()['idle_text']}; "
             "border: 2px solid #333; border-radius: 10px; "
@@ -2283,6 +2529,8 @@ class MainWindow(QMainWindow):
             ("history", f"🕐  {t('nav_history')}", "nav_btn",    self._show_history,       False),
             ("data",    f"📊  {t('nav_data')}",    "nav_btn",    self._show_data_table,    False),
             ("stats",   f"📊  {t('nav_stats')}",   "nav_btn",    self._show_stats,         False),
+            ("zones",   "✏  Zones",               "nav_btn",    self._toggle_edit_mode,   False),
+            ("manual",  "▶  Démarrer cycle",      "nav_btn",    self._start_manual_cycle, False),
             ("raz",     f"🔄  {t('nav_raz')}",     "nav_btn_red", self._reset_counters,     False),
         ]
 
@@ -2293,11 +2541,15 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(callback)
             btn.clicked.connect(lambda checked=False, b=btn: self._flash_nav_button(b))
             self._nav_buttons[key] = btn
-            if obj_name == "nav_btn":
+            if obj_name == "nav_btn" and key not in ("zones", "manual"):
                 btn.setCheckable(True)
                 btn.setChecked(checked)
                 btn_group.addButton(btn)
             h.addWidget(btn, stretch=1)
+
+        manual_btn = self._nav_buttons.get("manual")
+        if manual_btn is not None:
+            manual_btn.setVisible(False)
 
         return bar
 
@@ -2575,6 +2827,105 @@ class MainWindow(QMainWindow):
         self._content_stack.setCurrentIndex(2)
         self._stats_widget.refresh(self._production_log)
 
+    def _start_manual_cycle(self) -> None:
+        if not self._manual_cycle_enabled:
+            return
+        if self._cycle_started:
+            return
+        self.on_cycle_started()
+        if self._restart_callback:
+            self._restart_callback()
+
+    def _toggle_edit_mode(self) -> None:
+        new_mode = not self._graph._edit_mode
+        self._graph.set_edit_mode(new_mode)
+        if new_mode:
+            self._edit_bar.setVisible(True)
+            gw = self._graph
+            bar_h = 60
+            self._edit_bar.setGeometry(0, gw.height() - bar_h, gw.width(), bar_h)
+        else:
+            self._edit_bar.setVisible(False)
+        for btn in self.findChildren(QPushButton):
+            if "Zones" in btn.text():
+                if new_mode:
+                    btn.setText("✏  Zones ●")
+                    btn.setStyleSheet(
+                        btn.styleSheet() +
+                        "background-color: #A07830;"
+                    )
+                else:
+                    btn.setText("✏  Zones")
+                    btn.setStyleSheet("")
+                break
+
+    def _apply_zone_edits(self) -> None:
+        from ihm.ui_utils import load_config, save_config
+        from pathlib import Path
+
+        cfg_path = Path(__file__).parent.parent / "config.yaml"
+        cfg = load_config(cfg_path)
+        pm_id = self._pm_id
+
+        tools_cfg = self._graph._tools_config
+        cfg.setdefault("programmes", {}).setdefault(pm_id, {}).setdefault("tools", {})
+        pm_tools = cfg["programmes"][pm_id]["tools"]
+
+        if "no_pass_zones" in tools_cfg:
+            pm_tools["no_pass_zones"] = tools_cfg["no_pass_zones"]
+
+        if "uni_box" in tools_cfg:
+            pm_tools["uni_box"] = tools_cfg["uni_box"]
+
+        save_config(cfg_path, cfg)
+
+        from config import build_tools_from_yaml
+        new_tools = build_tools_from_yaml(pm_id)
+        self._tools = new_tools
+        self._graph.set_tools(new_tools)
+
+        self._graph.set_edit_mode(False)
+        self._edit_bar.setVisible(False)
+        self._graph._tools_config_backup = None
+
+        for btn in self.findChildren(QPushButton):
+            if "Zones" in btn.text():
+                btn.setText("✏  Zones")
+                btn.setStyleSheet("")
+                break
+
+        QMessageBox.information(
+            self, "Zones sauvegardées",
+            f"✓ Zones du PM-{pm_id:02d} sauvegardées."
+        )
+
+    def _cancel_zone_edits(self) -> None:
+        if self._graph._tools_config_backup is not None:
+            import copy
+            self._graph._tools_config = copy.deepcopy(
+                self._graph._tools_config_backup
+            )
+
+        self._graph.set_edit_mode(False)
+        self._edit_bar.setVisible(False)
+
+        for btn in self.findChildren(QPushButton):
+            if "Zones" in btn.text():
+                btn.setText("✏  Zones")
+                btn.setStyleSheet("")
+                break
+
+        self._graph.update()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, '_edit_bar') and self._edit_bar.isVisible():
+            gw = self._graph
+            self._edit_bar.setGeometry(
+                0, gw.height() - 60,
+                gw.width(), 60
+            )
+
     def _animate_counter(self, label: QLabel) -> None:
         """Grossit brièvement le compteur pour signaler l'incrémentation."""
         obj = label.objectName()
@@ -2619,7 +2970,14 @@ class MainWindow(QMainWindow):
     def set_restart_callback(self, callback) -> None:
         self._restart_callback = callback
 
+    def set_manual_cycle_enabled(self, enabled: bool) -> None:
+        self._manual_cycle_enabled = enabled
+        manual_btn = self._nav_buttons.get("manual") if hasattr(self, "_nav_buttons") else None
+        if manual_btn is not None:
+            manual_btn.setVisible(enabled and not self._modbus_connected and not self._sim_mode)
+
     def set_modbus_status(self, connected: bool) -> None:
+        self._modbus_connected = connected
         if connected:
             self._modbus_indicator.setText(f"⬤  {t('modbus_connected')}")
             self._modbus_indicator.setStyleSheet(
@@ -2630,6 +2988,9 @@ class MainWindow(QMainWindow):
             self._modbus_indicator.setStyleSheet(
                 "color: #ef5350; font-size: 12px; padding: 4px;"
             )
+        manual_btn = self._nav_buttons.get("manual") if hasattr(self, "_nav_buttons") else None
+        if manual_btn is not None:
+            manual_btn.setVisible(self._manual_cycle_enabled and not connected and not self._sim_mode)
 
     def _on_pm_clicked(self) -> None:
         """Ouvre le sélecteur de PM."""
