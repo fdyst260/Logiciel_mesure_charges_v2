@@ -401,6 +401,7 @@ class GraphWidget(QWidget):
         self._tools: list[EvaluationTool] = []
         self._tools_config: dict = {}
         self._current_result: str | None = None
+        self._auto_scale: bool = False
         self._edit_mode: bool = False
         self._edit_handles: list[dict] = []
         self._dragging_handle: dict | None = None
@@ -429,6 +430,10 @@ class GraphWidget(QWidget):
 
     def set_history_mode(self, enabled: bool) -> None:
         self._history_mode = enabled
+        self.update()
+
+    def toggle_auto_scale(self) -> None:
+        self._auto_scale = not self._auto_scale
         self.update()
 
     def set_edit_mode(self, enabled: bool) -> None:
@@ -532,10 +537,24 @@ class GraphWidget(QWidget):
 
     def _get_ranges(self) -> tuple[float, float]:
         if self._display_mode == DisplayMode.FORCE_POSITION:
-            return POSITION_MM_MAX, FORCE_NEWTON_MAX
-        if self._display_mode == DisplayMode.FORCE_TIME:
-            return 2.0, FORCE_NEWTON_MAX
-        return 2.0, POSITION_MM_MAX
+            xr, yr = POSITION_MM_MAX, FORCE_NEWTON_MAX
+        elif self._display_mode == DisplayMode.FORCE_TIME:
+            xr, yr = 2.0, FORCE_NEWTON_MAX
+        else:
+            xr, yr = 2.0, POSITION_MM_MAX
+
+        if self._auto_scale and self._current_points:
+            max_f = max(f for _, f, _ in self._current_points)
+            max_x = max(x for _, _, x in self._current_points)
+            if self._display_mode == DisplayMode.FORCE_POSITION:
+                yr = max(max_f * 1.15, 100.0)
+                xr = max(max_x * 1.15, 1.0)
+            elif self._display_mode == DisplayMode.FORCE_TIME:
+                yr = max(max_f * 1.15, 100.0)
+            else:
+                yr = max(max_x * 1.15, 1.0)
+
+        return xr, yr
 
     def _pt_to_data(self, t: float, f: float, x: float) -> tuple[float, float]:
         if self._display_mode == DisplayMode.FORCE_POSITION:
@@ -2122,9 +2141,10 @@ class MainWindow(QMainWindow):
         # Flag premier point du cycle courant
         self._cycle_started: bool = False
 
-        # Mode simulateur + callback relance
+        # Mode simulateur + callback relance/arrêt
         self._sim_mode: bool = False
         self._restart_callback = None
+        self._stop_callback = None
         self._restart_btn = None
         self._manual_cycle_enabled: bool = False
         self._modbus_connected: bool = False
@@ -2182,6 +2202,27 @@ class MainWindow(QMainWindow):
         edit_layout.addWidget(self._btn_apply_zones)
 
         self._edit_bar.setVisible(False)
+
+        # Bouton Auto-scale flottant sur le graphique
+        self._auto_scale_btn = QPushButton("⤢ Auto", self._graph)
+        self._auto_scale_btn.setCheckable(True)
+        self._auto_scale_btn.setFixedSize(70, 28)
+        self._auto_scale_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(40, 40, 40, 180);
+                color: #aaaaaa;
+                font-size: 12px;
+                border: 1px solid #555555;
+                border-radius: 4px;
+            }
+            QPushButton:checked {
+                background-color: rgba(30, 80, 160, 200);
+                color: #ffffff;
+                border: 1px solid #42a5f5;
+            }
+        """)
+        self._auto_scale_btn.clicked.connect(self._on_auto_scale_toggled)
+        self._position_auto_scale_btn()
 
         self._apply_state_style("idle")
         self.apply_display_settings()
@@ -2727,6 +2768,11 @@ class MainWindow(QMainWindow):
         if self._content_stack.currentIndex() == 2:
             self._stats_widget.refresh(self._production_log)
 
+        # Remettre le bouton en mode "Démarrer"
+        manual_btn = self._nav_buttons.get("manual")
+        if manual_btn is not None:
+            manual_btn.setText("▶  Démarrer cycle")
+
         if self._sim_mode:
             self._show_restart_button()
 
@@ -2779,6 +2825,11 @@ class MainWindow(QMainWindow):
         self._last_pos = 0.0
         self._graph.start_new_cycle()
         self._update_result_display("idle")
+
+        # Basculer le bouton en mode "Arrêter"
+        manual_btn = self._nav_buttons.get("manual")
+        if manual_btn is not None:
+            manual_btn.setText("⏹  Arrêter cycle")
 
     # ------------------------------------------------------------------
     # Timer 30 FPS
@@ -2835,11 +2886,18 @@ class MainWindow(QMainWindow):
     def _start_manual_cycle(self) -> None:
         if not self._manual_cycle_enabled:
             return
+        # Si cycle en cours → arrêter
         if self._cycle_started:
+            self._stop_manual_cycle()
             return
         self.on_cycle_started()
         if self._restart_callback:
             self._restart_callback()
+
+    def _stop_manual_cycle(self) -> None:
+        """Arrête manuellement le cycle en cours."""
+        if self._stop_callback:
+            self._stop_callback()
 
     def _toggle_edit_mode(self) -> None:
         new_mode = not self._graph._edit_mode
@@ -2930,6 +2988,8 @@ class MainWindow(QMainWindow):
                 0, gw.height() - 60,
                 gw.width(), 60
             )
+        if hasattr(self, '_auto_scale_btn'):
+            self._position_auto_scale_btn()
 
     def _animate_counter(self, label: QLabel) -> None:
         """Grossit brièvement le compteur pour signaler l'incrémentation."""
@@ -2972,8 +3032,22 @@ class MainWindow(QMainWindow):
     def set_sim_mode(self, enabled: bool) -> None:
         self._sim_mode = enabled
 
+    def _position_auto_scale_btn(self) -> None:
+        gw = self._graph
+        self._auto_scale_btn.move(gw.width() - 80, 10)
+
+    def _on_auto_scale_toggled(self) -> None:
+        self._graph.toggle_auto_scale()
+        if self._graph._auto_scale:
+            self._auto_scale_btn.setText("⤢ Fixe")
+        else:
+            self._auto_scale_btn.setText("⤢ Auto")
+
     def set_restart_callback(self, callback) -> None:
         self._restart_callback = callback
+
+    def set_stop_callback(self, callback) -> None:
+        self._stop_callback = callback
 
     def set_manual_cycle_enabled(self, enabled: bool) -> None:
         self._manual_cycle_enabled = enabled

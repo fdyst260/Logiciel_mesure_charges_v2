@@ -320,7 +320,14 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         def _restart_real_cycle() -> None:
             _start_cycle(acquisition_loop, {}, sim_mode=False)
 
+        def _stop_real_cycle() -> None:
+            try:
+                data_queue.put_nowait(None)
+            except Exception:
+                pass
+
         window.set_restart_callback(_restart_real_cycle)
+        window.set_stop_callback(_stop_real_cycle)
         window.set_manual_cycle_enabled(True)
         window.set_modbus_status(modbus_controller._connected)
 
