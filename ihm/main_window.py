@@ -2380,7 +2380,7 @@ class MainWindow(QMainWindow):
             self._result_badge.setStyleSheet(
                 f"background-color: {get_colors()['ok_bg']}; color: {get_colors()['ok_text']}; "
                 f"border: 2px solid {get_colors()['ok_border']}; border-radius: 10px; "
-                "font-size: 44px; font-weight: bold; padding: 8px;"
+                "font-size: 36px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("ok")
             self._flash_badge()
@@ -2388,7 +2388,7 @@ class MainWindow(QMainWindow):
             self._result_badge.setStyleSheet(
                 f"background-color: {get_colors()['nok_bg']}; color: {get_colors()['nok_text']}; "
                 f"border: 2px solid {get_colors()['nok_border']}; border-radius: 10px; "
-                "font-size: 44px; font-weight: bold; padding: 8px;"
+                "font-size: 36px; font-weight: bold; padding: 8px;"
             )
             self._apply_state_style("nok")
             self._flash_badge()
