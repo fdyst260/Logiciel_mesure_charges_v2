@@ -500,6 +500,8 @@ class GraphWidget(QWidget):
 
         self._compute_handles()
         self.update()
+        if hasattr(self.parent(), '_update_edit_coords'):
+            self.parent()._update_edit_coords(self._tools_config)
 
     def mouseReleaseEvent(self, event) -> None:
         if not self._edit_mode:
@@ -507,6 +509,66 @@ class GraphWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging_handle = None
             self.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if not self._edit_mode:
+            return
+        px = event.position().x()
+        py = event.position().y()
+        for handle in self._edit_handles:
+            dist = ((handle["px"] - px) ** 2 + (handle["py"] - py) ** 2) ** 0.5
+            if dist <= 20:
+                self._edit_handle_manually(handle)
+                break
+
+    def _edit_handle_manually(self, handle: dict) -> None:
+        from ihm.main_window import NumpadDialog
+        hid = handle["handle_id"]
+
+        if hid in ("lm", "rm"):
+            dlg = NumpadDialog(
+                title="Position (mm)", unit=" mm",
+                value=str(round(handle["x_data"], 1)), parent=self
+            )
+            if dlg.exec():
+                try:
+                    handle_copy = dict(handle)
+                    self._apply_handle_drag(handle_copy, float(dlg.value()), handle["y_data"])
+                except ValueError:
+                    pass
+
+        elif hid in ("tm", "bm"):
+            dlg = NumpadDialog(
+                title="Force (N)", unit=" N",
+                value=str(round(handle["y_data"], 0)), parent=self
+            )
+            if dlg.exec():
+                try:
+                    handle_copy = dict(handle)
+                    self._apply_handle_drag(handle_copy, handle["x_data"], float(dlg.value()))
+                except ValueError:
+                    pass
+
+        else:
+            dlg_x = NumpadDialog(
+                title="Position (mm)", unit=" mm",
+                value=str(round(handle["x_data"], 1)), parent=self
+            )
+            if not dlg_x.exec():
+                return
+            dlg_y = NumpadDialog(
+                title="Force (N)", unit=" N",
+                value=str(round(handle["y_data"], 0)), parent=self
+            )
+            if dlg_y.exec():
+                try:
+                    handle_copy = dict(handle)
+                    self._apply_handle_drag(handle_copy, float(dlg_x.value()), float(dlg_y.value()))
+                except ValueError:
+                    pass
+
+        self._compute_handles()
+        self.update()
 
     def add_points(self, points: list[tuple[float, float, float]]) -> None:
         """Ajoute les points du buffer (appelé par le timer 30 fps)."""
@@ -686,6 +748,9 @@ class GraphWidget(QWidget):
                     self._draw_envelope(painter, tool, rect)
 
         if self._edit_mode:
+            font_label = QFont()
+            font_label.setPixelSize(11)
+            painter.setFont(font_label)
             for handle in self._edit_handles:
                 px, py = self._to_px(handle["x_data"], handle["y_data"], rect)
                 handle["px"] = px
@@ -693,6 +758,49 @@ class GraphWidget(QWidget):
                 painter.setPen(QPen(QColor("#C49A3C"), 2))
                 painter.setBrush(QBrush(QColor("#FFFFFF")))
                 painter.drawEllipse(px - 6, py - 6, 12, 12)
+
+                hid = handle["handle_id"]
+                if hid in ("lm", "rm"):
+                    label_text = f"{handle['x_data']:.1f} mm"
+                elif hid in ("tm", "bm"):
+                    label_text = f"{handle['y_data']:.0f} N"
+                else:
+                    label_text = f"{handle['x_data']:.1f} mm / {handle['y_data']:.0f} N"
+
+                lw = max(len(label_text) * 7, 80)
+                lh = 18
+                lx = px + 14 if px + 14 + lw <= rect.right() else px - 14 - lw
+                ly = py + 8 if py + 8 + lh <= rect.bottom() else py - 8 - lh
+                label_rect = QRect(lx, ly, lw, lh)
+                painter.fillRect(label_rect, QColor(26, 26, 26, 200))
+                painter.setPen(QColor("#C49A3C"))
+                painter.drawRect(label_rect)
+                painter.setPen(QColor("#F0F0F0"))
+                painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, label_text)
+
+            if self._dragging_handle is not None:
+                h = self._dragging_handle
+                hid = h["handle_id"]
+                if hid in ("lm", "rm"):
+                    tip_text = f"{h['x_data']:.1f} mm"
+                elif hid in ("tm", "bm"):
+                    tip_text = f"{h['y_data']:.0f} N"
+                else:
+                    tip_text = f"{h['x_data']:.1f} mm / {h['y_data']:.0f} N"
+                font_big = QFont()
+                font_big.setPixelSize(14)
+                font_big.setBold(True)
+                painter.setFont(font_big)
+                tw = max(len(tip_text) * 9, 120)
+                th = 26
+                tx = max(rect.left(), min(h["px"] - tw // 2, rect.right() - tw))
+                ty = max(rect.top(), h["py"] - 30 - th)
+                tip_rect = QRect(tx, ty, tw, th)
+                painter.fillRect(tip_rect, QColor(26, 26, 26, 230))
+                painter.setPen(QColor("#C49A3C"))
+                painter.drawRect(tip_rect)
+                painter.setPen(QColor("#FFFFFF"))
+                painter.drawText(tip_rect, Qt.AlignmentFlag.AlignCenter, tip_text)
 
     def _compute_handles(self) -> None:
         self._edit_handles.clear()
@@ -2197,6 +2305,11 @@ class MainWindow(QMainWindow):
         """)
         self._btn_cancel_zones.clicked.connect(self._cancel_zone_edits)
 
+        self._edit_coords_label = QLabel("")
+        self._edit_coords_label.setStyleSheet(
+            "color: #C49A3C; font-size: 12px; background: transparent;"
+        )
+        edit_layout.addWidget(self._edit_coords_label)
         edit_layout.addStretch()
         edit_layout.addWidget(self._btn_cancel_zones)
         edit_layout.addWidget(self._btn_apply_zones)
@@ -2979,6 +3092,25 @@ class MainWindow(QMainWindow):
                 break
 
         self._graph.update()
+
+    def _update_edit_coords(self, tools_cfg: dict) -> None:
+        zones = tools_cfg.get("no_pass_zones", [])
+        texts = []
+        for i, z in enumerate(zones):
+            if z.get("enabled"):
+                texts.append(
+                    f"Zone {i+1}: "
+                    f"{z.get('x_min', 0):.1f}→{z.get('x_max', 0):.1f} mm  "
+                    f"max {z.get('y_limit', 0):.0f} N"
+                )
+        ub = tools_cfg.get("uni_box", {})
+        if ub.get("enabled"):
+            texts.append(
+                f"UNI-BOX: "
+                f"{ub.get('box_x_min', 0):.1f}→{ub.get('box_x_max', 0):.1f} mm  "
+                f"{ub.get('box_y_min', 0):.0f}→{ub.get('box_y_max', 0):.0f} N"
+            )
+        self._edit_coords_label.setText("  |  ".join(texts))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
