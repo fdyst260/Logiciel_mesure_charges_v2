@@ -500,8 +500,9 @@ class GraphWidget(QWidget):
 
         self._compute_handles()
         self.update()
-        if hasattr(self.parent(), '_update_edit_coords'):
-            self.parent()._update_edit_coords(self._tools_config)
+        main_win = self.window()
+        if hasattr(main_win, '_refresh_edit_panel'):
+            main_win._refresh_edit_panel()
 
     def mouseReleaseEvent(self, event) -> None:
         if not self._edit_mode:
@@ -509,66 +510,6 @@ class GraphWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging_handle = None
             self.setCursor(Qt.CursorShape.ArrowCursor)
-
-    def mouseDoubleClickEvent(self, event) -> None:
-        if not self._edit_mode:
-            return
-        px = event.position().x()
-        py = event.position().y()
-        for handle in self._edit_handles:
-            dist = ((handle["px"] - px) ** 2 + (handle["py"] - py) ** 2) ** 0.5
-            if dist <= 20:
-                self._edit_handle_manually(handle)
-                break
-
-    def _edit_handle_manually(self, handle: dict) -> None:
-        from ihm.main_window import NumpadDialog
-        hid = handle["handle_id"]
-
-        if hid in ("lm", "rm"):
-            dlg = NumpadDialog(
-                title="Position (mm)", unit=" mm",
-                value=str(round(handle["x_data"], 1)), parent=self
-            )
-            if dlg.exec():
-                try:
-                    handle_copy = dict(handle)
-                    self._apply_handle_drag(handle_copy, float(dlg.value()), handle["y_data"])
-                except ValueError:
-                    pass
-
-        elif hid in ("tm", "bm"):
-            dlg = NumpadDialog(
-                title="Force (N)", unit=" N",
-                value=str(round(handle["y_data"], 0)), parent=self
-            )
-            if dlg.exec():
-                try:
-                    handle_copy = dict(handle)
-                    self._apply_handle_drag(handle_copy, handle["x_data"], float(dlg.value()))
-                except ValueError:
-                    pass
-
-        else:
-            dlg_x = NumpadDialog(
-                title="Position (mm)", unit=" mm",
-                value=str(round(handle["x_data"], 1)), parent=self
-            )
-            if not dlg_x.exec():
-                return
-            dlg_y = NumpadDialog(
-                title="Force (N)", unit=" N",
-                value=str(round(handle["y_data"], 0)), parent=self
-            )
-            if dlg_y.exec():
-                try:
-                    handle_copy = dict(handle)
-                    self._apply_handle_drag(handle_copy, float(dlg_x.value()), float(dlg_y.value()))
-                except ValueError:
-                    pass
-
-        self._compute_handles()
-        self.update()
 
     def add_points(self, points: list[tuple[float, float, float]]) -> None:
         """Ajoute les points du buffer (appelé par le timer 30 fps)."""
@@ -748,6 +689,11 @@ class GraphWidget(QWidget):
                     self._draw_envelope(painter, tool, rect)
 
         if self._edit_mode:
+            _HANDLE_NUMS = {
+                "tl": 1, "tm": 2, "tr": 3, "rm": 4,
+                "br": 5, "bm": 6, "bl": 7, "lm": 8,
+            }
+            font_num = QFont("Arial", 9, QFont.Weight.Bold)
             for handle in self._edit_handles:
                 px, py = self._to_px(handle["x_data"], handle["y_data"], rect)
                 handle["px"] = px
@@ -755,6 +701,10 @@ class GraphWidget(QWidget):
                 painter.setPen(QPen(QColor("#C49A3C"), 2))
                 painter.setBrush(QBrush(QColor("#FFFFFF")))
                 painter.drawEllipse(px - 6, py - 6, 12, 12)
+                num = _HANDLE_NUMS.get(handle["handle_id"], 0)
+                painter.setPen(QColor("#C49A3C"))
+                painter.setFont(font_num)
+                painter.drawText(px + 8, py - 8, str(num))
 
     def _compute_handles(self) -> None:
         self._edit_handles.clear()
@@ -2521,21 +2471,56 @@ class MainWindow(QMainWindow):
         ))
         layout.addWidget(reset_zoom_btn)
 
-        hint = QLabel("Double-clic sur une poignée\npour saisir une valeur précise")
+        hint = QLabel("Cliquez sur ✏ pour modifier\nune coordonnée précisément")
         hint.setStyleSheet("color: #888; font-size: 11px; font-style: italic; background: transparent;")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(hint)
 
+        self._handle_coord_labels: dict[str, QLabel] = {}
         return panel
 
-    def _refresh_edit_panel(self) -> None:
-        """Relit _tools_config et reconstruit le contenu du panneau édition."""
-        # Vider le layout de contenu
+    _HANDLE_ORDER = [
+        ("tl", 1), ("tm", 2), ("tr", 3), ("rm", 4),
+        ("br", 5), ("bm", 6), ("bl", 7), ("lm", 8),
+    ]
+
+    def _get_handle_text(self, zone_type: str, zone_idx: int, hid: str) -> str:
+        tools_cfg = self._graph._tools_config
+        if zone_type == "no_pass":
+            zones = tools_cfg.get("no_pass_zones", [])
+            if not zones:
+                old = tools_cfg.get("no_pass", {})
+                if old.get("enabled"):
+                    zones = [old]
+            if zone_idx >= len(zones):
+                return "—"
+            z = zones[zone_idx]
+            x = float(z.get("x_min", 0)) if hid in ("tl", "bl", "lm") else float(z.get("x_max", 0))
+            y = float(z.get("y_limit", 0)) if hid in ("tl", "tr", "tm") else 0.0
+        elif zone_type == "uni_box":
+            ub = tools_cfg.get("uni_box", {})
+            x = float(ub.get("box_x_min", 0)) if hid in ("tl", "bl", "lm") else float(ub.get("box_x_max", 0))
+            y = float(ub.get("box_y_max", 0)) if hid in ("tl", "tr", "tm") else float(ub.get("box_y_min", 0))
+        else:
+            return "—"
+        if hid in ("lm", "rm"):
+            return f"X: {x:.1f} mm"
+        elif hid in ("tm", "bm"):
+            return f"Y: {y:.0f} N"
+        else:
+            return f"X: {x:.1f} mm  Y: {y:.0f} N"
+
+    def _update_handle_coord_labels(self) -> None:
+        for key, lbl in self._handle_coord_labels.items():
+            zone_type, zone_idx_str, hid = key.split("|")
+            lbl.setText(self._get_handle_text(zone_type, int(zone_idx_str), hid))
+
+    def _build_edit_panel_content(self) -> None:
         while self._edit_panel_content.count():
             item = self._edit_panel_content.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-
+        self._handle_coord_labels = {}
         tools_cfg = self._graph._tools_config
 
         no_pass_zones = tools_cfg.get("no_pass_zones", [])
@@ -2544,39 +2529,120 @@ class MainWindow(QMainWindow):
             if old.get("enabled"):
                 no_pass_zones = [old]
 
-        for i, z in enumerate(no_pass_zones):
+        for zone_idx, z in enumerate(no_pass_zones):
             if not z.get("enabled"):
                 continue
-            lbl_title = QLabel(f"Zone {i+1} — NO-PASS")
-            lbl_title.setStyleSheet("color: #ef5350; font-weight: bold; font-size: 13px; background: transparent;")
+            lbl_title = QLabel(f"Zone {zone_idx + 1} — NO-PASS")
+            lbl_title.setStyleSheet(
+                "color: #ef5350; font-weight: bold; font-size: 13px; background: transparent;"
+            )
             self._edit_panel_content.addWidget(lbl_title)
-
-            for text in [
-                f"Position min : {z.get('x_min', 0):.1f} mm",
-                f"Position max : {z.get('x_max', 0):.1f} mm",
-                f"Force max    : {z.get('y_limit', 0):.0f} N",
-            ]:
-                lbl = QLabel(text)
-                lbl.setStyleSheet("color: #F0F0F0; font-size: 12px; background: transparent; padding-left: 8px;")
-                self._edit_panel_content.addWidget(lbl)
+            self._add_handle_rows("no_pass", zone_idx)
             self._edit_panel_content.addWidget(make_hseparator())
 
         ub = tools_cfg.get("uni_box", {})
         if ub.get("enabled"):
             lbl_title = QLabel("UNI-BOX")
-            lbl_title.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 13px; background: transparent;")
+            lbl_title.setStyleSheet(
+                "color: #FF9800; font-weight: bold; font-size: 13px; background: transparent;"
+            )
             self._edit_panel_content.addWidget(lbl_title)
-
-            for text in [
-                f"X min : {ub.get('box_x_min', 0):.1f} mm",
-                f"X max : {ub.get('box_x_max', 0):.1f} mm",
-                f"Y min : {ub.get('box_y_min', 0):.0f} N",
-                f"Y max : {ub.get('box_y_max', 0):.0f} N",
-            ]:
-                lbl = QLabel(text)
-                lbl.setStyleSheet("color: #F0F0F0; font-size: 12px; background: transparent; padding-left: 8px;")
-                self._edit_panel_content.addWidget(lbl)
+            self._add_handle_rows("uni_box", 0)
             self._edit_panel_content.addWidget(make_hseparator())
+
+    def _add_handle_rows(self, zone_type: str, zone_idx: int) -> None:
+        for hid, num in self._HANDLE_ORDER:
+            key = f"{zone_type}|{zone_idx}|{hid}"
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 1, 0, 1)
+            row_layout.setSpacing(4)
+
+            lbl_num = QLabel(f"{num}—{hid}")
+            lbl_num.setStyleSheet(
+                "color: #C49A3C; font-size: 11px; background: transparent; min-width: 45px;"
+            )
+
+            lbl_coord = QLabel(self._get_handle_text(zone_type, zone_idx, hid))
+            lbl_coord.setStyleSheet(
+                "color: #F0F0F0; font-size: 11px; background: transparent;"
+            )
+            self._handle_coord_labels[key] = lbl_coord
+
+            btn_edit = QPushButton("✏")
+            btn_edit.setFixedSize(26, 24)
+            btn_edit.setStyleSheet(
+                "background: #444; color: #C49A3C; border: 1px solid #C49A3C; "
+                "border-radius: 4px; font-size: 12px; padding: 0;"
+            )
+            btn_edit.clicked.connect(
+                lambda _checked, zt=zone_type, zi=zone_idx, h=hid:
+                    self._edit_handle_from_panel(zt, zi, h)
+            )
+
+            row_layout.addWidget(lbl_num)
+            row_layout.addWidget(lbl_coord, stretch=1)
+            row_layout.addWidget(btn_edit)
+            self._edit_panel_content.addWidget(row)
+
+    def _edit_handle_from_panel(self, zone_type: str, zone_idx: int, hid: str) -> None:
+        handle = next(
+            (h for h in self._graph._edit_handles
+             if h["zone_type"] == zone_type and h["zone_idx"] == zone_idx and h["handle_id"] == hid),
+            None,
+        )
+        if handle is None:
+            return
+
+        if hid in ("lm", "rm"):
+            dlg = NumpadDialog(
+                title="Position (mm)", unit=" mm",
+                value=str(round(handle["x_data"], 1)), parent=self
+            )
+            if dlg.exec():
+                try:
+                    self._graph._apply_handle_drag(dict(handle), float(dlg.value()), handle["y_data"])
+                except ValueError:
+                    return
+        elif hid in ("tm", "bm"):
+            dlg = NumpadDialog(
+                title="Force (N)", unit=" N",
+                value=str(round(handle["y_data"], 0)), parent=self
+            )
+            if dlg.exec():
+                try:
+                    self._graph._apply_handle_drag(dict(handle), handle["x_data"], float(dlg.value()))
+                except ValueError:
+                    return
+        else:
+            dlg_x = NumpadDialog(
+                title="Position (mm)", unit=" mm",
+                value=str(round(handle["x_data"], 1)), parent=self
+            )
+            if not dlg_x.exec():
+                return
+            dlg_y = NumpadDialog(
+                title="Force (N)", unit=" N",
+                value=str(round(handle["y_data"], 0)), parent=self
+            )
+            if not dlg_y.exec():
+                return
+            try:
+                self._graph._apply_handle_drag(dict(handle), float(dlg_x.value()), float(dlg_y.value()))
+            except ValueError:
+                return
+
+        self._graph._compute_handles()
+        self._graph.update()
+        self._update_handle_coord_labels()
+
+    def _refresh_edit_panel(self) -> None:
+        if not hasattr(self, '_handle_coord_labels'):
+            self._handle_coord_labels = {}
+        if self._handle_coord_labels:
+            self._update_handle_coord_labels()
+        else:
+            self._build_edit_panel_content()
 
     def _build_result_badge(self) -> QLabel:
         self._result_badge = QLabel(t("status_idle"))
@@ -3071,6 +3137,7 @@ class MainWindow(QMainWindow):
             bar_h = 60
             self._edit_bar.setGeometry(0, gw.height() - bar_h, gw.width(), bar_h)
             self._right_stack.setCurrentIndex(1)
+            self._handle_coord_labels = {}
             self._refresh_edit_panel()
         else:
             self._edit_bar.setVisible(False)
