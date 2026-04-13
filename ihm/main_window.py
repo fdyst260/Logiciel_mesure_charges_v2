@@ -748,9 +748,6 @@ class GraphWidget(QWidget):
                     self._draw_envelope(painter, tool, rect)
 
         if self._edit_mode:
-            font_label = QFont()
-            font_label.setPixelSize(11)
-            painter.setFont(font_label)
             for handle in self._edit_handles:
                 px, py = self._to_px(handle["x_data"], handle["y_data"], rect)
                 handle["px"] = px
@@ -758,49 +755,6 @@ class GraphWidget(QWidget):
                 painter.setPen(QPen(QColor("#C49A3C"), 2))
                 painter.setBrush(QBrush(QColor("#FFFFFF")))
                 painter.drawEllipse(px - 6, py - 6, 12, 12)
-
-                hid = handle["handle_id"]
-                if hid in ("lm", "rm"):
-                    label_text = f"{handle['x_data']:.1f} mm"
-                elif hid in ("tm", "bm"):
-                    label_text = f"{handle['y_data']:.0f} N"
-                else:
-                    label_text = f"{handle['x_data']:.1f} mm / {handle['y_data']:.0f} N"
-
-                lw = max(len(label_text) * 7, 80)
-                lh = 18
-                lx = px + 14 if px + 14 + lw <= rect.right() else px - 14 - lw
-                ly = py + 8 if py + 8 + lh <= rect.bottom() else py - 8 - lh
-                label_rect = QRect(lx, ly, lw, lh)
-                painter.fillRect(label_rect, QColor(26, 26, 26, 200))
-                painter.setPen(QColor("#C49A3C"))
-                painter.drawRect(label_rect)
-                painter.setPen(QColor("#F0F0F0"))
-                painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, label_text)
-
-            if self._dragging_handle is not None:
-                h = self._dragging_handle
-                hid = h["handle_id"]
-                if hid in ("lm", "rm"):
-                    tip_text = f"{h['x_data']:.1f} mm"
-                elif hid in ("tm", "bm"):
-                    tip_text = f"{h['y_data']:.0f} N"
-                else:
-                    tip_text = f"{h['x_data']:.1f} mm / {h['y_data']:.0f} N"
-                font_big = QFont()
-                font_big.setPixelSize(14)
-                font_big.setBold(True)
-                painter.setFont(font_big)
-                tw = max(len(tip_text) * 9, 120)
-                th = 26
-                tx = max(rect.left(), min(h["px"] - tw // 2, rect.right() - tw))
-                ty = max(rect.top(), h["py"] - 30 - th)
-                tip_rect = QRect(tx, ty, tw, th)
-                painter.fillRect(tip_rect, QColor(26, 26, 26, 230))
-                painter.setPen(QColor("#C49A3C"))
-                painter.drawRect(tip_rect)
-                painter.setPen(QColor("#FFFFFF"))
-                painter.drawText(tip_rect, Qt.AlignmentFlag.AlignCenter, tip_text)
 
     def _compute_handles(self) -> None:
         self._edit_handles.clear()
@@ -2441,10 +2395,14 @@ class MainWindow(QMainWindow):
         self._graph.setMinimumWidth(860)
         h.addWidget(self._content_stack, stretch=1)
 
-        # Panneau droit — 420px fixe
+        # Panneau droit — 420px fixe (normal + édition)
+        self._right_stack = QStackedWidget()
+        self._right_stack.setFixedWidth(420)
         right = self._build_right_panel()
-        right.setFixedWidth(420)
-        h.addWidget(right)
+        self._right_stack.addWidget(right)           # index 0 : normal
+        self._edit_panel = self._build_edit_panel()
+        self._right_stack.addWidget(self._edit_panel) # index 1 : édition
+        h.addWidget(self._right_stack)
 
         v.addWidget(content, stretch=1)
         v.addWidget(self._build_nav_bar())
@@ -2529,6 +2487,96 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._theme_btn)
         layout.addWidget(self._build_settings_button())
         return panel
+
+    def _build_edit_panel(self) -> QWidget:
+        panel = QWidget()
+        panel.setStyleSheet(
+            f"background-color: {get_colors()['panel_bg']}; "
+            f"border-left: 1px solid {get_colors()['separator']};"
+        )
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        title = QLabel("✏  Édition des zones")
+        title.setStyleSheet("color: #C49A3C; font-size: 14px; font-weight: bold; background: transparent;")
+        layout.addWidget(title)
+        layout.addWidget(make_hseparator())
+
+        self._edit_panel_content = QVBoxLayout()
+        self._edit_panel_content.setSpacing(4)
+        layout.addLayout(self._edit_panel_content)
+
+        layout.addStretch()
+        layout.addWidget(make_hseparator())
+
+        reset_zoom_btn = QPushButton("↺  Réinitialiser zoom")
+        reset_zoom_btn.setStyleSheet(
+            "background-color: #444; color: #C49A3C; font-size: 13px; "
+            "border: 1px solid #C49A3C; border-radius: 6px; padding: 6px;"
+        )
+        reset_zoom_btn.clicked.connect(lambda: (
+            setattr(self._graph, '_auto_scale', False),
+            self._graph.update(),
+        ))
+        layout.addWidget(reset_zoom_btn)
+
+        hint = QLabel("Double-clic sur une poignée\npour saisir une valeur précise")
+        hint.setStyleSheet("color: #888; font-size: 11px; font-style: italic; background: transparent;")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(hint)
+
+        return panel
+
+    def _refresh_edit_panel(self) -> None:
+        """Relit _tools_config et reconstruit le contenu du panneau édition."""
+        # Vider le layout de contenu
+        while self._edit_panel_content.count():
+            item = self._edit_panel_content.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        tools_cfg = self._graph._tools_config
+
+        no_pass_zones = tools_cfg.get("no_pass_zones", [])
+        if not no_pass_zones:
+            old = tools_cfg.get("no_pass", {})
+            if old.get("enabled"):
+                no_pass_zones = [old]
+
+        for i, z in enumerate(no_pass_zones):
+            if not z.get("enabled"):
+                continue
+            lbl_title = QLabel(f"Zone {i+1} — NO-PASS")
+            lbl_title.setStyleSheet("color: #ef5350; font-weight: bold; font-size: 13px; background: transparent;")
+            self._edit_panel_content.addWidget(lbl_title)
+
+            for text in [
+                f"Position min : {z.get('x_min', 0):.1f} mm",
+                f"Position max : {z.get('x_max', 0):.1f} mm",
+                f"Force max    : {z.get('y_limit', 0):.0f} N",
+            ]:
+                lbl = QLabel(text)
+                lbl.setStyleSheet("color: #F0F0F0; font-size: 12px; background: transparent; padding-left: 8px;")
+                self._edit_panel_content.addWidget(lbl)
+            self._edit_panel_content.addWidget(make_hseparator())
+
+        ub = tools_cfg.get("uni_box", {})
+        if ub.get("enabled"):
+            lbl_title = QLabel("UNI-BOX")
+            lbl_title.setStyleSheet("color: #FF9800; font-weight: bold; font-size: 13px; background: transparent;")
+            self._edit_panel_content.addWidget(lbl_title)
+
+            for text in [
+                f"X min : {ub.get('box_x_min', 0):.1f} mm",
+                f"X max : {ub.get('box_x_max', 0):.1f} mm",
+                f"Y min : {ub.get('box_y_min', 0):.0f} N",
+                f"Y max : {ub.get('box_y_max', 0):.0f} N",
+            ]:
+                lbl = QLabel(text)
+                lbl.setStyleSheet("color: #F0F0F0; font-size: 12px; background: transparent; padding-left: 8px;")
+                self._edit_panel_content.addWidget(lbl)
+            self._edit_panel_content.addWidget(make_hseparator())
 
     def _build_result_badge(self) -> QLabel:
         self._result_badge = QLabel(t("status_idle"))
@@ -2983,6 +3031,8 @@ class MainWindow(QMainWindow):
     def _show_current_curve(self) -> None:
         self._graph.set_history_mode(False)
         self._content_stack.setCurrentIndex(0)
+        if not self._cycle_started:
+            self._graph.start_new_cycle()
 
     def _show_history(self) -> None:
         self._graph.set_history_mode(True)
@@ -3020,8 +3070,11 @@ class MainWindow(QMainWindow):
             gw = self._graph
             bar_h = 60
             self._edit_bar.setGeometry(0, gw.height() - bar_h, gw.width(), bar_h)
+            self._right_stack.setCurrentIndex(1)
+            self._refresh_edit_panel()
         else:
             self._edit_bar.setVisible(False)
+            self._right_stack.setCurrentIndex(0)
         for btn in self.findChildren(QPushButton):
             if "Zones" in btn.text():
                 if new_mode:
@@ -3063,6 +3116,7 @@ class MainWindow(QMainWindow):
         self._graph.set_edit_mode(False)
         self._edit_bar.setVisible(False)
         self._graph._tools_config_backup = None
+        self._right_stack.setCurrentIndex(0)
 
         for btn in self.findChildren(QPushButton):
             if "Zones" in btn.text():
@@ -3084,6 +3138,7 @@ class MainWindow(QMainWindow):
 
         self._graph.set_edit_mode(False)
         self._edit_bar.setVisible(False)
+        self._right_stack.setCurrentIndex(0)
 
         for btn in self.findChildren(QPushButton):
             if "Zones" in btn.text():
@@ -3094,23 +3149,7 @@ class MainWindow(QMainWindow):
         self._graph.update()
 
     def _update_edit_coords(self, tools_cfg: dict) -> None:
-        zones = tools_cfg.get("no_pass_zones", [])
-        texts = []
-        for i, z in enumerate(zones):
-            if z.get("enabled"):
-                texts.append(
-                    f"Zone {i+1}: "
-                    f"{z.get('x_min', 0):.1f}→{z.get('x_max', 0):.1f} mm  "
-                    f"max {z.get('y_limit', 0):.0f} N"
-                )
-        ub = tools_cfg.get("uni_box", {})
-        if ub.get("enabled"):
-            texts.append(
-                f"UNI-BOX: "
-                f"{ub.get('box_x_min', 0):.1f}→{ub.get('box_x_max', 0):.1f} mm  "
-                f"{ub.get('box_y_min', 0):.0f}→{ub.get('box_y_max', 0):.0f} N"
-            )
-        self._edit_coords_label.setText("  |  ".join(texts))
+        self._refresh_edit_panel()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
