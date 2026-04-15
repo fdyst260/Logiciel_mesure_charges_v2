@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QPointF, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF, QPixmap, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -4307,27 +4307,66 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        v.addWidget(self._make_header(t("settings_home_title_icon"), back_to_home=False))
+        # Header agrandi pour la page d'accueil
+        header = QWidget()
+        header.setFixedHeight(70)
+        header.setStyleSheet(
+            f"background-color: {_C['header_bg']}; "
+            f"border-bottom: 1px solid {_C['border']};"
+        )
+        hh = QHBoxLayout(header)
+        hh.setContentsMargins(20, 0, 0, 0)
+        hh.setSpacing(0)
 
-        # Corps — 3 tuiles centrées
+        lbl_title = QLabel(t("settings_home_title_icon"))
+        lbl_title.setStyleSheet(
+            f"color: {_C['text']}; font-size: 26px; font-weight: bold;"
+        )
+        hh.addWidget(lbl_title)
+        hh.addStretch()
+
+        btn_prod = QPushButton(f"{t('btn_back_arrow')} Production")
+        btn_prod.setObjectName("btn_back")
+        btn_prod.setMinimumHeight(54)
+        btn_prod.setMinimumWidth(200)
+        btn_prod.setStyleSheet(
+            f"background-color: {_C['btn_bg']}; color: {_C['text']};"
+            f" font-size: 18px; font-weight: 700;"
+            f" border: 1px solid {_C['btn_border']}; border-radius: 0px;"
+            f" padding: 0 28px; min-height: 54px;"
+        )
+        btn_prod.clicked.connect(self._go_to_production)
+        hh.addWidget(btn_prod)
+        v.addWidget(header)
+
+        # Corps — 3 tuiles en grille plein écran
         body = QWidget()
         body.setStyleSheet(f"background-color: {_C['bg']};")
-        bh = QHBoxLayout(body)
-        bh.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bh.setSpacing(40)
-        bh.setContentsMargins(40, 0, 40, 0)
+        grid = QGridLayout(body)
+        grid.setContentsMargins(16, 16, 16, 16)
+        grid.setSpacing(16)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
+        grid.setRowStretch(0, 1)
 
         tiles_def = [
             ("🔧", t("settings_tile_general"),    "#A07830", 1),
             ("📋", t("settings_tile_pm"),         "#1565C0", 2),
             ("📁", t("settings_tile_pm_manager"), "#2E7D32", 3),
         ]
-        for icon, label, border, page_idx in tiles_def:
+        for col, (icon, label, border, page_idx) in enumerate(tiles_def):
             tile = _Tile(icon, label, border)
+            # Libérer la taille fixe pour que les tuiles s'étendent
+            tile.setFixedSize(16_777_215, 16_777_215)
+            tile.setMinimumSize(160, 140)
+            tile.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             tile.clicked.connect(
                 lambda idx=page_idx: self._settings_stack.setCurrentIndex(idx)
             )
-            bh.addWidget(tile)
+            grid.addWidget(tile, 0, col)
 
         v.addWidget(body, stretch=1)
         v.addWidget(self._build_footer())
@@ -4404,7 +4443,7 @@ class SettingsPage(QWidget):
             ("📅", t("dlg_datetime_title"),           0, 2, "date_heure"),
             ("⇄",  coord_label,                        1, 0, "coordonnees"),
             ("⏱",  t("dlg_cycle_ctrl_title"),         1, 1, "cycle"),
-            ("🖥", t("dlg_display_title"),            1, 2, "affichage"),
+            ("assets/icon/settings/Image_kistler/Affichage_production.png", t("dlg_display_title"),            1, 2, "affichage"),
             ("💾", t("hdr_export"),                   2, 0, "exportation"),
             ("⚙",  t("hdr_extras"),                   2, 1, "extras"),
             ("ℹ",  info_label,                         2, 2, "info_systeme"),
@@ -4423,6 +4462,13 @@ class SettingsPage(QWidget):
             icon_lbl = QLabel(icon)
             icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             icon_lbl.setStyleSheet("font-size: 28px; background: transparent; border: none;")
+            pixmap = QPixmap(icon)
+            if not pixmap.isNull():
+                pixmap = pixmap.scaled(140, 140, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                icon_lbl.setPixmap(pixmap)
+            else:
+                icon_lbl.setText(icon)
+                icon_lbl.setStyleSheet("font-size: 28px; background: transparent; border: none;")
             icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             text_lbl = QLabel(label)
             text_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
