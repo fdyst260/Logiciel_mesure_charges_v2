@@ -44,8 +44,9 @@ POSITION_THRESHOLD_MM = 18.0
 # Dossier d'export CSV
 DATA_DIR = "./data"
 
-# Nombre maximum de zones NO-PASS par PM
+# Nombre maximum de zones NO-PASS et UNI-BOX par PM
 MAX_NO_PASS_ZONES = 5
+MAX_UNI_BOX_ZONES = 5
 
 # Sorties GPIO (Pi 5)
 GPIO_OUT_OK = 5
@@ -219,15 +220,35 @@ def build_tools_from_yaml(pm_id: int) -> list:
                 y_limit=float(zone["y_limit"]),
             ))
 
-    ub_d = tools_data.get("uni_box", {})
-    if ub_d.get("enabled", False):
-        tools.append(EvaluationTool(
-            name="uni_box",
-            tool_type=EvaluationType.UNI_BOX,
-            box_x_min=ub_d["box_x_min"], box_x_max=ub_d["box_x_max"],
-            box_y_min=ub_d["box_y_min"], box_y_max=ub_d["box_y_max"],
-            entry_side=ub_d["entry_side"], exit_side=ub_d["exit_side"],
-        ))
+    # UNI-BOX multi-zones
+    ub_zones = tools_data.get("uni_box_zones", [])
+    # Compatibilité ancien format (uni_box unique → zone 1)
+    if not ub_zones and tools_data.get("uni_box", {}):
+        old_ub = tools_data["uni_box"]
+        if old_ub.get("enabled"):
+            ub_zones = [{
+                "enabled":   True,
+                "box_x_min": float(old_ub.get("box_x_min", 0.0)),
+                "box_x_max": float(old_ub.get("box_x_max", 0.0)),
+                "box_y_min": float(old_ub.get("box_y_min", 0.0)),
+                "box_y_max": float(old_ub.get("box_y_max", 0.0)),
+                "entry_side": old_ub.get("entry_side", "left"),
+                "exit_side":  old_ub.get("exit_side", "left"),
+            }]
+
+    for i, zone in enumerate(ub_zones[:MAX_UNI_BOX_ZONES]):
+        if zone.get("enabled", False):
+            tools.append(EvaluationTool(
+                name=f"uni_box_{i + 1}",
+                tool_type=EvaluationType.UNI_BOX,
+                zone_name=f"Zone {i + 1}",
+                box_x_min=float(zone["box_x_min"]),
+                box_x_max=float(zone["box_x_max"]),
+                box_y_min=float(zone["box_y_min"]),
+                box_y_max=float(zone["box_y_max"]),
+                entry_side=zone.get("entry_side", "left"),
+                exit_side=zone.get("exit_side", "left"),
+            ))
 
     env_d = tools_data.get("envelope", {})
     if env_d.get("enabled", False):

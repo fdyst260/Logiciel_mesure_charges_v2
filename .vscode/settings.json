@@ -9,5 +9,23 @@
   ],
   "python.analysis.diagnosticSeverityOverrides": {
     "reportMissingModuleSource": "none"
+  },
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": [
+          "comment",
+          "punctuation.definition.comment"
+        ],
+        "settings": {
+          "foreground": "#FF0000"
+        }
+      }
+    ]
+  },
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "comment": "#FF0000"
+    }
   }
 }

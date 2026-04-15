@@ -27,8 +27,8 @@ def save_cycle_csv(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with path.open("w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["time_s", "force_n", "position_mm"])
+        writer = csv.writer(csvfile, delimiter=';')
+        writer.writerow(["t", "force_n", "position_mm"])
         writer.writerows(points)
 
     _auto_export_if_enabled(path)

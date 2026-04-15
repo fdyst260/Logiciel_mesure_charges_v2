@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
 )
 
 from config import PM_DEFINITIONS, ProgramMeasure
+from ihm.translations import t, get_language
 from ihm.ui_utils import load_config, save_config
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
@@ -69,9 +70,9 @@ def _make_numpad_btn(
     btn.setProperty("numpad_suffix", suffix)
     btn.setStyleSheet("""
         QPushButton {
-            background-color: #444444;
-            color: #ffffff;
-            border: 1.5px solid #555555;
+            background-color: #FAFAF8;
+            color: #1A1A18;
+            border: 1.5px solid #C8C4BC;
             border-radius: 6px;
             padding: 6px 12px;
             font-size: 15px;
@@ -117,9 +118,9 @@ def _make_alpha_btn(
     btn.setProperty("alpha_value", value)
     btn.setStyleSheet("""
         QPushButton {
-            background-color: #444444;
-            color: #ffffff;
-            border: 1.5px solid #555555;
+            background-color: #FAFAF8;
+            color: #1A1A18;
+            border: 1.5px solid #C8C4BC;
             border-radius: 6px;
             padding: 6px 12px;
             font-size: 15px;
@@ -152,18 +153,18 @@ def _get_alpha_value(btn: QPushButton) -> str:
 # Palette de couleurs — thème sombre identique à main_window
 # ---------------------------------------------------------------------------
 _C = {
-    "bg":         "#2E2E2E",
-    "panel":      "#3A3A3A",
-    "card":       "#444444",
-    "border":     "#555555",
-    "header_bg":  "#3A3A3A",
-    "text":       "#F0F0F0",
-    "text_dim":   "#AAAAAA",
-    "btn_bg":     "#444444",
-    "btn_border": "#555555",
+    "bg":         "#F0EDE6",
+    "panel":      "#E8E4DC",
+    "card":       "#FAFAF8",
+    "border":     "#C8C4BC",
+    "header_bg":  "#E8E4DC",
+    "text":       "#1A1A18",
+    "text_dim":   "#4A4844",
+    "btn_bg":     "#FAFAF8",
+    "btn_border": "#C8C4BC",
     "btn_active": "#A07830",
-    "ok_green":   "#4caf50",
-    "nok_red":    "#ef5350",
+    "ok_green":   "#2E7D32",
+    "nok_red":    "#C62828",
     "blue":       "#C49A3C",
 }
 
@@ -209,7 +210,7 @@ QListWidget {{
     outline: none;
 }}
 QListWidget::item {{ padding: 10px 12px; border-bottom: 1px solid {_C['border']}; }}
-QListWidget::item:selected {{ background-color: {_C['btn_active']}; color: #ffffff; }}
+QListWidget::item:selected {{ background-color: {_C['btn_active']}; color: #1A1A18; }}
 
 QTableWidget {{
     background-color: {_C['card']};
@@ -231,23 +232,23 @@ QFrame#separator {{ background-color: {_C['border']}; max-height: 1px; }}
 """
 
 # ---------------------------------------------------------------------------
-# Feuille de style — dialogues Voie X / Voie Y
+# Feuille de style — dialogues Coordonnée X / Coordonnée Y
 # ---------------------------------------------------------------------------
 _DIALOG_STYLE = """
 QDialog, QWidget {
-    background-color: #3A3A3A;
-    color: #F0F0F0;
+    background-color: #FAFAF8;
+    color: #1A1A18;
     font-family: 'Segoe UI', Arial, sans-serif;
 }
 QLabel {
     background-color: transparent;
     font-size: 15px;
-    color: #F0F0F0;
+    color: #1A1A18;
 }
 QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
-    background-color: #444444;
-    color: #F0F0F0;
-    border: 1.5px solid #555555;
+    background-color: #FAFAF8;
+    color: #1A1A18;
+    border: 1.5px solid #C8C4BC;
     border-radius: 6px;
     padding: 6px;
     font-size: 15px;
@@ -258,41 +259,41 @@ QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus {
 }
 QComboBox::drop-down { border: none; width: 20px; }
 QComboBox QAbstractItemView {
-    background-color: #444444;
-    color: #F0F0F0;
+    background-color: #FAFAF8;
+    color: #1A1A18;
     selection-background-color: #A07830;
 }
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button,
 QSpinBox::up-button,       QSpinBox::down-button {
-    background-color: #555555;
+    background-color: #C8C4BC;
     border: none;
     width: 20px;
 }
 QPushButton#btn_save {
-    background-color: #085041;
-    color: #9FE1CB;
+    background-color: #C49A3C;
+    color: #1A1A18;
     font-size: 14px;
     font-weight: bold;
-    border: none;
+    border: 1px solid #A07830;
     border-radius: 8px;
     min-height: 44px;
     min-width: 160px;
 }
-QPushButton#btn_save:pressed { background-color: #063d31; }
+QPushButton#btn_save:pressed { background-color: #A07830; }
 QPushButton#btn_cancel {
-    background-color: #3d1515;
-    color: #F7C1C1;
+    background-color: #FAFAF8;
+    color: #4A4844;
     font-size: 14px;
     font-weight: bold;
-    border: none;
+    border: 1px solid #C8C4BC;
     border-radius: 8px;
     min-height: 44px;
     min-width: 160px;
 }
-QPushButton#btn_cancel:pressed { background-color: #2a0e0e; }
+QPushButton#btn_cancel:pressed { background-color: #E8E4DC; }
 QPushButton#btn_nav {
     background-color: #A07830;
-    color: #ffffff;
+    color: #1A1A18;
     font-size: 14px;
     font-weight: bold;
     border: none;
@@ -301,16 +302,16 @@ QPushButton#btn_nav {
     min-width: 120px;
 }
 QPushButton#btn_nav:pressed { background-color: #7a5c24; }
-QPushButton#btn_nav:disabled { background-color: #444444; color: #777777; }
+QPushButton#btn_nav:disabled { background-color: #C8C4BC; color: #7A7870; }
 QCheckBox {
-    font-size: 15px; color: #F0F0F0; spacing: 8px;
+    font-size: 15px; color: #1A1A18; spacing: 8px;
     min-height: 42px; background: transparent;
 }
 QCheckBox::indicator {
-    width: 22px; height: 22px; background-color: #444444;
-    border: 1.5px solid #555555; border-radius: 4px;
+    width: 22px; height: 22px; background-color: #FAFAF8;
+    border: 1.5px solid #C8C4BC; border-radius: 4px;
 }
-QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75; }
+QCheckBox::indicator:checked { background-color: #F1F8E9; border-color: #2d7a2d; }
 """
 
 
@@ -318,21 +319,21 @@ QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75;
 # Style QTabWidget pour PMEditDialog
 # ---------------------------------------------------------------------------
 _PM_EDIT_STYLE = _DIALOG_STYLE + """
-QTabWidget::pane { background-color: #3A3A3A; border: none; }
+QTabWidget::pane { background-color: #FAFAF8; border: none; }
 QTabBar::tab {
-    background: #444444; color: #AAAAAA; padding: 10px 20px;
+    background: #E8E4DC; color: #4A4844; padding: 10px 20px;
     font-size: 14px; border-radius: 6px 6px 0 0; margin-right: 2px;
 }
-QTabBar::tab:selected { background: #3A3A3A; color: #ffffff; border-bottom: 2px solid #C49A3C; }
+QTabBar::tab:selected { background: #FAFAF8; color: #1A1A18; border-bottom: 2px solid #C49A3C; }
 QCheckBox {
-    font-size: 15px; color: #F0F0F0; spacing: 8px;
+    font-size: 15px; color: #1A1A18; spacing: 8px;
     min-height: 42px; background: transparent;
 }
 QCheckBox::indicator {
-    width: 22px; height: 22px; background-color: #444444;
-    border: 1.5px solid #555555; border-radius: 4px;
+    width: 22px; height: 22px; background-color: #FAFAF8;
+    border: 1.5px solid #C8C4BC; border-radius: 4px;
 }
-QCheckBox::indicator:checked { background-color: #085041; border-color: #1D9E75; }
+QCheckBox::indicator:checked { background-color: #F1F8E9; border-color: #2d7a2d; }
 """
 
 
@@ -351,26 +352,33 @@ class _NoPassPreview(QWidget):
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        mx, my = 24, 8
-        ws_x, ws_y, ws_w, ws_h = mx, my, w - 2 * mx, h - 2 * my - 16
-        p.fillRect(ws_x, ws_y, ws_w, ws_h, QColor("#1a1a1a"))
-        p.setPen(QPen(QColor("#444444"), 1))
-        p.drawRect(ws_x, ws_y, ws_w, ws_h)
-        X_MAX, Y_MAX = 500.0, 6000.0
-        def fx(v): return ws_x + (v / X_MAX) * ws_w
-        def fy(v): return ws_y + ws_h - (v / Y_MAX) * ws_h
-        rx1, rx2 = int(fx(self._x_min.value())), int(fx(self._x_max.value()))
-        ry_top, ry_bot = ws_y, int(fy(self._y_limit.value()))
-        if rx2 > rx1 and ry_bot > ry_top:
-            p.fillRect(rx1, ry_top, rx2 - rx1, ry_bot - ry_top, QColor(226, 75, 74, 80))
-            p.setPen(QPen(QColor("#E24B4A"), 1.5))
-            p.drawRect(rx1, ry_top, rx2 - rx1, ry_bot - ry_top)
-        p.setPen(QPen(QColor("#666666"), 1))
-        p.setFont(QFont("Arial", 9))
-        p.drawText(ws_x, ws_y + ws_h + 13, "Aperçu NO-PASS  (X = position mm, Y = force N)")
-        p.end()
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            w, h = self.width(), self.height()
+            mx, my = 24, 8
+            ws_x, ws_y, ws_w, ws_h = mx, my, w - 2 * mx, h - 2 * my - 16
+            p.fillRect(ws_x, ws_y, ws_w, ws_h, QColor("#FAFAF8"))
+            p.setPen(QPen(QColor("#C8C4BC"), 1))
+            p.drawRect(ws_x, ws_y, ws_w, ws_h)
+            X_MAX, Y_MAX = 500.0, 6000.0
+
+            def fx(v):
+                return ws_x + (v / X_MAX) * ws_w
+
+            def fy(v):
+                return ws_y + ws_h - (v / Y_MAX) * ws_h
+
+            rx1, rx2 = int(fx(self._x_min.value())), int(fx(self._x_max.value()))
+            ry_top, ry_bot = ws_y, int(fy(self._y_limit.value()))
+            if rx2 > rx1 and ry_bot > ry_top:
+                p.fillRect(rx1, ry_top, rx2 - rx1, ry_bot - ry_top, QColor(226, 75, 74, 80))
+                p.setPen(QPen(QColor("#E24B4A"), 1.5))
+                p.drawRect(rx1, ry_top, rx2 - rx1, ry_bot - ry_top)
+            p.setPen(QPen(QColor("#7A7870"), 1))
+            p.setFont(QFont("Arial", 9))
+            p.drawText(ws_x, ws_y + ws_h + 13, "Aperçu NO-PASS  (X = position mm, Y = force N)")
+        finally:
+            p.end()
 
 
 class _UniBoxPreview(QWidget):
@@ -388,31 +396,38 @@ class _UniBoxPreview(QWidget):
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        mx, my = 24, 8
-        ws_x, ws_y, ws_w, ws_h = mx, my, w - 2 * mx, h - 2 * my - 16
-        p.fillRect(ws_x, ws_y, ws_w, ws_h, QColor("#1a1a1a"))
-        p.setPen(QPen(QColor("#444444"), 1))
-        p.drawRect(ws_x, ws_y, ws_w, ws_h)
-        X_MAX, Y_MAX = 500.0, 6000.0
-        def fx(v): return ws_x + (v / X_MAX) * ws_w
-        def fy(v): return ws_y + ws_h - (v / Y_MAX) * ws_h
-        bx1, bx2 = int(fx(self._x_min.value())), int(fx(self._x_max.value()))
-        by1, by2 = int(fy(self._y_max.value())), int(fy(self._y_min.value()))
-        if bx2 > bx1 and by2 > by1:
-            p.fillRect(bx1, by1, bx2 - bx1, by2 - by1, QColor(133, 79, 11, 60))
-            p.setPen(QPen(QColor("#E8891B"), 1.5, Qt.PenStyle.DashLine))
-            p.drawRect(bx1, by1, bx2 - bx1, by2 - by1)
-            cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
-            self._arrow(p, bx1, bx2, by1, by2, cx, cy,
-                        self._entry.currentData(), QColor("#1D9E75"), True)
-            self._arrow(p, bx1, bx2, by1, by2, cx, cy,
-                        self._exit.currentData(), QColor("#E24B4A"), False)
-        p.setPen(QPen(QColor("#666666"), 1))
-        p.setFont(QFont("Arial", 9))
-        p.drawText(ws_x, ws_y + ws_h + 13, "Aperçu UNI-BOX  (vert = entrée, rouge = sortie)")
-        p.end()
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            w, h = self.width(), self.height()
+            mx, my = 24, 8
+            ws_x, ws_y, ws_w, ws_h = mx, my, w - 2 * mx, h - 2 * my - 16
+            p.fillRect(ws_x, ws_y, ws_w, ws_h, QColor("#FAFAF8"))
+            p.setPen(QPen(QColor("#C8C4BC"), 1))
+            p.drawRect(ws_x, ws_y, ws_w, ws_h)
+            X_MAX, Y_MAX = 500.0, 6000.0
+
+            def fx(v):
+                return ws_x + (v / X_MAX) * ws_w
+
+            def fy(v):
+                return ws_y + ws_h - (v / Y_MAX) * ws_h
+
+            bx1, bx2 = int(fx(self._x_min.value())), int(fx(self._x_max.value()))
+            by1, by2 = int(fy(self._y_max.value())), int(fy(self._y_min.value()))
+            if bx2 > bx1 and by2 > by1:
+                p.fillRect(bx1, by1, bx2 - bx1, by2 - by1, QColor(133, 79, 11, 60))
+                p.setPen(QPen(QColor("#E8891B"), 1.5, Qt.PenStyle.DashLine))
+                p.drawRect(bx1, by1, bx2 - bx1, by2 - by1)
+                cx, cy = (bx1 + bx2) // 2, (by1 + by2) // 2
+                self._arrow(p, bx1, bx2, by1, by2, cx, cy,
+                            self._entry.currentData(), QColor("#1D9E75"), True)
+                self._arrow(p, bx1, bx2, by1, by2, cx, cy,
+                            self._exit.currentData(), QColor("#E24B4A"), False)
+            p.setPen(QPen(QColor("#7A7870"), 1))
+            p.setFont(QFont("Arial", 9))
+            p.drawText(ws_x, ws_y + ws_h + 13, "Aperçu UNI-BOX  (vert = entrée, rouge = sortie)")
+        finally:
+            p.end()
 
     @staticmethod
     def _arrow(p, bx1, bx2, by1, by2, cx, cy, side, color, inward):
@@ -448,45 +463,53 @@ class _EnvelopePreview(QWidget):
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        mx, my = 24, 8
-        ws_x, ws_y, ws_w, ws_h = mx, my, w - 2 * mx, h - 2 * my - 16
-        p.fillRect(ws_x, ws_y, ws_w, ws_h, QColor("#1a1a1a"))
-        p.setPen(QPen(QColor("#444444"), 1))
-        p.drawRect(ws_x, ws_y, ws_w, ws_h)
-        lower, upper = self._read(self._lower), self._read(self._upper)
-        if len(lower) < 2 or len(upper) < 2:
-            p.setPen(QPen(QColor("#666"), 1))
-            p.setFont(QFont("Arial", 10))
-            p.drawText(ws_x + 10, ws_y + ws_h // 2 + 4, "≥ 2 points requis dans chaque courbe")
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            w, h = self.width(), self.height()
+            mx, my = 24, 8
+            ws_x, ws_y, ws_w, ws_h = mx, my, w - 2 * mx, h - 2 * my - 16
+            p.fillRect(ws_x, ws_y, ws_w, ws_h, QColor("#FAFAF8"))
+            p.setPen(QPen(QColor("#C8C4BC"), 1))
+            p.drawRect(ws_x, ws_y, ws_w, ws_h)
+            lower, upper = self._read(self._lower), self._read(self._upper)
+            if len(lower) < 2 or len(upper) < 2:
+                p.setPen(QPen(QColor("#666"), 1))
+                p.setFont(QFont("Arial", 10))
+                p.drawText(ws_x + 10, ws_y + ws_h // 2 + 4, "≥ 2 points requis dans chaque courbe")
+                return
+            all_pts = lower + upper
+            x0, x1 = min(pt[0] for pt in all_pts), max(pt[0] for pt in all_pts)
+            y0, y1 = min(0.0, min(pt[1] for pt in all_pts)), max(pt[1] for pt in all_pts)
+            if x1 == x0:
+                x1 += 1
+            if y1 == y0:
+                y1 += 1
+
+            def fx(v):
+                return ws_x + (v - x0) / (x1 - x0) * ws_w
+
+            def fy(v):
+                return ws_y + ws_h - (v - y0) / (y1 - y0) * ws_h
+
+            poly = QPolygonF()
+            for x, y in lower:
+                poly.append(QPointF(fx(x), fy(y)))
+            for x, y in reversed(upper):
+                poly.append(QPointF(fx(x), fy(y)))
+            p.setPen(QPen(Qt.PenStyle.NoPen))
+            p.setBrush(QColor(29, 158, 117, 50))
+            p.drawPolygon(poly)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for pts, color in [(lower, "#1D9E75"), (upper, "#E24B4A")]:
+                p.setPen(QPen(QColor(color), 2))
+                for i in range(len(pts) - 1):
+                    p.drawLine(int(fx(pts[i][0])), int(fy(pts[i][1])),
+                               int(fx(pts[i + 1][0])), int(fy(pts[i + 1][1])))
+            p.setPen(QPen(QColor("#7A7870"), 1))
+            p.setFont(QFont("Arial", 9))
+            p.drawText(ws_x, ws_y + ws_h + 13, "Aperçu ENVELOPPE  (vert = basse, rouge = haute)")
+        finally:
             p.end()
-            return
-        all_pts = lower + upper
-        x0, x1 = min(pt[0] for pt in all_pts), max(pt[0] for pt in all_pts)
-        y0, y1 = min(0.0, min(pt[1] for pt in all_pts)), max(pt[1] for pt in all_pts)
-        if x1 == x0: x1 += 1
-        if y1 == y0: y1 += 1
-        def fx(v): return ws_x + (v - x0) / (x1 - x0) * ws_w
-        def fy(v): return ws_y + ws_h - (v - y0) / (y1 - y0) * ws_h
-        poly = QPolygonF()
-        for x, y in lower:
-            poly.append(QPointF(fx(x), fy(y)))
-        for x, y in reversed(upper):
-            poly.append(QPointF(fx(x), fy(y)))
-        p.setPen(QPen(Qt.PenStyle.NoPen))
-        p.setBrush(QColor(29, 158, 117, 50))
-        p.drawPolygon(poly)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        for pts, color in [(lower, "#1D9E75"), (upper, "#E24B4A")]:
-            p.setPen(QPen(QColor(color), 2))
-            for i in range(len(pts) - 1):
-                p.drawLine(int(fx(pts[i][0])), int(fy(pts[i][1])),
-                           int(fx(pts[i + 1][0])), int(fy(pts[i + 1][1])))
-        p.setPen(QPen(QColor("#666666"), 1))
-        p.setFont(QFont("Arial", 9))
-        p.drawText(ws_x, ws_y + ws_h + 13, "Aperçu ENVELOPPE  (vert = basse, rouge = haute)")
-        p.end()
 
 
 # ===========================================================================
@@ -528,31 +551,31 @@ class _PMEditPage(QWidget):
         # Header
         header = QWidget()
         header.setFixedHeight(55)
-        header.setStyleSheet("background-color: #252525;")
+        header.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
         hh.setSpacing(12)
-        self._title_lbl = QLabel(f"📋  PM-{self._pm_id:02d} — {self._pm_name}")
+        self._title_lbl = QLabel(f"{t('table_col_pm')}-{self._pm_id:02d} — {self._pm_name}")
         self._title_lbl.setStyleSheet(
-            "font-size: 17px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 17px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(self._title_lbl)
         hh.addStretch()
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         hh.addWidget(btn_save)
-        btn_cancel = QPushButton("✗  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self._cancel)
         hh.addWidget(btn_cancel)
         root.addWidget(header)
         # Onglets
         tabs = QTabWidget()
-        tabs.addTab(self._build_tab_general(),  "Général")
-        tabs.addTab(self._build_tab_no_pass(),  "Outil NO-PASS")
-        tabs.addTab(self._build_tab_uni_box(),  "Outil UNI-BOX")
-        tabs.addTab(self._build_tab_envelope(), "Outil ENVELOPPE")
+        tabs.addTab(self._build_tab_general(),  t("tab_general"))
+        tabs.addTab(self._build_tab_no_pass(),  t("tab_nopass"))
+        tabs.addTab(self._build_tab_uni_box(),  t("tab_unibox"))
+        tabs.addTab(self._build_tab_envelope(), t("tab_enveloppe"))
         root.addWidget(tabs, stretch=1)
 
     # ---- helpers ----------------------------------------------------------
@@ -568,19 +591,19 @@ class _PMEditPage(QWidget):
     def _make_desc(text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setStyleSheet(
-            "background-color: #1a1a1a; border: 1px solid #333; border-radius: 6px; "
-            "padding: 10px; font-size: 13px; color: #888888;"
+            "background-color: #FAFAF8; border: 1px solid #C8C4BC; border-radius: 6px; "
+            "padding: 10px; font-size: 13px; color: #4A4844;"
         )
         lbl.setWordWrap(True)
         return lbl
 
     @staticmethod
     def _make_curve_table() -> QTableWidget:
-        t = QTableWidget(6, 2)
-        t.setHorizontalHeaderLabels(["Position mm", "Force N"])
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        t.verticalHeader().setVisible(False)
-        return t
+        table = QTableWidget(6, 2)
+        table.setHorizontalHeaderLabels([t("table_col_position_mm"), t("table_col_force_n")])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.verticalHeader().setVisible(False)
+        return table
 
     @staticmethod
     def _add_row(table: QTableWidget) -> None:
@@ -609,15 +632,15 @@ class _PMEditPage(QWidget):
     def _build_tab_general(self) -> QWidget:
         w = QWidget()
         form = self._make_form(w)
-        self._gen_name = _make_alpha_btn("", title="Nom du PM", parent=self)
-        form.addRow("Nom du PM :", self._gen_name)
+        self._gen_name = _make_alpha_btn("", title=t("table_col_name"), parent=self)
+        form.addRow(t("lbl_pm_name"), self._gen_name)
         self._gen_desc = _make_alpha_btn("", title="Description", parent=self)
-        form.addRow("Description :", self._gen_desc)
+        form.addRow(t("lbl_description"), self._gen_desc)
         self._gen_mode = QComboBox()
         self._gen_mode.addItem("Force = f(Position)", "FORCE_POSITION")
         self._gen_mode.addItem("Force = f(Temps)",    "FORCE_TIME")
         self._gen_mode.addItem("Position = f(Temps)", "POSITION_TIME")
-        form.addRow("Mode d'affichage :", self._gen_mode)
+        form.addRow(t("lbl_display_mode"), self._gen_mode)
         return w
 
     # ---- Onglet 2 — NO-PASS -----------------------------------------------
@@ -643,9 +666,9 @@ class _PMEditPage(QWidget):
         hdr_h.setContentsMargins(0, 0, 0, 0)
         hdr_h.setSpacing(8)
         for txt, w_fixed in [("Zone", 60), ("Actif", 50), ("Pos min (mm)", 110),
-                               ("Pos max (mm)", 110), ("Force max (N)", 110), ("", 28)]:
+                               ("Pos max (mm)", 110), ("Force max (daN)", 110), ("", 28)]:
             lbl = QLabel(txt)
-            lbl.setStyleSheet("color: #AAAAAA; font-size: 11px; font-weight: bold;")
+            lbl.setStyleSheet("color: #4A4844; font-size: 11px; font-weight: bold;")
             if w_fixed:
                 lbl.setFixedWidth(w_fixed)
             hdr_h.addWidget(lbl)
@@ -670,7 +693,7 @@ class _PMEditPage(QWidget):
 
             lbl_zone = QLabel(f"Zone {i + 1}")
             lbl_zone.setFixedWidth(60)
-            lbl_zone.setStyleSheet("color: #F0F0F0; font-size: 13px;")
+            lbl_zone.setStyleSheet("color: #1A1A18; font-size: 13px;")
             row_h.addWidget(lbl_zone)
 
             chk = QCheckBox()
@@ -679,26 +702,26 @@ class _PMEditPage(QWidget):
             row_h.addWidget(chk)
 
             btn_xmin = _make_numpad_btn("0.0", suffix=" mm",
-                                        title=f"Zone {i+1} — Position min", parent=self)
+                                        title=f"Zone {i+1} — {t('position_label')} min", parent=self)
             btn_xmin.setFixedWidth(110)
             self._np_x_min.append(btn_xmin)
             row_h.addWidget(btn_xmin)
 
             btn_xmax = _make_numpad_btn("0.0", suffix=" mm",
-                                        title=f"Zone {i+1} — Position max", parent=self)
+                                        title=f"Zone {i+1} — {t('position_label')} max", parent=self)
             btn_xmax.setFixedWidth(110)
             self._np_x_max.append(btn_xmax)
             row_h.addWidget(btn_xmax)
 
             btn_ylim = _make_numpad_btn("0", suffix=" N",
-                                        title=f"Zone {i+1} — Force limite", parent=self)
+                                        title=f"Zone {i+1} — {t('force_label')} limite", parent=self)
             btn_ylim.setFixedWidth(110)
             self._np_y_limit.append(btn_ylim)
             row_h.addWidget(btn_ylim)
 
             preview = QLabel()
             preview.setFixedSize(24, 24)
-            preview.setStyleSheet("background-color: #555555; border-radius: 3px;")
+            preview.setStyleSheet("background-color: #C8C4BC; border-radius: 3px;")
             self._np_preview.append(preview)
             row_h.addWidget(preview)
 
@@ -718,57 +741,121 @@ class _PMEditPage(QWidget):
         self._np_x_min[i].setEnabled(checked)
         self._np_x_max[i].setEnabled(checked)
         self._np_y_limit[i].setEnabled(checked)
-        color = "#c62828" if checked else "#555555"
+        color = "#c62828" if checked else "#7A7870"
         self._np_preview[i].setStyleSheet(
             f"background-color: {color}; border-radius: 3px;"
         )
 
-    # ---- Onglet 3 — UNI-BOX -----------------------------------------------
+    # ---- Onglet 3 — UNI-BOX (multi-zones) -----------------------------------
 
     def _build_tab_uni_box(self) -> QWidget:
+        from config import MAX_UNI_BOX_ZONES
         outer = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; }")
         w = QWidget()
         v = QVBoxLayout(w)
-        v.setContentsMargins(20, 14, 20, 14)
-        v.setSpacing(14)
+        v.setContentsMargins(16, 12, 16, 12)
+        v.setSpacing(10)
         v.addWidget(self._make_desc(
-            "Boîte de passage obligatoire : la courbe doit entrer et sortir par les côtés définis.\n"
-            "Utile pour vérifier un point de force à une position donnée."
+            "Boîtes de passage obligatoire : la courbe doit passer dans chaque zone active.\n"
+            "Jusqu'à 5 zones indépendantes. Cocher 'Actif' pour activer une zone."
         ))
-        fw = QWidget()
-        form = QFormLayout(fw)
-        form.setContentsMargins(0, 0, 0, 0)
-        form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self._ub_enabled = QCheckBox("Activer")
-        form.addRow("Activer UNI-BOX :", self._ub_enabled)
-        self._ub_x_min = _make_numpad_btn("0.0", suffix=" mm", title="Position min boîte", parent=self)
-        form.addRow("Position min boîte :", self._ub_x_min)
-        self._ub_x_max = _make_numpad_btn("0.0", suffix=" mm", title="Position max boîte", parent=self)
-        form.addRow("Position max boîte :", self._ub_x_max)
-        self._ub_y_min = _make_numpad_btn("0", suffix=" N", title="Force min boîte", parent=self)
-        form.addRow("Force min boîte :", self._ub_y_min)
-        self._ub_y_max = _make_numpad_btn("0", suffix=" N", title="Force max boîte", parent=self)
-        form.addRow("Force max boîte :", self._ub_y_max)
-        _SIDES = [("Gauche (left)", "left"), ("Droite (right)", "right"),
-                  ("Bas (bottom)", "bottom"), ("Haut (top)", "top")]
-        self._ub_entry = QComboBox()
-        self._ub_exit = QComboBox()
-        for lbl, val in _SIDES:
-            self._ub_entry.addItem(lbl, val)
-            self._ub_exit.addItem(lbl, val)
-        form.addRow("Côté d'entrée :", self._ub_entry)
-        form.addRow("Côté de sortie :", self._ub_exit)
-        v.addWidget(fw)
+
+        # En-tête colonnes
+        hdr = QWidget()
+        hdr_h = QHBoxLayout(hdr)
+        hdr_h.setContentsMargins(0, 0, 0, 0)
+        hdr_h.setSpacing(8)
+        for txt, w_fixed in [("Zone", 60), ("Actif", 50), ("Pos min (mm)", 110),
+                               ("Pos max (mm)", 110), ("F min (daN)", 110),
+                               ("F max (daN)", 110), ("", 28)]:
+            lbl = QLabel(txt)
+            lbl.setStyleSheet("color: #4A4844; font-size: 11px; font-weight: bold;")
+            if w_fixed:
+                lbl.setFixedWidth(w_fixed)
+            hdr_h.addWidget(lbl)
+        v.addWidget(hdr)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"background-color: {_C['border']}; max-height:1px;")
+        v.addWidget(sep)
+
+        self._ub_enabled: list[QCheckBox]   = []
+        self._ub_x_min:   list[QPushButton] = []
+        self._ub_x_max:   list[QPushButton] = []
+        self._ub_y_min:   list[QPushButton] = []
+        self._ub_y_max:   list[QPushButton] = []
+        self._ub_preview: list[QLabel]      = []
+
+        for i in range(MAX_UNI_BOX_ZONES):
+            row_w = QWidget()
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(0, 2, 0, 2)
+            row_h.setSpacing(8)
+
+            lbl_zone = QLabel(f"Zone {i + 1}")
+            lbl_zone.setFixedWidth(60)
+            lbl_zone.setStyleSheet("color: #1A1A18; font-size: 13px;")
+            row_h.addWidget(lbl_zone)
+
+            chk = QCheckBox()
+            chk.setFixedWidth(50)
+            self._ub_enabled.append(chk)
+            row_h.addWidget(chk)
+
+            btn_xmin = _make_numpad_btn("0.0", suffix=" mm",
+                                        title=f"Zone {i+1} — {t('position_label')} min", parent=self)
+            btn_xmin.setFixedWidth(110)
+            self._ub_x_min.append(btn_xmin)
+            row_h.addWidget(btn_xmin)
+
+            btn_xmax = _make_numpad_btn("0.0", suffix=" mm",
+                                        title=f"Zone {i+1} — {t('position_label')} max", parent=self)
+            btn_xmax.setFixedWidth(110)
+            self._ub_x_max.append(btn_xmax)
+            row_h.addWidget(btn_xmax)
+
+            btn_ymin = _make_numpad_btn("0", suffix=" N",
+                                        title=f"Zone {i+1} — {t('force_label')} min", parent=self)
+            btn_ymin.setFixedWidth(110)
+            self._ub_y_min.append(btn_ymin)
+            row_h.addWidget(btn_ymin)
+
+            btn_ymax = _make_numpad_btn("0", suffix=" N",
+                                        title=f"Zone {i+1} — {t('force_label')} max", parent=self)
+            btn_ymax.setFixedWidth(110)
+            self._ub_y_max.append(btn_ymax)
+            row_h.addWidget(btn_ymax)
+
+            preview = QLabel()
+            preview.setFixedSize(24, 24)
+            preview.setStyleSheet("background-color: #C8C4BC; border-radius: 3px;")
+            self._ub_preview.append(preview)
+            row_h.addWidget(preview)
+
+            chk.toggled.connect(lambda checked, idx=i: self._on_ub_zone_toggled(idx, checked))
+
+            v.addWidget(row_w)
+
         v.addStretch()
         scroll.setWidget(w)
         out_v = QVBoxLayout(outer)
         out_v.setContentsMargins(0, 0, 0, 0)
         out_v.addWidget(scroll)
         return outer
+
+    def _on_ub_zone_toggled(self, i: int, checked: bool) -> None:
+        self._ub_x_min[i].setEnabled(checked)
+        self._ub_x_max[i].setEnabled(checked)
+        self._ub_y_min[i].setEnabled(checked)
+        self._ub_y_max[i].setEnabled(checked)
+        color = "#FF9800" if checked else "#7A7870"
+        self._ub_preview[i].setStyleSheet(
+            f"background-color: {color}; border-radius: 3px;"
+        )
 
     # ---- Onglet 4 — ENVELOPPE ---------------------------------------------
 
@@ -804,9 +891,9 @@ class _PMEditPage(QWidget):
                 table.setItem(row, 1, QTableWidgetItem(yv))
             setattr(self, attr, table)
             col_v.addWidget(table, stretch=1)
-            btn_add = QPushButton("+ Ajouter point")
+            btn_add = QPushButton(t("btn_add_point"))
             btn_add.setObjectName("action_btn")
-            btn_del = QPushButton("- Supprimer")
+            btn_del = QPushButton(t("btn_delete"))
             btn_del.setObjectName("action_btn")
             btn_add.clicked.connect(lambda _, t=table: self._add_row(t))
             btn_del.clicked.connect(lambda _, t=table: self._del_row(t))
@@ -860,23 +947,31 @@ class _PMEditPage(QWidget):
                 btn.setProperty("numpad_value", val)
                 btn.setText(f"{val}{suffix}")
             self._on_np_zone_toggled(i, checked)
-        ub_d = tools.get("uni_box", {})
-        if ub_d:
-            self._ub_enabled.setChecked(bool(ub_d.get("enabled", False)))
-            for btn, key in [
-                (self._ub_x_min, "box_x_min"),
-                (self._ub_x_max, "box_x_max"),
-                (self._ub_y_min, "box_y_min"),
-                (self._ub_y_max, "box_y_max"),
+        # UNI-BOX multi-zones
+        ub_zones = tools.get("uni_box_zones", [])
+        # Compatibilité ancien format
+        if not ub_zones and tools.get("uni_box", {}):
+            old_ub = tools["uni_box"]
+            if old_ub.get("enabled"):
+                ub_zones = [{"enabled": True,
+                             "box_x_min": old_ub.get("box_x_min", 0.0),
+                             "box_x_max": old_ub.get("box_x_max", 0.0),
+                             "box_y_min": old_ub.get("box_y_min", 0.0),
+                             "box_y_max": old_ub.get("box_y_max", 0.0)}]
+        for i in range(5):
+            z = ub_zones[i] if i < len(ub_zones) else {}
+            checked = bool(z.get("enabled", False))
+            self._ub_enabled[i].setChecked(checked)
+            for btn, key, suffix in [
+                (self._ub_x_min[i], "box_x_min", " mm"),
+                (self._ub_x_max[i], "box_x_max", " mm"),
+                (self._ub_y_min[i], "box_y_min", " N"),
+                (self._ub_y_max[i], "box_y_max", " N"),
             ]:
-                v = str(ub_d.get(key, 0.0))
-                suffix = btn.property("numpad_suffix") or ""
-                btn.setProperty("numpad_value", v)
-                btn.setText(f"{v}{suffix}")
-            for combo, key in [(self._ub_entry, "entry_side"), (self._ub_exit, "exit_side")]:
-                idx = combo.findData(ub_d.get(key, "left"))
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
+                val = str(z.get(key, 0.0))
+                btn.setProperty("numpad_value", val)
+                btn.setText(f"{val}{suffix}")
+            self._on_ub_zone_toggled(i, checked)
         env_d = tools.get("envelope", {})
         if env_d:
             self._env_enabled.setChecked(bool(env_d.get("enabled", False)))
@@ -910,15 +1005,18 @@ class _PMEditPage(QWidget):
                     }
                     for i in range(5)
                 ],
-                "uni_box": {
-                    "enabled":    self._ub_enabled.isChecked(),
-                    "box_x_min":  _get_numpad_value(self._ub_x_min),
-                    "box_x_max":  _get_numpad_value(self._ub_x_max),
-                    "box_y_min":  _get_numpad_value(self._ub_y_min),
-                    "box_y_max":  _get_numpad_value(self._ub_y_max),
-                    "entry_side": self._ub_entry.currentData(),
-                    "exit_side":  self._ub_exit.currentData(),
-                },
+                "uni_box_zones": [
+                    {
+                        "enabled":   self._ub_enabled[i].isChecked(),
+                        "box_x_min": _get_numpad_value(self._ub_x_min[i]),
+                        "box_x_max": _get_numpad_value(self._ub_x_max[i]),
+                        "box_y_min": _get_numpad_value(self._ub_y_min[i]),
+                        "box_y_max": _get_numpad_value(self._ub_y_max[i]),
+                        "entry_side": "left",
+                        "exit_side":  "left",
+                    }
+                    for i in range(5)
+                ],
                 "envelope": {
                     "enabled":     self._env_enabled.isChecked(),
                     "lower_curve": self._read_table(self._env_lower_table),
@@ -933,7 +1031,11 @@ class _PMEditPage(QWidget):
             description=_get_alpha_value(self._gen_desc),
             view_mode=self._gen_mode.currentData(),
         )
-        QMessageBox.information(self, "PM sauvegardé", f"✓ PM-{self._pm_id:02d} sauvegardé.")
+        QMessageBox.information(
+            self,
+            t("dlg_pm_saved_title"),
+            t("dlg_pm_saved_msg").format(id=f"{self._pm_id:02d}"),
+        )
         self._main_stack.setCurrentIndex(2)
         self._on_after_save_cb(self._pm_id)
 
@@ -975,14 +1077,15 @@ class _Tile(QFrame):
         lbl_text = QLabel(label)
         lbl_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_text.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        lbl_text.setStyleSheet("background: transparent; border: none; color: #e0e0e0;")
+        lbl_text.setStyleSheet("background: transparent; border: none; color: #1A1A18;")
         v.addWidget(lbl_text)
 
     def _update_style(self) -> None:
-        bg = "#2a2a2a" if self._hovered else "#1e1e1e"
+        bg = "#F5EDD6" if self._hovered else "#FAFAF8"
+        border = "#C49A3C" if self._hovered else self._border_color
         self.setStyleSheet(
             f"QFrame {{ background-color: {bg}; "
-            f"border: 2px solid {self._border_color}; "
+            f"border: 2px solid {border}; "
             f"border-radius: 16px; }}"
             "QLabel { background: transparent; border: none; }"
         )
@@ -1004,13 +1107,13 @@ class _Tile(QFrame):
 
 
 # ===========================================================================
-# Constantes de choix — dialogues Voie X / Voie Y
+# Constantes de choix — dialogues Coordonnée X / Coordonnée Y
 # ===========================================================================
 
 _DECIMAL_CHOICES  = ["0", "1", "2", "3", "4"]
 _SENSOR_TYPES_X   = ["Linéaire", "Rotatif", "Angulaire", "Impulsion"]
 _UNITS_X          = ["mm", "cm", "°", "pulse", "µm", "in"]
-_UNITS_Y          = ["N", "kN", "kg", "lbf"]
+_UNITS_Y          = ["daN", "kN", "kg", "lbf"]
 _FILTER_CHOICES   = ["Aucun", "50 Hz", "100 Hz", "200 Hz", "500 Hz"]
 _SCALE_METHODS    = ["Sensibilité", "2 points"]
 
@@ -1042,11 +1145,11 @@ class _ChoiceDialog(QDialog):
         # Header
         hdr = QWidget()
         hdr.setFixedHeight(46)
-        hdr.setStyleSheet("background-color: #252525;")
+        hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
         lbl = QLabel(title)
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #e0e0e0;")
+        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #1A1A18;")
         hh.addWidget(lbl)
         root.addWidget(hdr)
 
@@ -1054,9 +1157,9 @@ class _ChoiceDialog(QDialog):
         for c in choices:
             b = QPushButton(c)
             b.setMinimumHeight(48)
-            bg = "#185FA5" if c == current else "#2a2a2a"
+            bg = "#A07830" if c == current else "#E8E4DC"
             b.setStyleSheet(
-                f"background-color: {bg}; color: #e0e0e0; font-size: 15px;"
+                f"background-color: {bg}; color: #1A1A18; font-size: 15px;"
                 " border: none; border-bottom: 1px solid #333;"
                 " text-align: left; padding-left: 16px;"
             )
@@ -1064,7 +1167,7 @@ class _ChoiceDialog(QDialog):
             root.addWidget(b)
 
         # Annuler
-        btn_x = QPushButton("✗  Fermer")
+        btn_x = QPushButton(t("btn_close_x"))
         btn_x.setObjectName("btn_cancel")
         btn_x.clicked.connect(self.reject)
         root.addWidget(btn_x)
@@ -1106,11 +1209,11 @@ def _make_choice_btn(
 
 
 # ===========================================================================
-# VoieXDialog — configuration Voie X (Position)
+# VoieXDialog — configuration Coordonnée X (Position)
 # ===========================================================================
 
 class _VoieXPage(QWidget):
-    """Page 2 pages — configuration Voie X (intégrée dans _settings_stack).
+    """Page 2 pages — configuration Coordonnée X (intégrée dans _settings_stack).
 
     Page 0 : Déclaration capteur (nom, type, unité, canal, décimales)
     Page 1 : Mise à l'échelle 2 points (table affichage / signal%)
@@ -1128,7 +1231,7 @@ class _VoieXPage(QWidget):
         super().showEvent(event)
 
     def _cancel(self) -> None:
-        self._main_stack.setCurrentIndex(1)
+        self._main_stack.setCurrentIndex(14)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1139,12 +1242,12 @@ class _VoieXPage(QWidget):
         # Header
         header = QWidget()
         header.setFixedHeight(50)
-        header.setStyleSheet("background-color: #252525;")
+        header.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
-        self._header_lbl = QLabel("Voie X — Déclaration capteur")
+        self._header_lbl = QLabel(t("hdr_voie_x_decl"))
         self._header_lbl.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 16px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(self._header_lbl)
         root.addWidget(header)
@@ -1169,24 +1272,24 @@ class _VoieXPage(QWidget):
         form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._name_btn = _make_alpha_btn("", title="Nom du capteur", parent=self)
-        form.addRow("Nom du capteur :", self._name_btn)
+        self._name_btn = _make_alpha_btn("", title=t("table_col_name"), parent=self)
+        form.addRow(t("lbl_sensor_name"), self._name_btn)
 
         self._sensor_type_btn = _make_choice_btn(
             _SENSOR_TYPES_X, "Linéaire", "Type de capteur", self
         )
-        form.addRow("Type de capteur :", self._sensor_type_btn)
+        form.addRow(t("lbl_sensor_type"), self._sensor_type_btn)
 
         self._unit_btn = _make_choice_btn(_UNITS_X, "mm", "Unité", self)
-        form.addRow("Unité :", self._unit_btn)
+        form.addRow(t("lbl_unit"), self._unit_btn)
 
         self._channel_btn = _make_numpad_btn(
             "1", suffix="", title="Canal MCC 118 (0-7)", parent=self
         )
-        form.addRow("Canal MCC 118 :", self._channel_btn)
+        form.addRow(t("lbl_mcc_channel"), self._channel_btn)
 
         self._decimal_btn = _make_choice_btn(_DECIMAL_CHOICES, "2", "Décimales", self)
-        form.addRow("Décimales :", self._decimal_btn)
+        form.addRow(t("lbl_decimals"), self._decimal_btn)
 
         return w
 
@@ -1196,8 +1299,8 @@ class _VoieXPage(QWidget):
         v.setContentsMargins(24, 16, 24, 16)
         v.setSpacing(12)
 
-        lbl = QLabel("Mise à l'échelle — 2 points")
-        lbl.setStyleSheet("font-size: 14px; color: #888888; font-weight: bold;")
+        lbl = QLabel(t("hdr_scale_2pts"))
+        lbl.setStyleSheet("font-size: 14px; color: #4A4844; font-weight: bold;")
         v.addWidget(lbl)
 
         grid = QGridLayout()
@@ -1206,36 +1309,36 @@ class _VoieXPage(QWidget):
         # En-têtes colonnes
         for col, txt in enumerate(["", "Affichage", "Signal  %", ""], start=0):
             lc = QLabel(txt)
-            lc.setStyleSheet("font-size: 13px; color: #888888;")
+            lc.setStyleSheet("font-size: 13px; color: #4A4844;")
             lc.setAlignment(Qt.AlignmentFlag.AlignCenter)
             grid.addWidget(lc, 0, col)
 
         # Point 1
-        grid.addWidget(QLabel("Point 1"), 1, 0)
+        grid.addWidget(QLabel(t("lbl_point1")), 1, 0)
         self._p1_display = _make_numpad_btn(
-            "0.0", suffix="", title="Point 1 — Affichage", parent=self
+            "0.0", suffix="", title=t("lbl_point1"), parent=self
         )
         grid.addWidget(self._p1_display, 1, 1)
         self._p1_signal = _make_numpad_btn(
-            "0.0", suffix=" %", title="Point 1 — Signal %", parent=self
+            "0.0", suffix=" %", title=t("lbl_point1"), parent=self
         )
         grid.addWidget(self._p1_signal, 1, 2)
-        btn_t1 = QPushButton("TEACH")
+        btn_t1 = QPushButton(t("btn_teach"))
         btn_t1.setObjectName("btn_nav")
         btn_t1.setEnabled(False)
         grid.addWidget(btn_t1, 1, 3)
 
         # Point 2
-        grid.addWidget(QLabel("Point 2"), 2, 0)
+        grid.addWidget(QLabel(t("lbl_point2")), 2, 0)
         self._p2_display = _make_numpad_btn(
-            "100.0", suffix="", title="Point 2 — Affichage", parent=self
+            "100.0", suffix="", title=t("lbl_point2"), parent=self
         )
         grid.addWidget(self._p2_display, 2, 1)
         self._p2_signal = _make_numpad_btn(
-            "100.0", suffix=" %", title="Point 2 — Signal %", parent=self
+            "100.0", suffix=" %", title=t("lbl_point2"), parent=self
         )
         grid.addWidget(self._p2_signal, 2, 2)
-        btn_t2 = QPushButton("TEACH")
+        btn_t2 = QPushButton(t("btn_teach"))
         btn_t2.setObjectName("btn_nav")
         btn_t2.setEnabled(False)
         grid.addWidget(btn_t2, 2, 3)
@@ -1246,16 +1349,16 @@ class _VoieXPage(QWidget):
 
     def _build_footer0(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(16)
-        btn_cancel = QPushButton("✗  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
         h.addStretch()
-        btn_next = QPushButton("Suivant  →")
+        btn_next = QPushButton(t("btn_next"))
         btn_next.setObjectName("btn_nav")
         btn_next.clicked.connect(self._go_page1)
         h.addWidget(btn_next)
@@ -1263,16 +1366,16 @@ class _VoieXPage(QWidget):
 
     def _build_footer1(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(16)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(self._go_page0)
         h.addWidget(btn_back)
         h.addStretch()
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
@@ -1281,12 +1384,12 @@ class _VoieXPage(QWidget):
     def _go_page0(self) -> None:
         self._stack.setCurrentIndex(0)
         self._footer.setCurrentIndex(0)
-        self._header_lbl.setText("Voie X — Déclaration capteur")
+        self._header_lbl.setText(t("hdr_voie_x_decl"))
 
     def _go_page1(self) -> None:
         self._stack.setCurrentIndex(1)
         self._footer.setCurrentIndex(1)
-        self._header_lbl.setText("Voie X — Mise à l'échelle")
+        self._header_lbl.setText(t("hdr_voie_x_scale"))
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -1351,19 +1454,16 @@ class _VoieXPage(QWidget):
         cal["p2_signal"]  = _get_numpad_value(self._p2_signal)
 
         save_config(_CONFIG_PATH, cfg)
-        QMessageBox.information(
-            self, "Voie X",
-            "✓ Configuration Voie X sauvegardée.\nRedémarrez pour appliquer.",
-        )
+        QMessageBox.information(self, t("dlg_voie_x_title"), t("dlg_voie_x_saved_msg"))
         self._main_stack.setCurrentIndex(1)
 
 
 # ===========================================================================
-# VoieYDialog — configuration Voie Y (Force)
+# VoieYDialog — configuration Coordonnée Y (Force)
 # ===========================================================================
 
 class _VoieYPage(QWidget):
-    """Page 2 pages — configuration Voie Y (intégrée dans _settings_stack).
+    """Page 2 pages — configuration Coordonnée Y (intégrée dans _settings_stack).
 
     Page 0 : Déclaration capteur (nom, unité, force max, canal, décimales)
     Page 1 : Sensibilité piézo (méthode, sensibilité, alarme, Avancé ▼)
@@ -1381,7 +1481,7 @@ class _VoieYPage(QWidget):
         super().showEvent(event)
 
     def _cancel(self) -> None:
-        self._main_stack.setCurrentIndex(1)
+        self._main_stack.setCurrentIndex(14)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1392,12 +1492,12 @@ class _VoieYPage(QWidget):
         # Header
         header = QWidget()
         header.setFixedHeight(50)
-        header.setStyleSheet("background-color: #252525;")
+        header.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
-        self._header_lbl = QLabel("Voie Y — Déclaration capteur")
+        self._header_lbl = QLabel(t("hdr_voie_y_decl"))
         self._header_lbl.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 16px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(self._header_lbl)
         root.addWidget(header)
@@ -1422,30 +1522,30 @@ class _VoieYPage(QWidget):
         form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._name_btn = _make_alpha_btn("", title="Nom du capteur", parent=self)
-        form.addRow("Nom du capteur :", self._name_btn)
+        self._name_btn = _make_alpha_btn("", title=t("table_col_name"), parent=self)
+        form.addRow(t("lbl_sensor_name"), self._name_btn)
 
         # Type fixe piézo
-        btn_piezo = QPushButton("Piézoélectrique")
+        btn_piezo = QPushButton(t("btn_piezo"))
         btn_piezo.setObjectName("btn_nav")
         btn_piezo.setEnabled(False)
-        form.addRow("Type de capteur :", btn_piezo)
+        form.addRow(t("lbl_sensor_type"), btn_piezo)
 
-        self._unit_btn = _make_choice_btn(_UNITS_Y, "N", "Unité", self)
-        form.addRow("Unité :", self._unit_btn)
+        self._unit_btn = _make_choice_btn(_UNITS_Y, "daN", "Unité", self)
+        form.addRow(t("lbl_unit"), self._unit_btn)
 
         self._max_btn = _make_numpad_btn(
-            "5000.0", suffix="", title="Force max (pleine échelle)", parent=self
+            "5000.0", suffix="", title=t("force_label"), parent=self
         )
-        form.addRow("Force max :", self._max_btn)
+        form.addRow(t("lbl_force_max"), self._max_btn)
 
         self._channel_btn = _make_numpad_btn(
             "0", suffix="", title="Canal MCC 118 (0-7)", parent=self
         )
-        form.addRow("Canal MCC 118 :", self._channel_btn)
+        form.addRow(t("lbl_mcc_channel"), self._channel_btn)
 
         self._decimal_btn = _make_choice_btn(_DECIMAL_CHOICES, "1", "Décimales", self)
-        form.addRow("Décimales :", self._decimal_btn)
+        form.addRow(t("lbl_decimals"), self._decimal_btn)
 
         return w
 
@@ -1480,9 +1580,9 @@ class _VoieYPage(QWidget):
         v.addLayout(form)
 
         # Section Avancé (collapsible)
-        self._avance_toggle = QPushButton("Avancé  ▼")
+        self._avance_toggle = QPushButton(t("btn_advanced_collapsed"))
         self._avance_toggle.setStyleSheet(
-            "background: transparent; color: #378ADD; font-size: 14px;"
+            "background: transparent; color: #A07830; font-size: 14px;"
             " font-weight: bold; border: none; text-align: left; padding: 4px 0;"
         )
         self._avance_toggle.clicked.connect(self._toggle_avance)
@@ -1526,20 +1626,22 @@ class _VoieYPage(QWidget):
     def _toggle_avance(self) -> None:
         vis = self._avance_w.isVisible()
         self._avance_w.setVisible(not vis)
-        self._avance_toggle.setText("Avancé  ▲" if not vis else "Avancé  ▼")
+        self._avance_toggle.setText(
+            t("btn_advanced_expanded") if not vis else t("btn_advanced_collapsed")
+        )
 
     def _build_footer0(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(16)
-        btn_cancel = QPushButton("✗  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
         h.addStretch()
-        btn_next = QPushButton("Suivant  →")
+        btn_next = QPushButton(t("btn_next"))
         btn_next.setObjectName("btn_nav")
         btn_next.clicked.connect(self._go_page1)
         h.addWidget(btn_next)
@@ -1547,16 +1649,16 @@ class _VoieYPage(QWidget):
 
     def _build_footer1(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(16)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(self._go_page0)
         h.addWidget(btn_back)
         h.addStretch()
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
@@ -1565,12 +1667,12 @@ class _VoieYPage(QWidget):
     def _go_page0(self) -> None:
         self._stack.setCurrentIndex(0)
         self._footer.setCurrentIndex(0)
-        self._header_lbl.setText("Voie Y — Déclaration capteur")
+        self._header_lbl.setText(t("hdr_voie_y_decl"))
 
     def _go_page1(self) -> None:
         self._stack.setCurrentIndex(1)
         self._footer.setCurrentIndex(1)
-        self._header_lbl.setText("Voie Y — Sensibilité piézo")
+        self._header_lbl.setText(t("hdr_voie_y_piezo"))
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -1588,7 +1690,7 @@ class _VoieYPage(QWidget):
         self._name_btn.setText(name or "—")
 
         for btn, val, default in [
-            (self._unit_btn,         scaling.get("force_unit"),          "N"),
+            (self._unit_btn,         scaling.get("force_unit"),          "daN"),
             (self._decimal_btn,      str(scaling.get("force_decimal", 1)), "1"),
             (self._scale_method_btn, cal.get("scale_method"),             "Sensibilité"),
             (self._filter_btn,       cal.get("filter"),                   "Aucun"),
@@ -1622,7 +1724,7 @@ class _VoieYPage(QWidget):
         cfg["calibration"].setdefault("voie_y", {})
 
         cfg["scaling"]["force_name"] = _get_alpha_value(self._name_btn)
-        cfg["scaling"]["force_unit"] = self._unit_btn.property("choice_value") or "N"
+        cfg["scaling"]["force_unit"] = self._unit_btn.property("choice_value") or "daN"
         cfg["scaling"]["force_newton_max"] = _get_numpad_value(self._max_btn)
         cfg["scaling"]["force_decimal"] = int(
             self._decimal_btn.property("choice_value") or "1"
@@ -1641,10 +1743,7 @@ class _VoieYPage(QWidget):
         cal["test_tor"]      = self._test_tor_chk.isChecked()
 
         save_config(_CONFIG_PATH, cfg)
-        QMessageBox.information(
-            self, "Voie Y",
-            "✓ Configuration Voie Y sauvegardée.\nRedémarrez pour appliquer.",
-        )
+        QMessageBox.information(self, t("dlg_voie_y_title"), t("dlg_voie_y_saved_msg"))
         self._main_stack.setCurrentIndex(1)
 
 
@@ -1690,12 +1789,12 @@ class _ControleCyclePage(QWidget):
         # Header
         hdr = QWidget()
         hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #252525;")
+        hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
         self._header_lbl = QLabel(self._TITLES[0])
         self._header_lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(self._header_lbl)
         root.addWidget(hdr)
@@ -1717,34 +1816,34 @@ class _ControleCyclePage(QWidget):
 
     def _build_footer_nav(self, page_idx: int) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(12)
 
         if page_idx > 0:
-            btn_back = QPushButton("←  Retour")
+            btn_back = QPushButton(t("btn_back_arrow"))
             btn_back.setObjectName("btn_cancel")
             btn_back.clicked.connect(
                 lambda _c=False, i=page_idx: self._go_page(i - 1)
             )
             h.addWidget(btn_back)
 
-        btn_cancel = QPushButton("✗  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
         h.addStretch()
 
         if page_idx < 3:
-            btn_next = QPushButton("Suivant  →")
+            btn_next = QPushButton(t("btn_next"))
             btn_next.setObjectName("btn_nav")
             btn_next.clicked.connect(
                 lambda _c=False, i=page_idx: self._go_page(i + 1)
             )
             h.addWidget(btn_next)
         else:
-            btn_save = QPushButton("✓  Sauvegarder")
+            btn_save = QPushButton(t("btn_save_check"))
             btn_save.setObjectName("btn_save")
             btn_save.clicked.connect(self._save)
             h.addWidget(btn_save)
@@ -1779,25 +1878,25 @@ class _ControleCyclePage(QWidget):
         self._mode_btn = _make_choice_btn(
             ["Y (x)", "Y (t)", "X (t)", "Y (x, t)"], "Y (x)", "Mode mesure", self
         )
-        form.addRow("Mode mesure :", self._mode_btn)
+        form.addRow(t("lbl_measure_mode"), self._mode_btn)
 
         self._nb_samples_btn = _make_numpad_btn(
             "1000", suffix="", title="Nombre d'échantillons", parent=self
         )
-        form.addRow("Nb d'échantillons :", self._nb_samples_btn)
+        form.addRow(t("lbl_samples_count"), self._nb_samples_btn)
 
         self._delta_x_btn = _make_choice_btn(
             ["Automatique", "Manuel"], "Automatique", "Delta X", self
         )
-        form.addRow("Delta X :", self._delta_x_btn)
+        form.addRow(t("lbl_delta_x"), self._delta_x_btn)
 
         v.addLayout(form)
 
         # Indicateur mode (texte dynamique)
         self._mode_indicator = QLabel()
         self._mode_indicator.setStyleSheet(
-            "background-color: #252525; color: #378ADD; font-size: 13px;"
-            " padding: 10px 16px; border-radius: 6px; border: 1px solid #333333;"
+            "background-color: #E8E4DC; color: #A07830; font-size: 13px;"
+            " padding: 10px 16px; border-radius: 6px; border: 1px solid #C8C4BC;"
         )
         self._mode_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._mode_indicator.setFixedHeight(50)
@@ -1830,7 +1929,7 @@ class _ControleCyclePage(QWidget):
         for txt in ["  Début", "", "  Fin"]:
             lbl = QLabel(txt)
             if txt:
-                lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #e0e0e0;")
+                lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #1A1A18;")
             hdr_row.addWidget(lbl, 0 if not txt else 1)
         v.addLayout(hdr_row)
 
@@ -1847,9 +1946,9 @@ class _ControleCyclePage(QWidget):
         self._condition_debut_btn.setMinimumHeight(54)
         cols.addWidget(self._condition_debut_btn, stretch=1)
 
-        arrow = QLabel("→")
+        arrow = QLabel(t("symbol_arrow_right"))
         arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        arrow.setStyleSheet("color: #888888; font-size: 20px;")
+        arrow.setStyleSheet("color: #4A4844; font-size: 20px;")
         arrow.setFixedWidth(24)
         cols.addWidget(arrow)
 
@@ -1871,7 +1970,7 @@ class _ControleCyclePage(QWidget):
         self._duree_btn = _make_numpad_btn(
             "20.0", suffix=" s", title="Durée du cycle (s)", parent=self
         )
-        form_duree.addRow("Durée du cycle :", self._duree_btn)
+        form_duree.addRow(t("lbl_cycle_duration"), self._duree_btn)
         v.addLayout(form_duree)
         v.addStretch()
         return w
@@ -1898,13 +1997,13 @@ class _ControleCyclePage(QWidget):
             ["Non défini", "Xmax", "Ymax", "Ymin"], "Xmax",
             "Partie ALLER jusqu'à", self,
         )
-        form.addRow("Partie ALLER jusqu'à :", self._aller_btn)
+        form.addRow(t("lbl_part_forward_until"), self._aller_btn)
 
         self._retour_btn = _make_choice_btn(
             ["Non défini", "Xmin", "Ymax", "Ymin"], "Non défini",
             "Partie RETOUR jusqu'à", self,
         )
-        form.addRow("Partie RETOUR jusqu'à :", self._retour_btn)
+        form.addRow(t("lbl_part_return_until"), self._retour_btn)
 
         v.addLayout(form)
 
@@ -1912,7 +2011,7 @@ class _ControleCyclePage(QWidget):
         ind_row = QHBoxLayout()
         ind_row.setSpacing(32)
         ind_row.addStretch()
-        for txt, color in [("↗  ALLER", "#E24B4A"), ("↘  RETOUR", "#378ADD")]:
+        for txt, color in [("↗  ALLER", "#E24B4A"), ("↘  RETOUR", "#A07830")]:
             lbl = QLabel(txt)
             lbl.setStyleSheet(
                 f"color: {color}; font-size: 18px; font-weight: bold; background: transparent;"
@@ -1943,7 +2042,7 @@ class _ControleCyclePage(QWidget):
             ["ALLER-RETOUR", "ALLER", "RETOUR"], "ALLER",
             "Traçage de la courbe", self,
         )
-        form.addRow("Traçage de la courbe :", self._tracage_btn)
+        form.addRow(t("lbl_curve_tracing"), self._tracage_btn)
 
         v.addLayout(form)
 
@@ -1951,10 +2050,10 @@ class _ControleCyclePage(QWidget):
         ind_row = QHBoxLayout()
         ind_row.setSpacing(32)
         ind_row.addStretch()
-        self._tracage_lbl_aller = QLabel("↗  ALLER")
+        self._tracage_lbl_aller = QLabel(t("lbl_stroke_forward"))
         self._tracage_lbl_aller.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ind_row.addWidget(self._tracage_lbl_aller)
-        self._tracage_lbl_retour = QLabel("↘  RETOUR")
+        self._tracage_lbl_retour = QLabel(t("lbl_stroke_return"))
         self._tracage_lbl_retour.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ind_row.addWidget(self._tracage_lbl_retour)
         ind_row.addStretch()
@@ -1968,18 +2067,18 @@ class _ControleCyclePage(QWidget):
         aller_active  = (mode != "RETOUR")
         retour_active = (mode != "ALLER")
         self._tracage_lbl_aller.setStyleSheet(
-            f"color: {'#E24B4A' if aller_active else '#555555'};"
+            f"color: {'#E24B4A' if aller_active else '#7A7870'};"
             " font-size: 18px; font-weight: bold; background: transparent;"
         )
         self._tracage_lbl_aller.setText(
-            "↗  ALLER" + ("" if aller_active else "  (ignoré)")
+            t("lbl_stroke_forward") + ("" if aller_active else "  (ignoré)")
         )
         self._tracage_lbl_retour.setStyleSheet(
-            f"color: {'#378ADD' if retour_active else '#555555'};"
+            f"color: {'#A07830' if retour_active else '#7A7870'};"
             " font-size: 18px; font-weight: bold; background: transparent;"
         )
         self._tracage_lbl_retour.setText(
-            "↘  RETOUR" + ("" if retour_active else "  (ignoré)")
+            t("lbl_stroke_return") + ("" if retour_active else "  (ignoré)")
         )
 
     # ------------------------------------------------------------------
@@ -2030,10 +2129,7 @@ class _ControleCyclePage(QWidget):
         cc["tracage"]         = self._tracage_btn.property("choice_value") or "ALLER"
 
         save_config(_CONFIG_PATH, cfg)
-        QMessageBox.information(
-            self, "Contrôle cycle",
-            "✓ Configuration sauvegardée.\nRedémarrez pour appliquer.",
-        )
+        QMessageBox.information(self, t("dlg_cycle_ctrl_title"), t("dlg_config_saved_restart_msg"))
         self._main_stack.setCurrentIndex(1)
 
 
@@ -2057,9 +2153,9 @@ class _DroitsAccesPage(QWidget):
     """Page droits d'accès — 2 pages internes (QStackedWidget)."""
 
     _LEVELS = [
-        ("pin_operateur",  "🟢", "Opérateur",      "#4caf50"),
+        ("pin_operateur",  "🟢", "Opérateur",      "#2E7D32"),
         ("pin_technicien", "🟡", "Technicien",      "#FF9800"),
-        ("pin_admin",      "🔴", "Administrateur",  "#ef5350"),
+        ("pin_admin",      "🔴", "Administrateur",  "#C62828"),
     ]
 
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
@@ -2081,12 +2177,12 @@ class _DroitsAccesPage(QWidget):
         # Header
         hdr = QWidget()
         hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #252525;")
+        hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel("🔒   Droits d'accès")
+        lbl = QLabel(t("hdr_access_rights"))
         lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(lbl)
         root.addWidget(hdr)
@@ -2112,7 +2208,7 @@ class _DroitsAccesPage(QWidget):
 
         # Activation des droits
         self._enabled_chk = QCheckBox("Activer les droits d'accès")
-        self._enabled_chk.setStyleSheet("color: #cccccc; font-size: 14px;")
+        self._enabled_chk.setStyleSheet("color: #1A1A18; font-size: 14px;")
         v.addWidget(self._enabled_chk)
 
         # Déconnexion auto
@@ -2123,21 +2219,21 @@ class _DroitsAccesPage(QWidget):
             ["Jamais", "5 minutes", "15 minutes", "1 heure"],
             "Jamais", "Déconnexion auto", self,
         )
-        form.addRow("Déconnexion auto :", self._auto_logout_btn)
+        form.addRow(t("lbl_auto_logout"), self._auto_logout_btn)
         v.addLayout(form)
 
         # Séparateur + titre
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #333333;")
+        sep.setStyleSheet("color: #C8C4BC;")
         v.addWidget(sep)
-        lbl_pin = QLabel("Modifier les codes PIN")
-        lbl_pin.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        lbl_pin = QLabel(t("lbl_modify_pin"))
+        lbl_pin.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         v.addWidget(lbl_pin)
 
         # 3 lignes PIN
         _ROW_STYLE = (
-            "background-color: #252525; border-radius: 8px; padding: 6px;"
+            "background-color: #E8E4DC; border-radius: 8px; padding: 6px;"
         )
         for key, icon, name, color in self._LEVELS:
             row_w = QWidget()
@@ -2149,10 +2245,10 @@ class _DroitsAccesPage(QWidget):
             lbl.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold; min-width: 160px;")
             rh.addWidget(lbl)
             rh.addStretch()
-            pin_lbl = QLabel("PIN : ••••")
+            pin_lbl = QLabel(t("lbl_pin_masked"))
             pin_lbl.setStyleSheet("color: #666666; font-size: 13px;")
             rh.addWidget(pin_lbl)
-            btn_mod = QPushButton("✏  Modifier")
+            btn_mod = QPushButton(t("btn_edit"))
             btn_mod.setObjectName("btn_nav")
             btn_mod.setFixedWidth(120)
             btn_mod.clicked.connect(
@@ -2170,12 +2266,14 @@ class _DroitsAccesPage(QWidget):
         v.setContentsMargins(24, 18, 24, 18)
         v.setSpacing(14)
 
-        lbl = QLabel("Tableau des niveaux d'accès")
-        lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        lbl = QLabel(t("lbl_access_levels_table"))
+        lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         v.addWidget(lbl)
 
         table = QTableWidget(3, 3)
-        table.setHorizontalHeaderLabels(["Niveau", "Nom", "Droits"])
+        table.setHorizontalHeaderLabels([
+            t("table_col_level"), t("table_col_name"), t("table_col_rights")
+        ])
         table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         table.horizontalHeader().setDefaultSectionSize(90)
         table.verticalHeader().setVisible(False)
@@ -2198,20 +2296,20 @@ class _DroitsAccesPage(QWidget):
 
     def _build_footer0(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(12)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
         h.addWidget(btn_back)
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
         h.addStretch()
-        btn_niveaux = QPushButton("Voir niveaux  →")
+        btn_niveaux = QPushButton(t("btn_view_levels"))
         btn_niveaux.setObjectName("btn_nav")
         btn_niveaux.clicked.connect(self._go_page1)
         h.addWidget(btn_niveaux)
@@ -2219,11 +2317,11 @@ class _DroitsAccesPage(QWidget):
 
     def _build_footer1(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(12)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(self._go_page0)
         h.addWidget(btn_back)
@@ -2257,7 +2355,7 @@ class _DroitsAccesPage(QWidget):
         )
         stored = ac.get(level_key, _hash_pin(default_plain[level_key]))
         if not _check_pin(entered_old, stored):
-            QMessageBox.warning(self, "PIN incorrect", "L'ancien PIN est incorrect.")
+            QMessageBox.warning(self, t("dlg_pin_incorrect_title"), t("dlg_old_pin_wrong_msg"))
             return
 
         # 2. Nouveau PIN
@@ -2275,14 +2373,18 @@ class _DroitsAccesPage(QWidget):
         if not dlg_conf.exec():
             return
         if dlg_conf.value() != new_pin:
-            QMessageBox.warning(self, "PIN différent", "Les deux PIN ne correspondent pas.")
+            QMessageBox.warning(self, t("dlg_pin_different_title"), t("dlg_pin_mismatch_msg"))
             return
 
         # 4. Sauvegarder
         ac[level_key] = _hash_pin(new_pin)
         cfg["access_control"] = ac
         save_config(_CONFIG_PATH, cfg)
-        QMessageBox.information(self, "PIN modifié", f"✓ PIN {level_name} mis à jour.")
+        QMessageBox.information(
+            self,
+            t("dlg_pin_updated_title"),
+            t("dlg_pin_updated_msg").format(level_name=level_name),
+        )
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -2308,8 +2410,9 @@ class _DroitsAccesPage(QWidget):
             ac.setdefault(key, _hash_pin(plain))
         save_config(_CONFIG_PATH, cfg)
         QMessageBox.information(
-            self, "Droits d'accès",
-            "✓ Configuration sauvegardée.\nRedémarrez pour appliquer.",
+            self,
+            t("dlg_access_rights_saved_title"),
+            t("dlg_config_saved_restart_msg"),
         )
         self._main_stack.setCurrentIndex(1)
 
@@ -2343,12 +2446,12 @@ class _DateHeurePage(QWidget):
         # Header
         hdr = QWidget()
         hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #252525;")
+        hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel("📅   Date / Heure")
+        lbl = QLabel(t("hdr_datetime"))
         lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(lbl)
         root.addWidget(hdr)
@@ -2366,12 +2469,12 @@ class _DateHeurePage(QWidget):
         ntp_v.setSpacing(10)
 
         self._ntp_check = QCheckBox("Utiliser l'horloge serveur pour horodatage auto.")
-        self._ntp_check.setStyleSheet("color: #cccccc; font-size: 14px;")
+        self._ntp_check.setStyleSheet("color: #1A1A18; font-size: 14px;")
         ntp_v.addWidget(self._ntp_check)
 
         ntp_row = QHBoxLayout()
-        ntp_lbl = QLabel("Serveur NTP :")
-        ntp_lbl.setStyleSheet("color: #888888; font-size: 13px;")
+        ntp_lbl = QLabel(t("lbl_ntp_server"))
+        ntp_lbl.setStyleSheet("color: #4A4844; font-size: 13px;")
         ntp_row.addWidget(ntp_lbl)
         self._btn_ntp = _make_alpha_btn("pool.ntp.org", title="Serveur NTP", parent=self)
         ntp_row.addWidget(self._btn_ntp, stretch=1)
@@ -2388,12 +2491,12 @@ class _DateHeurePage(QWidget):
         # Séparateur
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #333333;")
+        sep.setStyleSheet("color: #C8C4BC;")
         form_v.addWidget(sep)
 
         # ---- Date ----
-        date_lbl = QLabel("Date")
-        date_lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        date_lbl = QLabel(t("lbl_date"))
+        date_lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         form_v.addWidget(date_lbl)
 
         date_row = QHBoxLayout()
@@ -2406,7 +2509,7 @@ class _DateHeurePage(QWidget):
             col = QVBoxLayout()
             col.setSpacing(4)
             lbl_u = QLabel(unit_lbl)
-            lbl_u.setStyleSheet("color: #888888; font-size: 12px;")
+            lbl_u.setStyleSheet("color: #4A4844; font-size: 12px;")
             lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
             col.addWidget(lbl_u)
             btn = _make_numpad_btn(default, suffix="", title=title, parent=self)
@@ -2416,8 +2519,8 @@ class _DateHeurePage(QWidget):
         form_v.addLayout(date_row)
 
         # ---- Heure ----
-        heure_lbl = QLabel("Heure")
-        heure_lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        heure_lbl = QLabel(t("lbl_time"))
+        heure_lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         form_v.addWidget(heure_lbl)
 
         heure_row = QHBoxLayout()
@@ -2430,7 +2533,7 @@ class _DateHeurePage(QWidget):
             col = QVBoxLayout()
             col.setSpacing(4)
             lbl_u = QLabel(unit_lbl)
-            lbl_u.setStyleSheet("color: #888888; font-size: 12px;")
+            lbl_u.setStyleSheet("color: #4A4844; font-size: 12px;")
             lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
             col.addWidget(lbl_u)
             btn = _make_numpad_btn(default, suffix="", title=title, parent=self)
@@ -2445,18 +2548,18 @@ class _DateHeurePage(QWidget):
         # Footer
         footer = QWidget()
         footer.setFixedHeight(64)
-        footer.setStyleSheet("background-color: #181818;")
+        footer.setStyleSheet("background-color: #F0EDE6;")
         fh = QHBoxLayout(footer)
         fh.setContentsMargins(24, 10, 24, 10)
         fh.setSpacing(12)
 
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
         fh.addWidget(btn_back)
         fh.addStretch()
 
-        btn_apply = QPushButton("✓  Appliquer")
+        btn_apply = QPushButton(t("btn_apply"))
         btn_apply.setObjectName("btn_save")
         btn_apply.clicked.connect(self._apply)
         fh.addWidget(btn_apply)
@@ -2515,12 +2618,12 @@ class _DateHeurePage(QWidget):
                 capture_output=True,
             )
             QMessageBox.information(
-                self, "Date / Heure",
+                self, t("dlg_datetime_title"),
                 f"✓ Date et heure appliquées :\n{date_str}",
             )
         except subprocess.CalledProcessError as e:
             QMessageBox.warning(
-                self, "Erreur",
+                self, t("dlg_error_title"),
                 f"Impossible d'appliquer la date :\n{e.stderr.decode()}\n\n"
                 "Vérifiez que le Pi a les droits sudo sans mot de passe.",
             )
@@ -2581,12 +2684,12 @@ class _AffichageProdPage(QWidget):
         # Header
         hdr = QWidget()
         hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #252525;")
+        hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel("🖥   Affichage production")
+        lbl = QLabel(t("hdr_display"))
         lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(lbl)
         root.addWidget(hdr)
@@ -2612,13 +2715,13 @@ class _AffichageProdPage(QWidget):
         v.setSpacing(16)
 
         # ---- Histogramme ----
-        lbl_h = QLabel("Histogramme")
-        lbl_h.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        lbl_h = QLabel(t("lbl_histogram"))
+        lbl_h.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         v.addWidget(lbl_h)
 
         _PB_STYLE = (
             "QProgressBar { border: 1px solid #444; border-radius: 4px;"
-            " background: #1a1a1a; height: 22px; }"
+            " background: #FAFAF8; height: 22px; }"
             "QProgressBar::chunk { background-color: #E24B4A; border-radius: 4px; }"
         )
         self._histo_group = QButtonGroup(self)
@@ -2630,7 +2733,7 @@ class _AffichageProdPage(QWidget):
             row = QHBoxLayout()
             row.setSpacing(10)
             rb = QRadioButton(val)
-            rb.setStyleSheet("color: #cccccc; font-size: 13px; min-width: 160px;")
+            rb.setStyleSheet("color: #1A1A18; font-size: 13px; min-width: 160px;")
             self._histo_group.addButton(rb, idx)
             self._histo_btns.append(rb)
             row.addWidget(rb)
@@ -2642,7 +2745,7 @@ class _AffichageProdPage(QWidget):
             pb.setStyleSheet(_PB_STYLE)
             row.addWidget(pb, stretch=1)
             lbl_val = QLabel(f"65{suffix}")
-            lbl_val.setStyleSheet("color: #888888; font-size: 12px; min-width: 50px;")
+            lbl_val.setStyleSheet("color: #4A4844; font-size: 12px; min-width: 50px;")
             row.addWidget(lbl_val)
             v.addLayout(row)
 
@@ -2651,16 +2754,16 @@ class _AffichageProdPage(QWidget):
         # ---- Séparateur ----
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #333333;")
+        sep.setStyleSheet("color: #C8C4BC;")
         v.addWidget(sep)
 
         # ---- Outil d'évaluation ----
-        lbl_outil = QLabel("Outil d'évaluation")
-        lbl_outil.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        lbl_outil = QLabel(t("lbl_eval_tool"))
+        lbl_outil.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         v.addWidget(lbl_outil)
 
         _APE_STYLE = (
-            "background: #1e1e1e; border: 2px solid #378ADD;"
+            "background: #FAFAF8; border: 2px solid #C49A3C;"
             " border-radius: 4px; padding: 2px 8px;"
         )
 
@@ -2668,12 +2771,12 @@ class _AffichageProdPage(QWidget):
         row_fp = QHBoxLayout()
         row_fp.setSpacing(14)
         self._fenetre_pleine_chk = QCheckBox("Fenêtre pleine")
-        self._fenetre_pleine_chk.setStyleSheet("color: #cccccc; font-size: 13px;")
+        self._fenetre_pleine_chk.setStyleSheet("color: #1A1A18; font-size: 13px;")
         self._fenetre_pleine_chk.setChecked(True)
         row_fp.addWidget(self._fenetre_pleine_chk)
         row_fp.addStretch()
-        lbl_fp = QLabel("█████")
-        lbl_fp.setStyleSheet(f"color: #378ADD; font-size: 16px; {_APE_STYLE}")
+        lbl_fp = QLabel(t("preview_full_block"))
+        lbl_fp.setStyleSheet(f"color: #A07830; font-size: 16px; {_APE_STYLE}")
         row_fp.addWidget(lbl_fp)
         v.addLayout(row_fp)
 
@@ -2681,12 +2784,12 @@ class _AffichageProdPage(QWidget):
         row_es = QHBoxLayout()
         row_es.setSpacing(14)
         self._indication_es_chk = QCheckBox("Indication E/S")
-        self._indication_es_chk.setStyleSheet("color: #cccccc; font-size: 13px;")
+        self._indication_es_chk.setStyleSheet("color: #1A1A18; font-size: 13px;")
         self._indication_es_chk.setChecked(True)
         row_es.addWidget(self._indication_es_chk)
         row_es.addStretch()
-        lbl_es = QLabel("→ □ →")
-        lbl_es.setStyleSheet(f"color: #378ADD; font-size: 14px; {_APE_STYLE}")
+        lbl_es = QLabel(t("preview_io_arrow"))
+        lbl_es.setStyleSheet(f"color: #A07830; font-size: 14px; {_APE_STYLE}")
         row_es.addWidget(lbl_es)
         v.addLayout(row_es)
 
@@ -2700,19 +2803,19 @@ class _AffichageProdPage(QWidget):
         v.setContentsMargins(24, 18, 24, 14)
         v.setSpacing(10)
 
-        lbl = QLabel("Feu bicolore — style badge résultat")
-        lbl.setStyleSheet("color: #888888; font-size: 13px; font-weight: bold;")
+        lbl = QLabel(t("hdr_led_style"))
+        lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
         v.addWidget(lbl)
 
         self._feu_group = QButtonGroup(self)
         self._feu_btns: list = []
 
         _OK_STYLE  = (
-            "background-color: #1a3a1a; color: #4caf50; border-radius: 6px;"
+            "background-color: #F1F8E9; color: #2E7D32; border: 1px solid #2E7D32; border-radius: 6px;"
             " font-size: 18px; font-weight: bold;"
         )
         _NOK_STYLE = (
-            "background-color: #3a1a1a; color: #ef5350; border-radius: 6px;"
+            "background-color: #FDECEC; color: #C62828; border: 1px solid #C62828; border-radius: 6px;"
             " font-size: 18px; font-weight: bold;"
         )
 
@@ -2721,7 +2824,7 @@ class _AffichageProdPage(QWidget):
             row = QHBoxLayout()
             row.setSpacing(12)
             rb = QRadioButton(val)
-            rb.setStyleSheet("color: #cccccc; font-size: 13px; min-width: 120px;")
+            rb.setStyleSheet("color: #1A1A18; font-size: 13px; min-width: 120px;")
             self._feu_group.addButton(rb, idx)
             self._feu_btns.append(rb)
             row.addWidget(rb)
@@ -2741,20 +2844,20 @@ class _AffichageProdPage(QWidget):
     # ------------------------------------------------------------------
     def _build_footer0(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(12)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
         h.addWidget(btn_back)
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
         h.addStretch()
-        btn_feu = QPushButton("Feu bicolore  →")
+        btn_feu = QPushButton(t("btn_bicolor_next"))
         btn_feu.setObjectName("btn_nav")
         btn_feu.clicked.connect(self._go_page1)
         h.addWidget(btn_feu)
@@ -2762,16 +2865,16 @@ class _AffichageProdPage(QWidget):
 
     def _build_footer1(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #181818;")
+        w.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(w)
         h.setContentsMargins(24, 10, 24, 10)
         h.setSpacing(12)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(self._go_page0)
         h.addWidget(btn_back)
         h.addStretch()
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
@@ -2829,10 +2932,7 @@ class _AffichageProdPage(QWidget):
         if hasattr(main_win, "apply_display_settings"):
             main_win.apply_display_settings()
 
-        QMessageBox.information(
-            self, "Affichage production",
-            "✓ Préférences d'affichage sauvegardées.",
-        )
+        QMessageBox.information(self, t("dlg_display_title"), t("dlg_display_saved_msg"))
         self._main_stack.setCurrentIndex(1)
 
 
@@ -2866,13 +2966,13 @@ class _ExportationPage(QWidget):
         """Remet les boutons à leur état initial si aucun worker ne tourne."""
         if not (self._worker_usb is not None and self._worker_usb.isRunning()):
             self._btn_export.setEnabled(True)
-            self._btn_export.setText("💾  Exporter vers la clé USB")
+            self._btn_export.setText(t("btn_export_usb"))
         if not (self._worker_pdf is not None and self._worker_pdf.isRunning()):
             self._btn_pdf.setEnabled(True)
-            self._btn_pdf.setText("📄  Générer rapport PDF")
+            self._btn_pdf.setText(t("btn_generate_pdf"))
         if not (self._worker_detect is not None and self._worker_detect.isRunning()):
             self._btn_detect.setEnabled(True)
-            self._btn_detect.setText("🔍  Détecter les clés USB")
+            self._btn_detect.setText(t("btn_detect_usb"))
 
     def _cancel(self) -> None:
         self._main_stack.setCurrentIndex(1)
@@ -2886,12 +2986,12 @@ class _ExportationPage(QWidget):
         # Header commun
         header = QWidget()
         header.setFixedHeight(50)
-        header.setStyleSheet("background-color: #252525;")
+        header.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel("💾  Exportation")
+        lbl = QLabel(t("hdr_export"))
         lbl.setStyleSheet(
-            "font-size: 17px; font-weight: bold; color: #e0e0e0; background: transparent;"
+            "font-size: 17px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
         hh.addWidget(lbl)
         root.addWidget(header)
@@ -2922,15 +3022,15 @@ class _ExportationPage(QWidget):
         v.setSpacing(18)
 
         # ---- Section : Dossier local ----
-        sec0 = QLabel("📁  Dossier local")
-        sec0.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
+        sec0 = QLabel(t("lbl_local_folder"))
+        sec0.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A4844;")
         v.addWidget(sec0)
 
         cfg = _load_cfg_safe()
         data_dir = cfg.get("storage", {}).get("data_dir", "./data")
         self._data_dir_lbl = QLabel(str(Path(data_dir).resolve()))
         self._data_dir_lbl.setStyleSheet(
-            "background-color: #2a2a2a; color: #aaaaaa; border: 1px solid #444;"
+            "background-color: #E8E4DC; color: #4A4844; border: 1px solid #C8C4BC;"
             " border-radius: 6px; padding: 8px 12px; font-size: 14px;"
         )
         self._data_dir_lbl.setWordWrap(True)
@@ -2942,17 +3042,17 @@ class _ExportationPage(QWidget):
         v.addWidget(sep0)
 
         # ---- Section : Clé USB ----
-        sec1 = QLabel("🔌  Clé USB")
-        sec1.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
+        sec1 = QLabel(t("lbl_usb_key"))
+        sec1.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A4844;")
         v.addWidget(sec1)
 
-        self._btn_detect = QPushButton("🔍  Détecter les clés USB")
+        self._btn_detect = QPushButton(t("btn_detect_usb"))
         self._btn_detect.setObjectName("btn_nav")
         self._btn_detect.clicked.connect(self._detect_usb)
         v.addWidget(self._btn_detect)
 
-        self._usb_status_lbl = QLabel("Aucune clé USB détectée")
-        self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
+        self._usb_status_lbl = QLabel(t("lbl_no_usb"))
+        self._usb_status_lbl.setStyleSheet("color: #4A4844; font-size: 14px;")
         v.addWidget(self._usb_status_lbl)
 
         form_usb = QFormLayout()
@@ -2978,7 +3078,7 @@ class _ExportationPage(QWidget):
         fw_usb.setLayout(form_usb)
         v.addWidget(fw_usb)
 
-        self._btn_export = QPushButton("💾  Exporter vers la clé USB")
+        self._btn_export = QPushButton(t("btn_export_usb"))
         self._btn_export.setObjectName("btn_save")
         self._btn_export.clicked.connect(self._do_export_usb)
         v.addWidget(self._btn_export)
@@ -2989,8 +3089,8 @@ class _ExportationPage(QWidget):
         v.addWidget(sep1)
 
         # ---- Section : Rapport PDF ----
-        sec2 = QLabel("📄  Rapport PDF")
-        sec2.setStyleSheet("font-size: 14px; font-weight: bold; color: #888888;")
+        sec2 = QLabel(t("lbl_pdf_report"))
+        sec2.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A4844;")
         v.addWidget(sec2)
 
         form_pdf = QFormLayout()
@@ -3014,7 +3114,7 @@ class _ExportationPage(QWidget):
         fw_pdf.setLayout(form_pdf)
         v.addWidget(fw_pdf)
 
-        self._btn_pdf = QPushButton("📄  Générer rapport PDF")
+        self._btn_pdf = QPushButton(t("btn_generate_pdf"))
         self._btn_pdf.setObjectName("btn_nav")
         self._btn_pdf.clicked.connect(self._do_generate_pdf)
         v.addWidget(self._btn_pdf)
@@ -3052,10 +3152,10 @@ class _ExportationPage(QWidget):
             "Nommage fichier",
             self,
         )
-        form.addRow("Nommage fichier :", self._nommage_btn)
+        form.addRow(t("lbl_file_naming"), self._nommage_btn)
 
         self._auto_export_chk = QCheckBox("Exporter automatiquement à chaque cycle")
-        form.addRow("Export automatique :", self._auto_export_chk)
+        form.addRow(t("lbl_auto_export"), self._auto_export_chk)
 
         self._dest_auto_btn = _make_choice_btn(
             ["Dossier local", "Clé USB si présente"],
@@ -3063,7 +3163,7 @@ class _ExportationPage(QWidget):
             "Destination auto",
             self,
         )
-        form.addRow("Destination auto :", self._dest_auto_btn)
+        form.addRow(t("lbl_auto_destination"), self._dest_auto_btn)
 
         fw = QWidget()
         fw.setLayout(form)
@@ -3079,24 +3179,24 @@ class _ExportationPage(QWidget):
     # ------------------------------------------------------------------
     def _build_footer0(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #1a1a1a; border-top: 1px solid #333;")
+        w.setStyleSheet("background-color: #FAFAF8; border-top: 1px solid #C8C4BC;")
         h = QHBoxLayout(w)
         h.setContentsMargins(16, 8, 16, 8)
         h.setSpacing(12)
 
-        btn_cancel = QPushButton("←  Retour")
+        btn_cancel = QPushButton(t("btn_back_arrow"))
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
 
         h.addStretch()
 
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
 
-        btn_next = QPushButton("Avancé  →")
+        btn_next = QPushButton(t("btn_advanced_next"))
         btn_next.setObjectName("btn_nav")
         btn_next.clicked.connect(self._go_page1)
         h.addWidget(btn_next)
@@ -3105,19 +3205,19 @@ class _ExportationPage(QWidget):
 
     def _build_footer1(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #1a1a1a; border-top: 1px solid #333;")
+        w.setStyleSheet("background-color: #FAFAF8; border-top: 1px solid #C8C4BC;")
         h = QHBoxLayout(w)
         h.setContentsMargins(16, 8, 16, 8)
         h.setSpacing(12)
 
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(self._go_page0)
         h.addWidget(btn_back)
 
         h.addStretch()
 
-        btn_save = QPushButton("✓  Sauvegarder")
+        btn_save = QPushButton(t("btn_save_check"))
         btn_save.setObjectName("btn_save")
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
@@ -3190,7 +3290,7 @@ class _ExportationPage(QWidget):
         from core.export_manager import ExportWorker
 
         self._btn_detect.setEnabled(False)
-        self._btn_detect.setText("⏳  Recherche...")
+        self._btn_detect.setText(t("btn_searching"))
         self._worker_detect = ExportWorker(task="detect")
         self._worker_detect.drives_detected.connect(self._on_drives_detected)
         self._worker_detect.task_done.connect(self._on_detect_done)
@@ -3201,25 +3301,25 @@ class _ExportationPage(QWidget):
 
     def _on_detect_done(self, success: bool, message: str) -> None:
         self._btn_detect.setEnabled(True)
-        self._btn_detect.setText("🔍  Détecter les clés USB")
+        self._btn_detect.setText(t("btn_detect_usb"))
         self._worker_detect = None
         self._usb_status_lbl.setText(message)
         if success:
             self._usb_status_lbl.setStyleSheet("color: #1D9E75; font-size: 14px;")
         else:
-            self._usb_status_lbl.setStyleSheet("color: #888888; font-size: 14px;")
+            self._usb_status_lbl.setStyleSheet("color: #4A4844; font-size: 14px;")
 
     def _do_export_usb(self) -> None:
         if not self._detected_drives:
             QMessageBox.warning(
                 self,
-                "Export USB",
-                "Aucune clé USB détectée.\nBranchez une clé USB et cliquez sur Détecter.",
+                t("dlg_export_usb_title"),
+                t("dlg_no_usb_detected_msg"),
             )
             return
 
         self._btn_export.setEnabled(False)
-        self._btn_export.setText("⏳  Export en cours...")
+        self._btn_export.setText(t("btn_exporting"))
 
         from core.export_manager import ExportWorker
 
@@ -3249,17 +3349,17 @@ class _ExportationPage(QWidget):
     def _on_export_done(self, success: bool, message: str) -> None:
         print(f"[DEBUG] _on_export_done: success={success}, msg={message}")
         self._btn_export.setEnabled(True)
-        self._btn_export.setText("💾  Exporter vers la clé USB")
+        self._btn_export.setText(t("btn_export_usb"))
         self._worker_usb = None  # nettoyage manuel
         print("[DEBUG] Bouton export réactivé")
         if success:
-            QMessageBox.information(self, "Export USB terminé", message)
+            QMessageBox.information(self, t("dlg_export_usb_title"), message)
         else:
-            QMessageBox.warning(self, "Export USB", f"Erreur : {message}")
+            QMessageBox.warning(self, t("dlg_export_usb_title"), f"Erreur : {message}")
 
     def _do_generate_pdf(self) -> None:
         self._btn_pdf.setEnabled(False)
-        self._btn_pdf.setText("⏳  Génération en cours...")
+        self._btn_pdf.setText(t("btn_generating"))
 
         from core.export_manager import ExportWorker
 
@@ -3299,12 +3399,12 @@ class _ExportationPage(QWidget):
 
     def _on_pdf_done(self, success: bool, message: str) -> None:
         self._btn_pdf.setEnabled(True)
-        self._btn_pdf.setText("📄  Générer rapport PDF")
+        self._btn_pdf.setText(t("btn_generate_pdf"))
         self._worker_pdf = None  # nettoyage manuel
         if success:
-            QMessageBox.information(self, "Rapport PDF", message)
+            QMessageBox.information(self, t("lbl_pdf_report"), message)
         else:
-            QMessageBox.warning(self, "Rapport PDF", f"Erreur : {message}")
+            QMessageBox.warning(self, t("lbl_pdf_report"), f"Erreur : {message}")
 
 
 def _load_cfg_safe() -> dict:
@@ -3413,7 +3513,7 @@ def _build_cycles_from_csv(
 def _extras_section_header(title: str) -> QLabel:
     lbl = QLabel(title)
     lbl.setStyleSheet(
-        "background-color: #444444; color: #C49A3C; font-size: 14px; "
+        "background-color: #FAFAF8; color: #C49A3C; font-size: 14px; "
         "font-weight: bold; padding: 8px; border-radius: 6px; "
         "margin-top: 10px;"
     )
@@ -3441,7 +3541,7 @@ class _ExtrasPage(QWidget):
         root.setSpacing(0)
 
         # ── Header ──────────────────────────────────────────────────
-        hdr = QLabel("⚙   Extras")
+        hdr = QLabel(t("hdr_extras"))
         hdr.setStyleSheet(
             f"background-color: {_C['header_bg']}; color: {_C['text']}; "
             "font-size: 20px; font-weight: bold; padding: 14px 20px;"
@@ -3483,7 +3583,7 @@ class _ExtrasPage(QWidget):
         self._mb_port_btn = _make_numpad_btn(
             str(mb.get("port", 502)),
             suffix="",
-            title="Port Modbus",
+            title=t("dlg_modbus_title"),
             parent=self,
         )
         self._mb_poll_btn = _make_numpad_btn(
@@ -3493,11 +3593,11 @@ class _ExtrasPage(QWidget):
             parent=self,
         )
 
-        form_mb.addRow(QLabel("IP Automate :"), self._mb_host_btn)
-        form_mb.addRow(QLabel("Port Modbus :"), self._mb_port_btn)
-        form_mb.addRow(QLabel("Intervalle poll :"), self._mb_poll_btn)
+        form_mb.addRow(QLabel(t("lbl_plc_ip")), self._mb_host_btn)
+        form_mb.addRow(QLabel(t("lbl_modbus_port")), self._mb_port_btn)
+        form_mb.addRow(QLabel(t("lbl_poll_interval")), self._mb_poll_btn)
 
-        btn_apply_mb = QPushButton("✓  Appliquer")
+        btn_apply_mb = QPushButton(t("btn_apply"))
         btn_apply_mb.setObjectName("btn_save")
         btn_apply_mb.clicked.connect(self._apply_modbus)
         form_mb.addRow("", btn_apply_mb)
@@ -3519,7 +3619,7 @@ class _ExtrasPage(QWidget):
         net = cfg.get("network", {})
 
         # eth0
-        lbl_eth0 = QLabel("── eth0 (automate) ──")
+        lbl_eth0 = QLabel(t("hdr_eth0"))
         lbl_eth0.setStyleSheet("color: #C49A3C; font-weight: bold;")
         form_net.addRow(lbl_eth0)
 
@@ -3534,70 +3634,37 @@ class _ExtrasPage(QWidget):
             "Masque réseau",
             self,
         )
-        form_net.addRow(QLabel("IP fixe eth0 :"), self._eth0_ip_btn)
-        form_net.addRow(QLabel("Masque réseau :"), self._eth0_mask_btn)
+        form_net.addRow(QLabel(t("lbl_eth0_ip")), self._eth0_ip_btn)
+        form_net.addRow(QLabel(t("lbl_netmask")), self._eth0_mask_btn)
 
-        btn_apply_eth0 = QPushButton("✓  Appliquer eth0")
+        btn_apply_eth0 = QPushButton(t("btn_apply_eth0"))
         btn_apply_eth0.setObjectName("btn_save")
         btn_apply_eth0.clicked.connect(self._apply_eth0)
         form_net.addRow("", btn_apply_eth0)
 
         # WiFi (lecture seule)
-        lbl_wifi = QLabel("── WiFi (réseau entreprise) ──")
+        lbl_wifi = QLabel(t("hdr_wifi"))
         lbl_wifi.setStyleSheet("color: #C49A3C; font-weight: bold; margin-top: 6px;")
         form_net.addRow(lbl_wifi)
 
         self._wifi_ip_lbl = QLabel("—")
         self._wifi_ssid_lbl = QLabel("—")
-        form_net.addRow(QLabel("IP WiFi :"), self._wifi_ip_lbl)
-        form_net.addRow(QLabel("SSID :"), self._wifi_ssid_lbl)
+        form_net.addRow(QLabel(t("lbl_wifi_ip")), self._wifi_ip_lbl)
+        form_net.addRow(QLabel(t("lbl_wifi_ssid")), self._wifi_ssid_lbl)
 
         note_wifi = QLabel(
             "ℹ La config WiFi se fait via raspi-config ou l'interface graphique du Pi."
         )
         note_wifi.setWordWrap(True)
-        note_wifi.setStyleSheet("color: #AAAAAA; font-size: 12px;")
+        note_wifi.setStyleSheet("color: #4A4844; font-size: 12px;")
         form_net.addRow(note_wifi)
 
-        btn_refresh_net = QPushButton("🔄  Rafraîchir réseau")
+        btn_refresh_net = QPushButton(t("btn_refresh_network"))
         btn_refresh_net.setObjectName("btn_nav")
         btn_refresh_net.clicked.connect(self._refresh_network)
         form_net.addRow("", btn_refresh_net)
 
         v.addWidget(fw_net)
-
-        # ── Section 3 : Infos système ────────────────────────────────
-        v.addWidget(_extras_section_header("ℹ️ Informations système"))
-
-        fw_sys = QFrame()
-        fw_sys.setStyleSheet(
-            f"background-color: {_C['panel']}; border-radius: 8px; padding: 4px;"
-        )
-        form_sys = QFormLayout(fw_sys)
-        form_sys.setContentsMargins(12, 10, 12, 10)
-        form_sys.setSpacing(10)
-        form_sys.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
-        self._sys_labels: dict[str, QLabel] = {}
-        for key in ("version", "modele", "os", "uptime", "disque", "ram", "temp"):
-            lbl = QLabel("—")
-            lbl.setWordWrap(True)
-            self._sys_labels[key] = lbl
-
-        form_sys.addRow(QLabel("Version logiciel :"), self._sys_labels["version"])
-        form_sys.addRow(QLabel("Modèle Pi :"), self._sys_labels["modele"])
-        form_sys.addRow(QLabel("OS :"), self._sys_labels["os"])
-        form_sys.addRow(QLabel("Uptime :"), self._sys_labels["uptime"])
-        form_sys.addRow(QLabel("Espace disque :"), self._sys_labels["disque"])
-        form_sys.addRow(QLabel("RAM utilisée :"), self._sys_labels["ram"])
-        form_sys.addRow(QLabel("Température CPU :"), self._sys_labels["temp"])
-
-        btn_refresh_sys = QPushButton("🔄  Rafraîchir infos")
-        btn_refresh_sys.setObjectName("btn_nav")
-        btn_refresh_sys.clicked.connect(self._refresh_sysinfo)
-        form_sys.addRow("", btn_refresh_sys)
-
-        v.addWidget(fw_sys)
         v.addStretch()
 
         scroll.setWidget(content)
@@ -3611,7 +3678,7 @@ class _ExtrasPage(QWidget):
         )
         fh = QHBoxLayout(footer)
         fh.setContentsMargins(16, 8, 16, 8)
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(
             lambda: self._main_stack.setCurrentIndex(1)
@@ -3634,8 +3701,7 @@ class _ExtrasPage(QWidget):
         mask = net.get("eth0_mask", "/24 (255.255.255.0)")
         self._eth0_mask_btn.setProperty("choice_value", mask)
         self._eth0_mask_btn.setText(mask)
-        # Sys info + réseau
-        self._refresh_sysinfo()
+        # Réseau
         self._refresh_network()
 
     # ------------------------------------------------------------------
@@ -3647,7 +3713,7 @@ class _ExtrasPage(QWidget):
             port = int(port_str)
             poll = int(poll_str)
         except ValueError:
-            QMessageBox.warning(self, "Modbus", "Port et intervalle doivent être des entiers.")
+            QMessageBox.warning(self, t("dlg_modbus_title"), t("dlg_modbus_int_error_msg"))
             return
         cfg = _load_cfg_safe()
         cfg.setdefault("modbus", {})
@@ -3655,7 +3721,7 @@ class _ExtrasPage(QWidget):
         cfg["modbus"]["port"] = port
         cfg["modbus"]["poll_interval_ms"] = poll
         save_config(_CONFIG_PATH, cfg)
-        QMessageBox.information(self, "Modbus", "Configuration sauvegardée.\nRedémarrez pour appliquer.")
+        QMessageBox.information(self, t("dlg_modbus_title"), t("dlg_config_saved_restart_plain_msg"))
 
     # ------------------------------------------------------------------
     def _apply_eth0(self) -> None:
@@ -3691,7 +3757,7 @@ class _ExtrasPage(QWidget):
                     self, "Réseau", f"Erreur nmcli :\n{result.stderr.strip()}"
                 )
         except Exception as e:
-            QMessageBox.warning(self, "Réseau", f"Erreur : {e}")
+            QMessageBox.warning(self, t("dlg_network_title"), f"Erreur : {e}")
 
     # ------------------------------------------------------------------
     def _refresh_network(self) -> None:
@@ -3721,10 +3787,95 @@ class _ExtrasPage(QWidget):
             self._wifi_ssid_lbl.setText("—")
 
     # ------------------------------------------------------------------
+
+class _InfoSystemePage(QWidget):
+    """Page Informations système (index 15) — extraite de Extras."""
+
+    def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._main_stack = stack
+        self.setStyleSheet(_DIALOG_STYLE)
+        self._build_ui()
+
+    def showEvent(self, event) -> None:
+        self._refresh_sysinfo()
+        super().showEvent(event)
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        hdr = QLabel("ℹ️  " + t("lbl_sw_version").split(":")[0].strip() if False else "ℹ️  Informations système")
+        hdr.setStyleSheet(
+            f"background-color: {_C['header_bg']}; color: {_C['text']}; "
+            "font-size: 20px; font-weight: bold; padding: 14px 20px;"
+        )
+        root.addWidget(hdr)
+
+        # Contenu
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background-color: transparent;")
+
+        content = QWidget()
+        content.setStyleSheet(f"background-color: {_C['bg']};")
+        v = QVBoxLayout(content)
+        v.setContentsMargins(20, 16, 20, 20)
+        v.setSpacing(8)
+
+        fw_sys = QFrame()
+        fw_sys.setStyleSheet(
+            f"background-color: {_C['panel']}; border-radius: 8px; padding: 4px;"
+        )
+        form_sys = QFormLayout(fw_sys)
+        form_sys.setContentsMargins(12, 10, 12, 10)
+        form_sys.setSpacing(10)
+        form_sys.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._sys_labels: dict[str, QLabel] = {}
+        for key in ("version", "modele", "os", "uptime", "disque", "ram", "temp"):
+            lbl = QLabel("—")
+            lbl.setWordWrap(True)
+            self._sys_labels[key] = lbl
+
+        form_sys.addRow(QLabel(t("lbl_sw_version")), self._sys_labels["version"])
+        form_sys.addRow(QLabel(t("lbl_pi_model")), self._sys_labels["modele"])
+        form_sys.addRow(QLabel(t("lbl_os")), self._sys_labels["os"])
+        form_sys.addRow(QLabel(t("lbl_uptime")), self._sys_labels["uptime"])
+        form_sys.addRow(QLabel(t("lbl_disk_space")), self._sys_labels["disque"])
+        form_sys.addRow(QLabel(t("lbl_ram_used")), self._sys_labels["ram"])
+        form_sys.addRow(QLabel(t("lbl_cpu_temp")), self._sys_labels["temp"])
+
+        btn_refresh = QPushButton(t("btn_refresh_info"))
+        btn_refresh.setObjectName("btn_nav")
+        btn_refresh.clicked.connect(self._refresh_sysinfo)
+        form_sys.addRow("", btn_refresh)
+
+        v.addWidget(fw_sys)
+        v.addStretch()
+        scroll.setWidget(content)
+        root.addWidget(scroll, stretch=1)
+
+        # Footer : retour Paramètres généraux (index 1)
+        footer = QFrame()
+        footer.setStyleSheet(
+            f"background-color: {_C['header_bg']}; border-top: 1px solid {_C['border']};"
+        )
+        fh = QHBoxLayout(footer)
+        fh.setContentsMargins(16, 8, 16, 8)
+        btn_back = QPushButton(t("btn_back_arrow"))
+        btn_back.setObjectName("btn_cancel")
+        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
+        fh.addWidget(btn_back)
+        fh.addStretch()
+        root.addWidget(footer)
+
     def _refresh_sysinfo(self) -> None:
         import shutil
 
-        # Version logiciel
         version_file = _CONFIG_PATH.parent / "VERSION.txt"
         try:
             self._sys_labels["version"].setText(
@@ -3733,14 +3884,12 @@ class _ExtrasPage(QWidget):
         except Exception:
             self._sys_labels["version"].setText("1.0.0")
 
-        # Modèle Pi
         try:
             model = Path("/proc/device-tree/model").read_bytes().rstrip(b"\x00").decode()
             self._sys_labels["modele"].setText(model)
         except Exception:
             self._sys_labels["modele"].setText("—")
 
-        # OS
         try:
             os_info = "—"
             for line in Path("/etc/os-release").read_text().splitlines():
@@ -3751,7 +3900,6 @@ class _ExtrasPage(QWidget):
         except Exception:
             self._sys_labels["os"].setText("—")
 
-        # Uptime
         try:
             up_secs = int(float(Path("/proc/uptime").read_text().split()[0]))
             jours = up_secs // 86400
@@ -3763,7 +3911,6 @@ class _ExtrasPage(QWidget):
         except Exception:
             self._sys_labels["uptime"].setText("—")
 
-        # Espace disque
         try:
             du = shutil.disk_usage("/")
             used_go = du.used / 1e9
@@ -3775,7 +3922,6 @@ class _ExtrasPage(QWidget):
         except Exception:
             self._sys_labels["disque"].setText("—")
 
-        # RAM
         try:
             mem_total = mem_avail = 0
             for line in Path("/proc/meminfo").read_text().splitlines():
@@ -3790,11 +3936,10 @@ class _ExtrasPage(QWidget):
         except Exception:
             self._sys_labels["ram"].setText("—")
 
-        # Température CPU
         try:
             raw = int(Path("/sys/class/thermal/thermal_zone0/temp").read_text())
             temp = raw / 1000.0
-            color = "#4caf50" if temp < 60 else ("#f57f17" if temp < 70 else "#ef5350")
+            color = "#2E7D32" if temp < 60 else ("#A07830" if temp < 70 else "#C62828")
             self._sys_labels["temp"].setText(f"{temp:.1f} °C")
             self._sys_labels["temp"].setStyleSheet(f"color: {color};")
         except Exception:
@@ -3826,7 +3971,7 @@ class _CopyDestDialog(QDialog):
         self.setModal(True)
         self.setFixedSize(340, 500)
         self.setStyleSheet(
-            "QDialog { background-color: #2E2E2E; "
+            "QDialog { background-color: #F0EDE6; "
             "border: 2px solid #C49A3C; border-radius: 10px; }"
         )
         self.dest_pm_id: int | None = None
@@ -3838,7 +3983,7 @@ class _CopyDestDialog(QDialog):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
 
-        title = QLabel(f"Copier PM-{self._source:02d} vers :")
+        title = QLabel(f"{t('btn_copy_to').replace('📋  ', '').replace('...', '')} PM-{self._source:02d} vers :")
         title.setStyleSheet(
             "color: #C49A3C; font-size: 15px; font-weight: bold; background: transparent;"
         )
@@ -3859,9 +4004,9 @@ class _CopyDestDialog(QDialog):
             btn.setFixedHeight(44)
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #3A3A3A;
-                    color: #F0F0F0;
-                    border: 1px solid #555555;
+                    background-color: #FAFAF8;
+                    color: #1A1A18;
+                    border: 1px solid #C8C4BC;
                     border-radius: 6px;
                     font-size: 13px;
                     text-align: left;
@@ -3869,7 +4014,7 @@ class _CopyDestDialog(QDialog):
                 }
                 QPushButton:pressed {
                     background-color: #A07830;
-                    color: #ffffff;
+                    color: #1A1A18;
                 }
             """)
             btn.clicked.connect(lambda _, pid=pm_id: self._select(pid))
@@ -3879,12 +4024,12 @@ class _CopyDestDialog(QDialog):
         scroll.setWidget(inner)
         layout.addWidget(scroll, stretch=1)
 
-        btn_cancel = QPushButton("✕  Annuler")
+        btn_cancel = QPushButton(t("btn_cancel_x"))
         btn_cancel.setFixedHeight(40)
         btn_cancel.setStyleSheet("""
             QPushButton {
-                background-color: #3a1a1a;
-                color: #ef9a9a;
+                background-color: #FAFAF8;
+                color: #C62828;
                 border: 1px solid #c62828;
                 border-radius: 6px;
                 font-size: 13px;
@@ -3935,13 +4080,13 @@ class _LanguePage(QWidget):
         )
         hh = QHBoxLayout(header)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel("🌐   Langue / Language")
+        lbl = QLabel(t("hdr_language"))
         lbl.setStyleSheet(
             f"color: {_C['text']}; font-size: 18px; font-weight: bold;"
         )
         hh.addWidget(lbl)
         hh.addStretch()
-        btn_back = QPushButton("←  Retour")
+        btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_nav")
         btn_back.setFixedHeight(36)
         btn_back.clicked.connect(
@@ -3969,13 +4114,13 @@ class _LanguePage(QWidget):
                 border-radius: 10px;
             }}
             QPushButton:checked {{
-                background-color: #2a1500;
+                background-color: #F5EDD6;
                 border: 3px solid #C49A3C;
                 color: #C49A3C;
             }}
             QPushButton:pressed {{
                 background-color: #A07830;
-                color: #ffffff;
+                color: #1A1A18;
             }}
         """
 
@@ -4003,7 +4148,7 @@ class _LanguePage(QWidget):
         fh = QHBoxLayout(footer)
         fh.setContentsMargins(24, 8, 24, 8)
         fh.addStretch()
-        btn_apply = QPushButton("✓  Appliquer")
+        btn_apply = QPushButton(t("btn_apply"))
         btn_apply.setObjectName("btn_save")
         btn_apply.setFixedHeight(44)
         btn_apply.clicked.connect(self._apply)
@@ -4039,7 +4184,7 @@ class _LanguePage(QWidget):
         if hasattr(main_win, "apply_language"):
             main_win.apply_language()
 
-        QMessageBox.information(self, "Langue", "✓ Langue appliquée.")
+        QMessageBox.information(self, t("dlg_language_title"), t("dlg_language_applied_msg"))
         self._main_stack.setCurrentIndex(1)
 
 
@@ -4060,9 +4205,17 @@ class SettingsPage(QWidget):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        root = self.layout()
+        if root is None:
+            root = QVBoxLayout(self)
+            root.setContentsMargins(0, 0, 0, 0)
+            root.setSpacing(0)
+        else:
+            while root.count():
+                item = root.takeAt(0)
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
 
         self._settings_stack = QStackedWidget()
         self._settings_stack.addWidget(self._build_page0_home())        # 0
@@ -4072,10 +4225,13 @@ class SettingsPage(QWidget):
 
         self._cycle_page = _ControleCyclePage(self._settings_stack, self)
         self._settings_stack.addWidget(self._cycle_page)                # 4
+        # Voie X / Voie Y : instances créées mais pas ajoutées au stack.
+        # Elles sont intégrées côte-à-côte dans la page 14 (Coordonnées).
+        # Placeholders aux indices 5 et 6 pour garder les indices stables.
         self._voie_x_page = _VoieXPage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._voie_x_page)               # 5
+        self._settings_stack.addWidget(QWidget())                       # 5 (placeholder)
         self._voie_y_page = _VoieYPage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._voie_y_page)               # 6
+        self._settings_stack.addWidget(QWidget())                       # 6 (placeholder)
         self._pm_edit_page = _PMEditPage(
             self._settings_stack, self._on_pm_saved, self
         )
@@ -4092,8 +4248,16 @@ class SettingsPage(QWidget):
         self._settings_stack.addWidget(self._extras_page)               # 12
         self._langue_page = _LanguePage(self._settings_stack, self)
         self._settings_stack.addWidget(self._langue_page)               # 13
+        self._settings_stack.addWidget(self._build_page14_coordonnees())  # 14
+        self._info_sys_page = _InfoSystemePage(self._settings_stack, self)
+        self._settings_stack.addWidget(self._info_sys_page)               # 15
 
         root.addWidget(self._settings_stack)
+
+    def apply_language(self) -> None:
+        current_idx = self._settings_stack.currentIndex() if hasattr(self, "_settings_stack") else 0
+        self._build_ui()
+        self._settings_stack.setCurrentIndex(max(0, min(current_idx, self._settings_stack.count() - 1)))
 
     # ------------------------------------------------------------------
     # Helpers
@@ -4118,7 +4282,9 @@ class SettingsPage(QWidget):
         h.addWidget(lbl)
         h.addStretch()
 
-        btn = QPushButton("←  Retour" if back_to_home else "←  Retour Production")
+        btn = QPushButton(
+            t("btn_back_arrow") if back_to_home else f"{t('btn_back_arrow')} Production"
+        )
         btn.setObjectName("btn_back")
         if back_to_home:
             btn.clicked.connect(lambda: self._settings_stack.setCurrentIndex(0))
@@ -4141,7 +4307,7 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        v.addWidget(self._make_header("⚙   Réglages", back_to_home=False))
+        v.addWidget(self._make_header(t("settings_home_title_icon"), back_to_home=False))
 
         # Corps — 3 tuiles centrées
         body = QWidget()
@@ -4152,9 +4318,9 @@ class SettingsPage(QWidget):
         bh.setContentsMargins(40, 0, 40, 0)
 
         tiles_def = [
-            ("🔧", "Paramètres\ngénéraux", "#854F0B", 1),
-            ("📋", "Réglage PM",           "#185FA5", 2),
-            ("📁", "Gestionnaire\nPM",     "#0F6E56", 3),
+            ("🔧", t("settings_tile_general"),    "#A07830", 1),
+            ("📋", t("settings_tile_pm"),         "#1565C0", 2),
+            ("📁", t("settings_tile_pm_manager"), "#2E7D32", 3),
         ]
         for icon, label, border, page_idx in tiles_def:
             tile = _Tile(icon, label, border)
@@ -4177,49 +4343,101 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        v.addWidget(self._make_header("🔧   Paramètres généraux"))
+        # Header custom (titre 22px + bouton Retour agrandi)
+        header = QWidget()
+        header.setFixedHeight(64)
+        header.setStyleSheet(
+            f"background-color: {_C['header_bg']}; "
+            f"border-bottom: 1px solid {_C['border']};"
+        )
+        hh = QHBoxLayout(header)
+        hh.setContentsMargins(16, 0, 0, 0)
+        hh.setSpacing(0)
+        title_lbl = QLabel(t("settings_general_title_icon"))
+        title_lbl.setStyleSheet(
+            f"color: {_C['text']}; font-size: 22px; font-weight: bold;"
+        )
+        hh.addWidget(title_lbl)
+        hh.addStretch()
+        back_btn = QPushButton(t("btn_back_arrow"))
+        back_btn.setObjectName("btn_back")
+        back_btn.setMinimumHeight(48)
+        back_btn.setStyleSheet(
+            f"background-color: {_C['btn_bg']}; color: {_C['text']};"
+            f" font-size: 16px; font-weight: 600;"
+            f" border: 1px solid {_C['btn_border']}; border-radius: 0px;"
+            f" padding: 0 24px; min-height: 48px;"
+        )
+        back_btn.clicked.connect(lambda: self._settings_stack.setCurrentIndex(0))
+        hh.addWidget(back_btn)
+        v.addWidget(header)
 
         grid_w = QWidget()
         grid_w.setStyleSheet(f"background-color: {_C['bg']};")
         grid = QGridLayout(grid_w)
-        grid.setContentsMargins(20, 20, 20, 20)
-        grid.setSpacing(16)
+        grid.setContentsMargins(16, 16, 16, 16)
+        grid.setSpacing(12)
 
         _BTN_STYLE = f"""
             QPushButton {{
-                background-color: {_C['card']};
-                color: #cccccc;
-                font-size: 15px;
-                font-weight: 600;
-                border: 1px solid {_C['border']};
-                border-radius: 10px;
+                background-color: #FAFAF8;
+                color: #1A1A18;
+                font-size: 16px;
+                font-weight: 500;
+                border: 1.5px solid #C8C4BC;
+                border-radius: 12px;
+                padding: 8px;
             }}
-            QPushButton:hover {{ background-color: #2a2a2a; border-color: #555; }}
-            QPushButton:pressed {{ background-color: {_C['btn_active']}; color: #fff; }}
+            QPushButton:hover {{
+                background-color: #F5EDD6;
+                border-color: #C49A3C;
+                color: #A07830;
+            }}
+            QPushButton:pressed {{ background-color: {_C['btn_active']}; color: #1A1A18; }}
         """
 
+        coord_label = "Coordonnées" if get_language() == "fr" else "Coordinates"
+        info_label = "Informations système" if get_language() == "fr" else "System information"
         buttons = [
-            ("🌐", "Langue",          0, 0, "langue"),
-            ("🔒", "Droits d'accès",  0, 1, "droits"),
-            ("📅", "Date / Heure",    0, 2, "date_heure"),
-            ("📊", "Voie X",          1, 0, "voie_x"),
-            ("📡", "Voie Y",          1, 1, "voie_y"),
-            ("⏱",  "Contrôle cycle", 1, 2, "cycle"),
-            ("🖥",  "Affichage prod.",2, 0, "affichage"),
-            ("💾", "Exportation",     2, 1, "exportation"),
-            ("⚙",  "Extras",         2, 2, "extras"),
+            ("🌐", t("dlg_language_title"),           0, 0, "langue"),
+            ("🔒", t("dlg_access_rights_saved_title"), 0, 1, "droits"),
+            ("📅", t("dlg_datetime_title"),           0, 2, "date_heure"),
+            ("⇄",  coord_label,                        1, 0, "coordonnees"),
+            ("⏱",  t("dlg_cycle_ctrl_title"),         1, 1, "cycle"),
+            ("🖥", t("dlg_display_title"),            1, 2, "affichage"),
+            ("💾", t("hdr_export"),                   2, 0, "exportation"),
+            ("⚙",  t("hdr_extras"),                   2, 1, "extras"),
+            ("ℹ",  info_label,                         2, 2, "info_systeme"),
         ]
         for icon, label, row, col, action in buttons:
-            btn = QPushButton(f"{icon}\n{label}")
-            btn.setFixedSize(180, 120)
+            btn = QPushButton()
+            btn.setProperty("settings_action", action)
+            btn.setObjectName(f"settings_btn_{action}")
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            btn.setMinimumHeight(120)
             btn.setStyleSheet(_BTN_STYLE)
-            if action == "voie_x":
+            tile_layout = QVBoxLayout(btn)
+            tile_layout.setContentsMargins(8, 8, 8, 8)
+            tile_layout.setSpacing(6)
+            tile_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            icon_lbl = QLabel(icon)
+            icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            icon_lbl.setStyleSheet("font-size: 28px; background: transparent; border: none;")
+            icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            text_lbl = QLabel(label)
+            text_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            text_lbl.setWordWrap(True)
+            text_lbl.setStyleSheet("font-size: 16px; background: transparent; border: none;")
+            text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            tile_layout.addWidget(icon_lbl)
+            tile_layout.addWidget(text_lbl)
+            if action == "coordonnees":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(5)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(14)
                 )
-            elif action == "voie_y":
+            elif action == "info_systeme":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(6)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(15)
                 )
             elif action == "cycle":
                 btn.clicked.connect(
@@ -4257,7 +4475,82 @@ class SettingsPage(QWidget):
                 )
             grid.addWidget(btn, row, col)
 
+        for c in range(3):
+            grid.setColumnStretch(c, 1)
+        for r in range(3):
+            grid.setRowStretch(r, 1)
+
         v.addWidget(grid_w, stretch=1)
+        return page
+
+    # ------------------------------------------------------------------
+    # Page 14 — Coordonnées (intermédiaire vers Voie X / Voie Y)
+    # ------------------------------------------------------------------
+
+    def _build_page14_coordonnees(self) -> QWidget:
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        coord_label = "Coordonnées" if get_language() == "fr" else "Coordinates"
+
+        # Header custom
+        header = QWidget()
+        header.setFixedHeight(64)
+        header.setStyleSheet(
+            f"background-color: {_C['header_bg']}; "
+            f"border-bottom: 1px solid {_C['border']};"
+        )
+        hh = QHBoxLayout(header)
+        hh.setContentsMargins(16, 0, 0, 0)
+        hh.setSpacing(0)
+        title_lbl = QLabel(f"⇄  {coord_label}")
+        title_lbl.setStyleSheet(
+            f"color: {_C['text']}; font-size: 22px; font-weight: bold;"
+        )
+        hh.addWidget(title_lbl)
+        hh.addStretch()
+        back_btn = QPushButton(t("btn_back_arrow"))
+        back_btn.setObjectName("btn_back")
+        back_btn.setMinimumHeight(48)
+        back_btn.setStyleSheet(
+            f"background-color: {_C['btn_bg']}; color: {_C['text']};"
+            f" font-size: 16px; font-weight: 600;"
+            f" border: 1px solid {_C['btn_border']}; border-radius: 0px;"
+            f" padding: 0 24px; min-height: 48px;"
+        )
+        back_btn.clicked.connect(lambda: self._settings_stack.setCurrentIndex(1))
+        hh.addWidget(back_btn)
+        v.addWidget(header)
+
+        # Corps : 2 colonnes scrollables → Voie X à gauche, Voie Y à droite
+        body = QWidget()
+        body.setStyleSheet(f"background-color: {_C['bg']};")
+        bh = QHBoxLayout(body)
+        bh.setContentsMargins(0, 0, 0, 0)
+        bh.setSpacing(0)
+
+        # Séparateur vertical entre les deux colonnes
+        def _make_column(inner_widget: QWidget) -> QScrollArea:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setStyleSheet("background-color: transparent;")
+            scroll.setWidget(inner_widget)
+            return scroll
+
+        bh.addWidget(_make_column(self._voie_x_page), stretch=1)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setStyleSheet(f"color: {_C['border']};")
+        sep.setFixedWidth(1)
+        bh.addWidget(sep)
+
+        bh.addWidget(_make_column(self._voie_y_page), stretch=1)
+
+        v.addWidget(body, stretch=1)
         return page
 
     # ------------------------------------------------------------------
@@ -4270,7 +4563,7 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        v.addWidget(self._make_header("📋   Réglage PM"))
+        v.addWidget(self._make_header(t("settings_pm_title_icon")))
 
         self._pm_list = QListWidget()
         for pm_id, pm in PM_DEFINITIONS.items():
@@ -4302,7 +4595,7 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        v.addWidget(self._make_header("📁   Gestionnaire PM"))
+        v.addWidget(self._make_header(t("settings_pm_manager_title_icon")))
 
         # Corps : tableau à gauche + actions à droite
         body = QWidget()
@@ -4312,7 +4605,9 @@ class SettingsPage(QWidget):
 
         # ── Tableau PM ──────────────────────────────────────────────
         self._pm_table = QTableWidget(0, 3)
-        self._pm_table.setHorizontalHeaderLabels(["N°", "Nom", "Outils actifs"])
+        self._pm_table.setHorizontalHeaderLabels([
+            t("table_col_number"), t("table_col_name"), t("table_col_active_tools")
+        ])
         self._pm_table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.Stretch
         )
@@ -4333,9 +4628,9 @@ class SettingsPage(QWidget):
         av.setContentsMargins(0, 0, 0, 0)
         av.setSpacing(6)
 
-        self._btn_rename = QPushButton("✏  Renommer")
-        self._btn_copy   = QPushButton("📋  Copier vers...")
-        self._btn_raz    = QPushButton("🔄  RAZ")
+        self._btn_rename = QPushButton(t("btn_rename"))
+        self._btn_copy   = QPushButton(t("btn_copy_to"))
+        self._btn_raz    = QPushButton(t("btn_raz_icon"))
         for btn in (self._btn_rename, self._btn_copy, self._btn_raz):
             btn.setFixedHeight(44)
             btn.setObjectName("btn_nav")
@@ -4347,7 +4642,7 @@ class SettingsPage(QWidget):
         sep.setStyleSheet(f"background-color: {_C['border']}; max-height:1px;")
         av.addWidget(sep)
 
-        btn_close = QPushButton("✓  Fermer")
+        btn_close = QPushButton(t("btn_close_check"))
         btn_close.setFixedHeight(44)
         btn_close.setObjectName("btn_save")
         btn_close.clicked.connect(
@@ -4381,9 +4676,9 @@ class SettingsPage(QWidget):
             tools = programmes.get(pm_id, {}).get("tools", {})
 
             active: list[str] = []
-            if tools.get("no_pass", {}).get("enabled"):
+            if any(z.get("enabled") for z in tools.get("no_pass_zones", [tools.get("no_pass", {})])):
                 active.append("NO-PASS")
-            if tools.get("uni_box", {}).get("enabled"):
+            if any(z.get("enabled") for z in tools.get("uni_box_zones", [tools.get("uni_box", {})])):
                 active.append("UNI-BOX")
             if tools.get("envelope", {}).get("enabled"):
                 active.append("ENV")
@@ -4425,7 +4720,7 @@ class SettingsPage(QWidget):
         from ihm.main_window import AlphaNumpadDialog
         current_name = PM_DEFINITIONS[pm_id].name
         dlg = AlphaNumpadDialog(
-            title=f"Renommer PM-{pm_id:02d}",
+            title=f"{t('btn_rename').replace('✏  ', '')} PM-{pm_id:02d}",
             value=current_name,
             parent=self,
         )
@@ -4492,13 +4787,15 @@ class SettingsPage(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
+        _default_ub_zone = {
+            "enabled": False, "box_x_min": 0.0, "box_x_max": 0.0,
+            "box_y_min": 0.0, "box_y_max": 0.0,
+            "entry_side": "left", "exit_side": "left",
+        }
+        _default_np_zone = {"enabled": False, "x_min": 0.0, "x_max": 0.0, "y_limit": 0.0}
         default_tools = {
-            "no_pass":  {"enabled": False, "x_min": 0.0, "x_max": 0.0, "y_limit": 0.0},
-            "uni_box":  {
-                "enabled": False, "box_x_min": 0.0, "box_x_max": 0.0,
-                "box_y_min": 0.0, "box_y_max": 0.0,
-                "entry_side": "left", "exit_side": "left",
-            },
+            "no_pass_zones": [dict(_default_np_zone) for _ in range(5)],
+            "uni_box_zones": [dict(_default_ub_zone) for _ in range(5)],
             "envelope": {
                 "enabled": False,
                 "lower_curve": [[0.0, 0.0], [100.0, 0.0]],

@@ -137,7 +137,7 @@ class ModbusController(threading.Thread):
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        if not self._config.get("enabled", False):
+        if not self._config.get("enabled", True):
             print("[MODBUS] Désactivé dans config.yaml")
             return
 

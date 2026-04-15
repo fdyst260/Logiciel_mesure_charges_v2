@@ -80,17 +80,17 @@ def _compute_force(pos_mm: float, inject_fault: bool) -> float:
     """Calcule la force simulee en Newton selon la position."""
     noise = float(np.random.normal(0.0, 80.0))
 
-    if pos_mm < 20.0:
+    if pos_mm < 5.0:
         # Phase 1 : approche — force faible avec bruit reduit
         return max(0.0, 50.0 + noise * 0.2)
 
-    if pos_mm <= 80.0:
+    if pos_mm <= 10.0:
         # Phase 2 : sertissage
         if inject_fault and 53.0 <= pos_mm <= 57.0:
             # Pic de defaut a 5200 N (doit declencher NOK)
             return 5200.0 + noise
 
-        if pos_mm <= 60.0:
+        if pos_mm <= 18.0:
             # Montee lineaire 0 -> 3800 N entre 20 et 60 mm
             force = (pos_mm - 20.0) / 40.0 * 3800.0
         else:
