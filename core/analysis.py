@@ -128,6 +128,14 @@ class CycleManager:
         }
 
     def finalize_cycle(self) -> EvalStatus:
+        for tool in self.tools:
+            res = tool.finalize()
+            if res.status == EvalStatus.NOK:
+                self.result = EvalStatus.NOK
+                if res.message:
+                    self.messages.append(res.message)
+                break
+
         if self.result == EvalStatus.RUNNING:
             self.result = EvalStatus.PASS
         self.gpio.drive_outputs(

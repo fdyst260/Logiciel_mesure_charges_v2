@@ -68,6 +68,18 @@ class EvaluationTool:
         self._entry_side_seen = None
         self._exit_validated = False
 
+    def finalize(self) -> EvaluationResult:
+        """Vérifie les conditions de fin de cycle qui ne peuvent être évaluées point par point."""
+        if self.tool_type == EvaluationType.UNI_BOX:
+            if None not in (self.box_x_min, self.box_x_max, self.box_y_min, self.box_y_max):
+                if not self._entered:
+                    return EvaluationResult(
+                        status=EvalStatus.NOK,
+                        triggered=True,
+                        message="UNI-BOX: zone non traversée",
+                    )
+        return EvaluationResult(EvalStatus.PASS)
+
     @staticmethod
     def make_no_pass_zones(n: int = 5) -> "list[EvaluationTool]":
         """Retourne n zones NO-PASS vides (toutes désactivées)."""
