@@ -76,7 +76,7 @@ class EvaluationTool:
                     return EvaluationResult(
                         status=EvalStatus.NOK,
                         triggered=True,
-                        message="UNI-BOX: zone non traversée",
+                        message="UNI-BOX: zone non traversée en fin de cycle",
                     )
         return EvaluationResult(EvalStatus.PASS)
 
