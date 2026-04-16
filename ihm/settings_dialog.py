@@ -1800,12 +1800,17 @@ class _VoieYPage(QWidget):
 # ===========================================================================
 
 # ===========================================================================
-# _ControleCyclePage — configuration du contrôle de cycle (page unique)
+# _ControleCyclePage — configuration du contrôle de cycle (2 pages)
 # ===========================================================================
 
 class _ControleCyclePage(QWidget):
-    """Page unique — Mode mesure, Conditions, Parties aller/retour, Traçage
+    """2 pages — p.0 : Mode mesure + Conditions  /  p.1 : ALLER-RETOUR + Traçage
     (intégrée dans _settings_stack)."""
+
+    _TITLES = [
+        "Contrôle cycle — Mode / Conditions",
+        "Contrôle cycle — ALLER / RETOUR / Traçage",
+    ]
 
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1827,20 +1832,79 @@ class _ControleCyclePage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
+        # Header avec titre dynamique
         hdr = QWidget()
         hdr.setFixedHeight(50)
         hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel(t("dlg_cycle_ctrl_title"))
-        lbl.setStyleSheet(
+        self._header_lbl = QLabel(self._TITLES[0])
+        self._header_lbl.setStyleSheet(
             "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
-        hh.addWidget(lbl)
+        hh.addWidget(self._header_lbl)
         root.addWidget(hdr)
 
-        # Corps scrollable
+        # Corps (2 pages)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_page0())
+        self._stack.addWidget(self._build_page1())
+        root.addWidget(self._stack, stretch=1)
+
+        # Footer (2 états)
+        self._footer = QStackedWidget()
+        self._footer.setFixedHeight(64)
+        self._footer.addWidget(self._build_footer(0))
+        self._footer.addWidget(self._build_footer(1))
+        root.addWidget(self._footer)
+
+    def _build_footer(self, page_idx: int) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background-color: #F0EDE6;")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(24, 10, 24, 10)
+        h.setSpacing(12)
+
+        if page_idx == 1:
+            btn_back = QPushButton(t("btn_back_arrow"))
+            btn_back.setObjectName("btn_cancel")
+            btn_back.clicked.connect(lambda: self._go_page(0))
+            h.addWidget(btn_back)
+
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
+        btn_cancel.setObjectName("btn_cancel")
+        btn_cancel.clicked.connect(self._cancel)
+        h.addWidget(btn_cancel)
+        h.addStretch()
+
+        if page_idx == 0:
+            btn_next = QPushButton(t("btn_next"))
+            btn_next.setObjectName("btn_nav")
+            btn_next.clicked.connect(lambda: self._go_page(1))
+            h.addWidget(btn_next)
+        else:
+            btn_save = QPushButton(t("btn_save_check"))
+            btn_save.setObjectName("btn_save")
+            btn_save.clicked.connect(self._save)
+            h.addWidget(btn_save)
+
+        return w
+
+    def _go_page(self, idx: int) -> None:
+        self._stack.setCurrentIndex(idx)
+        self._footer.setCurrentIndex(idx)
+        self._header_lbl.setText(self._TITLES[idx])
+        if idx == 0:
+            self._refresh_mode_indicator()
+            self._refresh_duree_visibility()
+        else:
+            self._refresh_tracage_graph()
+
+    # ------------------------------------------------------------------
+    # Page 0 — Mode mesure + Conditions début / fin
+    # ------------------------------------------------------------------
+
+    def _build_page0(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -1946,7 +2010,37 @@ class _ControleCyclePage(QWidget):
         form1.addRow(t("lbl_cycle_duration"), self._duree_btn)
         v.addLayout(form1)
 
-        v.addWidget(_sep())
+        v.addStretch()
+        scroll.setWidget(inner)
+        return scroll
+
+    # ------------------------------------------------------------------
+    # Page 1 — Parties ALLER / RETOUR + Traçage
+    # ------------------------------------------------------------------
+
+    def _build_page1(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background-color: transparent;")
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(24, 20, 24, 20)
+        v.setSpacing(0)
+
+        def _sep() -> QFrame:
+            f = QFrame()
+            f.setFrameShape(QFrame.Shape.HLine)
+            f.setStyleSheet("color: #C8C4BC; margin: 14px 0px;")
+            return f
+
+        def _section_lbl(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                "font-size: 13px; font-weight: bold; color: #A07830;"
+                " background: transparent; padding-bottom: 6px;"
+            )
+            return lbl
 
         # ── Section 3 : Parties ALLER / RETOUR ──────────────────────
         v.addWidget(_section_lbl("Parties ALLER / RETOUR"))
@@ -2012,25 +2106,7 @@ class _ControleCyclePage(QWidget):
 
         v.addStretch()
         scroll.setWidget(inner)
-        root.addWidget(scroll, stretch=1)
-
-        # Footer
-        footer = QWidget()
-        footer.setFixedHeight(64)
-        footer.setStyleSheet("background-color: #F0EDE6;")
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(24, 10, 24, 10)
-        fh.setSpacing(12)
-        btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self._cancel)
-        fh.addWidget(btn_cancel)
-        fh.addStretch()
-        btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        fh.addWidget(btn_save)
-        root.addWidget(footer)
+        return scroll
 
     # ------------------------------------------------------------------
     # Refresh helpers
