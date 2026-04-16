@@ -1,10 +1,9 @@
 """Page de réglages — intégrée dans self.stack de MainWindow (index 1).
 
 Architecture QStackedWidget interne (self._settings_stack) :
-  Page 0 : Accueil Réglages   (3 grandes tuiles de navigation)
+    Page 0 : Accueil Réglages    (2 grandes tuiles de navigation)
   Page 1 : Paramètres généraux (grille 3×3 de boutons)
-  Page 2 : Réglage PM          (liste des 16 PM)
-  Page 3 : Gestionnaire PM     (tableau + actions)
+    Page 2 : Gestion PM          (tableau + actions)
 
 Chaque page enfant a son propre header avec titre + bouton ← Retour.
 """
@@ -29,7 +28,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QListWidget,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -1068,16 +1066,26 @@ class _Tile(QFrame):
         v.setSpacing(12)
         v.setContentsMargins(12, 16, 12, 16)
 
-        lbl_icon = QLabel(icon)
+        lbl_icon = QLabel()
         lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_icon.setFont(QFont("", 40))
+        lbl_icon.setStyleSheet("background: transparent; border: none;")
+        pixmap = QPixmap(icon)
+        if not pixmap.isNull():
+            pixmap = pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            lbl_icon.setPixmap(pixmap)
+        else:
+            lbl_icon.setText(icon)
+            lbl_icon.setFont(QFont("", 40))
         lbl_icon.setStyleSheet("background: transparent; border: none;")
         v.addWidget(lbl_icon)
 
         lbl_text = QLabel(label)
         lbl_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_text.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        lbl_text.setStyleSheet("background: transparent; border: none; color: #1A1A18;")
+        lbl_text.setFont(QFont("Segoe UI", 32, QFont.Weight.Bold))
+        lbl_text.setStyleSheet(
+            "font-size: 32px; font-weight: 700; "
+            "background: transparent; border: none; color: #1A1A18;"
+        )
         v.addWidget(lbl_text)
 
     def _update_style(self) -> None:
@@ -1231,7 +1239,7 @@ class _VoieXPage(QWidget):
         super().showEvent(event)
 
     def _cancel(self) -> None:
-        self._main_stack.setCurrentIndex(14)
+        self._main_stack.setCurrentIndex(13)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1481,7 +1489,7 @@ class _VoieYPage(QWidget):
         super().showEvent(event)
 
     def _cancel(self) -> None:
-        self._main_stack.setCurrentIndex(14)
+        self._main_stack.setCurrentIndex(13)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -4220,37 +4228,36 @@ class SettingsPage(QWidget):
         self._settings_stack = QStackedWidget()
         self._settings_stack.addWidget(self._build_page0_home())        # 0
         self._settings_stack.addWidget(self._build_page1_general())     # 1
-        self._settings_stack.addWidget(self._build_page2_pm_list())     # 2
-        self._settings_stack.addWidget(self._build_page3_pm_manager())  # 3
+        self._settings_stack.addWidget(self._build_page2_pm_management())  # 2
 
         self._cycle_page = _ControleCyclePage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._cycle_page)                # 4
+        self._settings_stack.addWidget(self._cycle_page)                # 3
         # Voie X / Voie Y : instances créées mais pas ajoutées au stack.
-        # Elles sont intégrées côte-à-côte dans la page 14 (Coordonnées).
-        # Placeholders aux indices 5 et 6 pour garder les indices stables.
+        # Elles sont intégrées côte-à-côte dans la page 13 (Coordonnées).
+        # Placeholders aux indices 4 et 5 pour garder les indices stables.
         self._voie_x_page = _VoieXPage(self._settings_stack, self)
-        self._settings_stack.addWidget(QWidget())                       # 5 (placeholder)
+        self._settings_stack.addWidget(QWidget())                       # 4 (placeholder)
         self._voie_y_page = _VoieYPage(self._settings_stack, self)
-        self._settings_stack.addWidget(QWidget())                       # 6 (placeholder)
+        self._settings_stack.addWidget(QWidget())                       # 5 (placeholder)
         self._pm_edit_page = _PMEditPage(
             self._settings_stack, self._on_pm_saved, self
         )
-        self._settings_stack.addWidget(self._pm_edit_page)              # 7
+        self._settings_stack.addWidget(self._pm_edit_page)              # 6
         self._date_heure_page = _DateHeurePage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._date_heure_page)           # 8
+        self._settings_stack.addWidget(self._date_heure_page)           # 7
         self._droits_page = _DroitsAccesPage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._droits_page)               # 9
+        self._settings_stack.addWidget(self._droits_page)               # 8
         self._affichage_page = _AffichageProdPage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._affichage_page)            # 10
+        self._settings_stack.addWidget(self._affichage_page)            # 9
         self._export_page = _ExportationPage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._export_page)               # 11
+        self._settings_stack.addWidget(self._export_page)               # 10
         self._extras_page = _ExtrasPage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._extras_page)               # 12
+        self._settings_stack.addWidget(self._extras_page)               # 11
         self._langue_page = _LanguePage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._langue_page)               # 13
-        self._settings_stack.addWidget(self._build_page14_coordonnees())  # 14
+        self._settings_stack.addWidget(self._langue_page)               # 12
+        self._settings_stack.addWidget(self._build_page13_coordonnees())  # 13
         self._info_sys_page = _InfoSystemePage(self._settings_stack, self)
-        self._settings_stack.addWidget(self._info_sys_page)               # 15
+        self._settings_stack.addWidget(self._info_sys_page)               # 14
 
         root.addWidget(self._settings_stack)
 
@@ -4339,7 +4346,7 @@ class SettingsPage(QWidget):
         hh.addWidget(btn_prod)
         v.addWidget(header)
 
-        # Corps — 3 tuiles en grille plein écran
+        # Corps — 2 tuiles en grille plein écran
         body = QWidget()
         body.setStyleSheet(f"background-color: {_C['bg']};")
         grid = QGridLayout(body)
@@ -4347,13 +4354,11 @@ class SettingsPage(QWidget):
         grid.setSpacing(16)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
         grid.setRowStretch(0, 1)
 
         tiles_def = [
-            ("🔧", t("settings_tile_general"),    "#A07830", 1),
-            ("📋", t("settings_tile_pm"),         "#1565C0", 2),
-            ("📁", t("settings_tile_pm_manager"), "#2E7D32", 3),
+            ("assets/icon/settings/Image_kistler/parametre_généraux .png", t("settings_tile_general"),    "#A07830", 1),
+            ("assets/icon/settings/Image_kistler/Getion_pm.png", "Gestion PM", "#1565C0", 2),
         ]
         for col, (icon, label, border, page_idx) in enumerate(tiles_def):
             tile = _Tile(icon, label, border)
@@ -4438,15 +4443,15 @@ class SettingsPage(QWidget):
         coord_label = "Coordonnées" if get_language() == "fr" else "Coordinates"
         info_label = "Informations système" if get_language() == "fr" else "System information"
         buttons = [
-            ("🌐", t("dlg_language_title"),           0, 0, "langue"),
-            ("🔒", t("dlg_access_rights_saved_title"), 0, 1, "droits"),
-            ("📅", t("dlg_datetime_title"),           0, 2, "date_heure"),
-            ("⇄",  coord_label,                        1, 0, "coordonnees"),
-            ("⏱",  t("dlg_cycle_ctrl_title"),         1, 1, "cycle"),
-            ("assets/icon/settings/Image_kistler/Affichage_production.png", t("dlg_display_title"),            1, 2, "affichage"),
-            ("💾", t("hdr_export"),                   2, 0, "exportation"),
-            ("⚙",  t("hdr_extras"),                   2, 1, "extras"),
-            ("ℹ",  info_label,                         2, 2, "info_systeme"),
+            ("assets/icon/settings/Image_kistler/langages.png", t("dlg_language_title"), 0, 0, "langue"),
+            ("assets/icon/settings/Image_kistler/Droit_acces.png", t("dlg_access_rights_saved_title"), 0, 1, "droits"),
+            ("assets/icon/settings/Image_kistler/date_heure.png", t("dlg_datetime_title"),0, 2, "date_heure"),
+            ("assets/icon/settings/Image_kistler/graphe_x_y.png",  coord_label,  1, 0, "coordonnees"),
+            ("assets/icon/settings/Image_kistler/Controle_cycle.png",  t("dlg_cycle_ctrl_title"), 1, 1, "cycle"),
+            ("assets/icon/settings/Image_kistler/pinceau.png", t("dlg_display_title"), 1, 2, "affichage"),
+            ("assets/icon/settings/Image_kistler/Exportation.png", t("hdr_export"), 2, 0, "exportation"),
+            ("assets/icon/settings/Image_kistler/Point_acces.png",  t("hdr_extras"),  2, 1, "extras"),
+            ("assets/icon/settings/Image_kistler/System_info.png",  info_label, 2, 2, "info_systeme"),
         ]
         for icon, label, row, col, action in buttons:
             btn = QPushButton()
@@ -4473,45 +4478,45 @@ class SettingsPage(QWidget):
             text_lbl = QLabel(label)
             text_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             text_lbl.setWordWrap(True)
-            text_lbl.setStyleSheet("font-size: 16px; background: transparent; border: none;")
+            text_lbl.setStyleSheet("font-size: 22px; font-weight: 700; background: transparent; border: none;")
             text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             tile_layout.addWidget(icon_lbl)
             tile_layout.addWidget(text_lbl)
             if action == "coordonnees":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(14)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(13)
                 )
             elif action == "info_systeme":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(15)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(14)
                 )
             elif action == "cycle":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(4)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(3)
                 )
             elif action == "date_heure":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(8)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(7)
                 )
             elif action == "droits":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(9)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(8)
                 )
             elif action == "affichage":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(10)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(9)
                 )
             elif action == "exportation":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(11)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(10)
                 )
             elif action == "extras":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(12)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(11)
                 )
             elif action == "langue":
                 btn.clicked.connect(
-                    lambda checked=False: self._settings_stack.setCurrentIndex(13)
+                    lambda checked=False: self._settings_stack.setCurrentIndex(12)
                 )
             else:
                 btn.clicked.connect(
@@ -4530,10 +4535,10 @@ class SettingsPage(QWidget):
         return page
 
     # ------------------------------------------------------------------
-    # Page 14 — Coordonnées (intermédiaire vers Voie X / Voie Y)
+    # Page 13 — Coordonnées (intermédiaire vers Voie X / Voie Y)
     # ------------------------------------------------------------------
 
-    def _build_page14_coordonnees(self) -> QWidget:
+    def _build_page13_coordonnees(self) -> QWidget:
         page = QWidget()
         v = QVBoxLayout(page)
         v.setContentsMargins(0, 0, 0, 0)
@@ -4600,48 +4605,17 @@ class SettingsPage(QWidget):
         return page
 
     # ------------------------------------------------------------------
-    # Page 2 — Réglage PM
+    # Page 2 — Gestion PM
     # ------------------------------------------------------------------
 
-    def _build_page2_pm_list(self) -> QWidget:
+    def _build_page2_pm_management(self) -> QWidget:
         page = QWidget()
+        page.showEvent = self._pm_management_show_event  # type: ignore[method-assign]
         v = QVBoxLayout(page)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        v.addWidget(self._make_header(t("settings_pm_title_icon")))
-
-        self._pm_list = QListWidget()
-        for pm_id, pm in PM_DEFINITIONS.items():
-            self._pm_list.addItem(f"PM-{pm_id:02d}   ·   {pm.name}")
-        self._pm_list.itemDoubleClicked.connect(self._on_pm_double_click)
-        v.addWidget(self._pm_list, stretch=1)
-        return page
-
-    def _on_pm_double_click(self, item) -> None:
-        row = self._pm_list.row(item)
-        pm_id = sorted(PM_DEFINITIONS.keys())[row]
-        self._pm_edit_page.load_pm(pm_id)
-        self._settings_stack.setCurrentIndex(7)
-
-    def _on_pm_saved(self, pm_id: int) -> None:
-        row = sorted(PM_DEFINITIONS.keys()).index(pm_id)
-        item = self._pm_list.item(row)
-        if item:
-            item.setText(f"PM-{pm_id:02d}   ·   {PM_DEFINITIONS[pm_id].name}")
-
-    # ------------------------------------------------------------------
-    # Page 3 — Gestionnaire PM
-    # ------------------------------------------------------------------
-
-    def _build_page3_pm_manager(self) -> QWidget:
-        page = QWidget()
-        page.showEvent = self._pm_manager_show_event  # type: ignore[method-assign]
-        v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-
-        v.addWidget(self._make_header(t("settings_pm_manager_title_icon")))
+        v.addWidget(self._make_header("Gestion PM"))
 
         # Corps : tableau à gauche + actions à droite
         body = QWidget()
@@ -4651,9 +4625,7 @@ class SettingsPage(QWidget):
 
         # ── Tableau PM ──────────────────────────────────────────────
         self._pm_table = QTableWidget(0, 3)
-        self._pm_table.setHorizontalHeaderLabels([
-            t("table_col_number"), t("table_col_name"), t("table_col_active_tools")
-        ])
+        self._pm_table.setHorizontalHeaderLabels(["N°", "Nom", "Outils actifs"])
         self._pm_table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.Stretch
         )
@@ -4665,6 +4637,7 @@ class SettingsPage(QWidget):
         self._pm_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._pm_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self._pm_table.itemSelectionChanged.connect(self._on_pm_table_selection)
+        self._pm_table.itemDoubleClicked.connect(self._on_pm_table_double_click)
         body_h.addWidget(self._pm_table, stretch=1)
 
         # ── Panneau d'actions ────────────────────────────────────────
@@ -4674,27 +4647,14 @@ class SettingsPage(QWidget):
         av.setContentsMargins(0, 0, 0, 0)
         av.setSpacing(6)
 
-        self._btn_rename = QPushButton(t("btn_rename"))
-        self._btn_copy   = QPushButton(t("btn_copy_to"))
-        self._btn_raz    = QPushButton(t("btn_raz_icon"))
+        self._btn_rename = QPushButton("Renommer")
+        self._btn_copy   = QPushButton("Copier vers...")
+        self._btn_raz    = QPushButton("RAZ")
         for btn in (self._btn_rename, self._btn_copy, self._btn_raz):
             btn.setFixedHeight(44)
-            btn.setObjectName("btn_nav")
+            btn.setObjectName("action_btn")
             btn.setEnabled(False)
             av.addWidget(btn)
-
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"background-color: {_C['border']}; max-height:1px;")
-        av.addWidget(sep)
-
-        btn_close = QPushButton(t("btn_close_check"))
-        btn_close.setFixedHeight(44)
-        btn_close.setObjectName("btn_save")
-        btn_close.clicked.connect(
-            lambda: self._settings_stack.setCurrentIndex(1)
-        )
-        av.addWidget(btn_close)
         av.addStretch()
         body_h.addWidget(actions)
 
@@ -4708,9 +4668,26 @@ class SettingsPage(QWidget):
         self._load_pm_table()
         return page
 
-    def _pm_manager_show_event(self, event) -> None:  # noqa: ANN001
+    def _on_pm_saved(self, pm_id: int) -> None:
         self._load_pm_table()
-        event.__class__.showEvent(self._pm_table.parent(), event)  # type: ignore[arg-type]
+        for row in range(self._pm_table.rowCount()):
+            item = self._pm_table.item(row, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) == pm_id:
+                self._pm_table.selectRow(row)
+                self._on_pm_table_selection()
+                break
+
+    def _on_pm_table_double_click(self, item) -> None:  # noqa: ANN001
+        row = self._pm_table.row(item)
+        id_item = self._pm_table.item(row, 0)
+        pm_id = id_item.data(Qt.ItemDataRole.UserRole) if id_item else None
+        if pm_id is None:
+            return
+        self._pm_edit_page.load_pm(pm_id)
+        self._settings_stack.setCurrentIndex(6)
+
+    def _pm_management_show_event(self, event) -> None:  # noqa: ANN001
+        self._load_pm_table()
 
     def _load_pm_table(self) -> None:
         self._pm_table.setRowCount(0)
@@ -4744,6 +4721,9 @@ class SettingsPage(QWidget):
             if active:
                 outils_item.setForeground(QColor(_C["blue"]))
             self._pm_table.setItem(row, 2, outils_item)
+
+        self._pm_table.clearSelection()
+        self._on_pm_table_selection()
 
     def _pm_manager_selected_id(self) -> int | None:
         rows = self._pm_table.selectedItems()
