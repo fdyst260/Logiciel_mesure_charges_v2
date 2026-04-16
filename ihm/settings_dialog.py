@@ -1199,18 +1199,27 @@ def _make_choice_btn(
     current: str,
     title: str,
     parent: QWidget | None = None,
+    display_map: dict[str, str] | None = None,
 ) -> QPushButton:
     """Retourne un QPushButton qui ouvre _ChoiceDialog au clic."""
-    btn = QPushButton(current)
+    reverse_display_map = {v: k for k, v in (display_map or {}).items()}
+
+    def _display(v: str) -> str:
+        return display_map.get(v, v) if display_map else v
+
+    btn = QPushButton(_display(current))
     btn.setProperty("choice_value", current)
     btn.setMinimumHeight(42)
 
     def _open(_chk: bool = False) -> None:
-        dlg = _ChoiceDialog(choices, btn.property("choice_value") or current, title, parent)
+        current_value = btn.property("choice_value") or current
+        shown_choices = [_display(c) for c in choices]
+        dlg = _ChoiceDialog(shown_choices, _display(current_value), title, parent)
         if dlg.exec():
-            v = dlg.value()
+            picked = dlg.value()
+            v = reverse_display_map.get(picked, picked)
             btn.setProperty("choice_value", v)
-            btn.setText(v)
+            btn.setText(_display(v))
 
     btn.clicked.connect(_open)
     return btn
@@ -1315,7 +1324,7 @@ class _VoieXPage(QWidget):
         grid.setSpacing(8)
 
         # En-têtes colonnes
-        for col, txt in enumerate(["", "Affichage", "Signal  %", ""], start=0):
+        for col, txt in enumerate(["", t("col_display"), t("col_signal_pct"), ""], start=0):
             lc = QLabel(txt)
             lc.setStyleSheet("font-size: 13px; color: #4A4844;")
             lc.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1488,6 +1497,21 @@ class _VoieYPage(QWidget):
         self._load_config()
         super().showEvent(event)
 
+    def _scale_method_display_map(self) -> dict[str, str]:
+        return {
+            "Sensibilité": t("scale_method_sensitivity"),
+            "2 points": t("scale_method_2points"),
+        }
+
+    def _filter_display_map(self) -> dict[str, str]:
+        return {
+            "Aucun": t("choice_none"),
+            "50 Hz": "50 Hz",
+            "100 Hz": "100 Hz",
+            "200 Hz": "200 Hz",
+            "500 Hz": "500 Hz",
+        }
+
     def _cancel(self) -> None:
         self._main_stack.setCurrentIndex(13)
 
@@ -1568,21 +1592,25 @@ class _VoieYPage(QWidget):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._scale_method_btn = _make_choice_btn(
-            _SCALE_METHODS, "Sensibilité", "Méthode d'échelle", self
+            _SCALE_METHODS,
+            "Sensibilité",
+            t("title_scale_method"),
+            self,
+            display_map=self._scale_method_display_map(),
         )
-        form.addRow("Méthode d'échelle :", self._scale_method_btn)
+        form.addRow(t("lbl_scale_method"), self._scale_method_btn)
 
         self._sensitivity_btn = _make_numpad_btn(
-            "-10.0", suffix=" pC/N", title="Sensibilité (pC/N)", parent=self
+            "-10.0", suffix=" pC/N", title=t("title_sensitivity_pcn"), parent=self
         )
-        form.addRow("Sensibilité :", self._sensitivity_btn)
+        form.addRow(t("lbl_sensitivity"), self._sensitivity_btn)
 
         self._alarm_btn = _make_numpad_btn(
-            "4500.0", suffix="", title="Seuil d'alarme", parent=self
+            "4500.0", suffix="", title=t("title_alarm_threshold"), parent=self
         )
-        form.addRow("Seuil d'alarme :", self._alarm_btn)
+        form.addRow(t("lbl_alarm_threshold"), self._alarm_btn)
 
-        self._invert_chk = QCheckBox("Inverser le signal")
+        self._invert_chk = QCheckBox(t("lbl_invert_signal"))
         form.addRow("", self._invert_chk)
 
         v.addLayout(form)
@@ -1602,21 +1630,27 @@ class _VoieYPage(QWidget):
         av.setSpacing(12)
         av.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._filter_btn = _make_choice_btn(_FILTER_CHOICES, "Aucun", "Filtre", self)
-        av.addRow("Filtre :", self._filter_btn)
+        self._filter_btn = _make_choice_btn(
+            _FILTER_CHOICES,
+            "Aucun",
+            t("title_filter"),
+            self,
+            display_map=self._filter_display_map(),
+        )
+        av.addRow(t("lbl_filter"), self._filter_btn)
 
-        self._couple_dcy_chk = QCheckBox("Couple DCY")
+        self._couple_dcy_chk = QCheckBox(t("lbl_couple_dcy"))
         av.addRow("", self._couple_dcy_chk)
 
         self._test_point_btn = _make_numpad_btn(
-            "0.0", suffix="", title="Point de test", parent=self
+            "0.0", suffix="", title=t("title_test_point"), parent=self
         )
-        av.addRow("Point de test :", self._test_point_btn)
+        av.addRow(t("lbl_test_point"), self._test_point_btn)
 
         self._tolerance_btn = _make_numpad_btn(
-            "5.0", suffix=" %", title="Tolérance (%)", parent=self
+            "5.0", suffix=" %", title=t("title_tolerance_pct"), parent=self
         )
-        av.addRow("Tolérance :", self._tolerance_btn)
+        av.addRow(t("lbl_tolerance"), self._tolerance_btn)
 
         self._test_tor_chk = QCheckBox("Test TOR")
         av.addRow("", self._test_tor_chk)
@@ -1700,12 +1734,18 @@ class _VoieYPage(QWidget):
         for btn, val, default in [
             (self._unit_btn,         scaling.get("force_unit"),          "daN"),
             (self._decimal_btn,      str(scaling.get("force_decimal", 1)), "1"),
-            (self._scale_method_btn, cal.get("scale_method"),             "Sensibilité"),
-            (self._filter_btn,       cal.get("filter"),                   "Aucun"),
         ]:
             v = val or default
             btn.setProperty("choice_value", v)
             btn.setText(v)
+
+        scale_method = cal.get("scale_method") or "Sensibilité"
+        self._scale_method_btn.setProperty("choice_value", scale_method)
+        self._scale_method_btn.setText(self._scale_method_display_map().get(scale_method, scale_method))
+
+        filt = cal.get("filter") or "Aucun"
+        self._filter_btn.setProperty("choice_value", filt)
+        self._filter_btn.setText(self._filter_display_map().get(filt, filt))
 
         for btn, val, default in [
             (self._max_btn,         str(scaling.get("force_newton_max", 5000.0)), "5000.0"),
@@ -1760,19 +1800,12 @@ class _VoieYPage(QWidget):
 # ===========================================================================
 
 # ===========================================================================
-# _ControleCyclePage — configuration du contrôle de cycle (4 pages)
+# _ControleCyclePage — configuration du contrôle de cycle (page unique)
 # ===========================================================================
 
 class _ControleCyclePage(QWidget):
-    """Page 4 pages — Mode mesure, Conditions, Parties aller/retour, Traçage
+    """Page unique — Mode mesure, Conditions, Parties aller/retour, Traçage
     (intégrée dans _settings_stack)."""
-
-    _TITLES = [
-        "Contrôle cycle — Mode mesure",
-        "Contrôle cycle — Conditions début / fin",
-        "Contrôle cycle — Parties aller / retour",
-        "Contrôle cycle — Traçage de la courbe",
-    ]
 
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1800,156 +1833,90 @@ class _ControleCyclePage(QWidget):
         hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
-        self._header_lbl = QLabel(self._TITLES[0])
-        self._header_lbl.setStyleSheet(
+        lbl = QLabel(t("dlg_cycle_ctrl_title"))
+        lbl.setStyleSheet(
             "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
-        hh.addWidget(self._header_lbl)
+        hh.addWidget(lbl)
         root.addWidget(hdr)
 
-        # Contenu (4 pages)
-        self._stack = QStackedWidget()
-        self._stack.addWidget(self._build_page0())
-        self._stack.addWidget(self._build_page1())
-        self._stack.addWidget(self._build_page2())
-        self._stack.addWidget(self._build_page3())
-        root.addWidget(self._stack, stretch=1)
+        # Corps scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background-color: transparent;")
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(24, 20, 24, 20)
+        v.setSpacing(0)
 
-        # Footer (4 états)
-        self._footer = QStackedWidget()
-        self._footer.setFixedHeight(64)
-        for i in range(4):
-            self._footer.addWidget(self._build_footer_nav(i))
-        root.addWidget(self._footer)
+        def _sep() -> QFrame:
+            f = QFrame()
+            f.setFrameShape(QFrame.Shape.HLine)
+            f.setStyleSheet("color: #C8C4BC; margin: 14px 0px;")
+            return f
 
-    def _build_footer_nav(self, page_idx: int) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(12)
-
-        if page_idx > 0:
-            btn_back = QPushButton(t("btn_back_arrow"))
-            btn_back.setObjectName("btn_cancel")
-            btn_back.clicked.connect(
-                lambda _c=False, i=page_idx: self._go_page(i - 1)
+        def _section_lbl(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                "font-size: 13px; font-weight: bold; color: #A07830;"
+                " background: transparent; padding-bottom: 6px;"
             )
-            h.addWidget(btn_back)
+            return lbl
 
-        btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self._cancel)
-        h.addWidget(btn_cancel)
-        h.addStretch()
-
-        if page_idx < 3:
-            btn_next = QPushButton(t("btn_next"))
-            btn_next.setObjectName("btn_nav")
-            btn_next.clicked.connect(
-                lambda _c=False, i=page_idx: self._go_page(i + 1)
-            )
-            h.addWidget(btn_next)
-        else:
-            btn_save = QPushButton(t("btn_save_check"))
-            btn_save.setObjectName("btn_save")
-            btn_save.clicked.connect(self._save)
-            h.addWidget(btn_save)
-
-        return w
-
-    def _go_page(self, idx: int) -> None:
-        self._stack.setCurrentIndex(idx)
-        self._footer.setCurrentIndex(idx)
-        self._header_lbl.setText(self._TITLES[idx])
-        if idx == 0:
-            self._refresh_mode_indicator()
-        elif idx == 1:
-            self._refresh_duree_visibility()
-        elif idx == 3:
-            self._refresh_tracage_graph()
-
-    # ------------------------------------------------------------------
-    # Page 0 — Mode mesure + acquisition
-    # ------------------------------------------------------------------
-
-    def _build_page0(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(14)
-
-        form = QFormLayout()
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        # ── Section 1 : Mode mesure ──────────────────────────────────
+        v.addWidget(_section_lbl("Mode mesure"))
+        form0 = QFormLayout()
+        form0.setSpacing(14)
+        form0.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._mode_btn = _make_choice_btn(
             ["Y (x)", "Y (t)", "X (t)", "Y (x, t)"], "Y (x)", "Mode mesure", self
         )
-        form.addRow(t("lbl_measure_mode"), self._mode_btn)
+        form0.addRow(t("lbl_measure_mode"), self._mode_btn)
 
         self._nb_samples_btn = _make_numpad_btn(
             "1000", suffix="", title="Nombre d'échantillons", parent=self
         )
-        form.addRow(t("lbl_samples_count"), self._nb_samples_btn)
+        form0.addRow(t("lbl_samples_count"), self._nb_samples_btn)
 
         self._delta_x_btn = _make_choice_btn(
             ["Automatique", "Manuel"], "Automatique", "Delta X", self
         )
-        form.addRow(t("lbl_delta_x"), self._delta_x_btn)
+        form0.addRow(t("lbl_delta_x"), self._delta_x_btn)
 
-        v.addLayout(form)
+        v.addLayout(form0)
 
-        # Indicateur mode (texte dynamique)
         self._mode_indicator = QLabel()
         self._mode_indicator.setStyleSheet(
             "background-color: #E8E4DC; color: #A07830; font-size: 13px;"
             " padding: 10px 16px; border-radius: 6px; border: 1px solid #C8C4BC;"
         )
         self._mode_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._mode_indicator.setFixedHeight(50)
+        self._mode_indicator.setFixedHeight(42)
+        v.addSpacing(10)
         v.addWidget(self._mode_indicator)
-        v.addStretch()
-        return w
 
-    def _refresh_mode_indicator(self) -> None:
-        _desc = {
-            "Y (x)":    "Force en fonction de la position",
-            "Y (t)":    "Force en fonction du temps",
-            "X (t)":    "Position en fonction du temps",
-            "Y (x, t)": "Force en fonction de la position et du temps",
-        }
-        mode = self._mode_btn.property("choice_value") or "Y (x)"
-        self._mode_indicator.setText(f"~  {_desc.get(mode, mode)}")
+        v.addWidget(_sep())
 
-    # ------------------------------------------------------------------
-    # Page 1 — Conditions début / fin
-    # ------------------------------------------------------------------
+        # ── Section 2 : Conditions début / fin ──────────────────────
+        v.addWidget(_section_lbl("Conditions début / fin"))
 
-    def _build_page1(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(16)
-
-        # En-têtes colonnes
-        hdr_row = QHBoxLayout()
+        cond_hdr = QHBoxLayout()
         for txt in ["  Début", "", "  Fin"]:
-            lbl = QLabel(txt)
+            lbl2 = QLabel(txt)
             if txt:
-                lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #1A1A18;")
-            hdr_row.addWidget(lbl, 0 if not txt else 1)
-        v.addLayout(hdr_row)
+                lbl2.setStyleSheet("font-size: 14px; font-weight: bold; color: #1A1A18;")
+            cond_hdr.addWidget(lbl2, 0 if not txt else 1)
+        v.addLayout(cond_hdr)
+        v.addSpacing(6)
 
-        # Deux colonnes
         cols = QHBoxLayout()
         cols.setSpacing(10)
 
         self._condition_debut_btn = _make_choice_btn(
             ["E-TOR 1 / Bus", "Seuil-X", "Seuil-Y", "Manuel"],
-            "E-TOR 1 / Bus",
-            "Condition début",
-            self,
+            "E-TOR 1 / Bus", "Condition début", self,
         )
         self._condition_debut_btn.setMinimumHeight(54)
         cols.addWidget(self._condition_debut_btn, stretch=1)
@@ -1962,113 +1929,126 @@ class _ControleCyclePage(QWidget):
 
         self._condition_fin_btn = _make_choice_btn(
             ["E-TOR 1 / Bus", "Manuel", "Seuil-X", "Seuil-Y", "Retour-X", "Temps"],
-            "E-TOR 1 / Bus",
-            "Condition fin",
-            self,
+            "E-TOR 1 / Bus", "Condition fin", self,
         )
         self._condition_fin_btn.setMinimumHeight(54)
         cols.addWidget(self._condition_fin_btn, stretch=1)
 
         v.addLayout(cols)
+        v.addSpacing(10)
 
-        # Durée du cycle (pleine largeur, grisée si condition fin ≠ "Temps")
-        form_duree = QFormLayout()
-        form_duree.setSpacing(14)
-        form_duree.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form1 = QFormLayout()
+        form1.setSpacing(14)
+        form1.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self._duree_btn = _make_numpad_btn(
             "20.0", suffix=" s", title="Durée du cycle (s)", parent=self
         )
-        form_duree.addRow(t("lbl_cycle_duration"), self._duree_btn)
-        v.addLayout(form_duree)
-        v.addStretch()
-        return w
+        form1.addRow(t("lbl_cycle_duration"), self._duree_btn)
+        v.addLayout(form1)
 
-    def _refresh_duree_visibility(self) -> None:
-        is_temps = (self._condition_fin_btn.property("choice_value") == "Temps")
-        self._duree_btn.setEnabled(is_temps)
+        v.addWidget(_sep())
 
-    # ------------------------------------------------------------------
-    # Page 2 — Parties ALLER / RETOUR
-    # ------------------------------------------------------------------
-
-    def _build_page2(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(16)
-
-        form = QFormLayout()
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        # ── Section 3 : Parties ALLER / RETOUR ──────────────────────
+        v.addWidget(_section_lbl("Parties ALLER / RETOUR"))
+        form2 = QFormLayout()
+        form2.setSpacing(14)
+        form2.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._aller_btn = _make_choice_btn(
             ["Non défini", "Xmax", "Ymax", "Ymin"], "Xmax",
             "Partie ALLER jusqu'à", self,
         )
-        form.addRow(t("lbl_part_forward_until"), self._aller_btn)
+        form2.addRow(t("lbl_part_forward_until"), self._aller_btn)
 
         self._retour_btn = _make_choice_btn(
             ["Non défini", "Xmin", "Ymax", "Ymin"], "Non défini",
             "Partie RETOUR jusqu'à", self,
         )
-        form.addRow(t("lbl_part_return_until"), self._retour_btn)
+        form2.addRow(t("lbl_part_return_until"), self._retour_btn)
 
-        v.addLayout(form)
+        v.addLayout(form2)
 
-        # Indicateur visuel statique (ALLER + RETOUR toujours affichés)
         ind_row = QHBoxLayout()
         ind_row.setSpacing(32)
         ind_row.addStretch()
         for txt, color in [("↗  ALLER", "#E24B4A"), ("↘  RETOUR", "#A07830")]:
-            lbl = QLabel(txt)
-            lbl.setStyleSheet(
+            lbl3 = QLabel(txt)
+            lbl3.setStyleSheet(
                 f"color: {color}; font-size: 18px; font-weight: bold; background: transparent;"
             )
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            ind_row.addWidget(lbl)
+            lbl3.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ind_row.addWidget(lbl3)
         ind_row.addStretch()
+        v.addSpacing(10)
         v.addLayout(ind_row)
 
-        v.addStretch()
-        return w
+        v.addWidget(_sep())
 
-    # ------------------------------------------------------------------
-    # Page 3 — Traçage de la courbe
-    # ------------------------------------------------------------------
-
-    def _build_page3(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(16)
-
-        form = QFormLayout()
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        # ── Section 4 : Traçage ──────────────────────────────────────
+        v.addWidget(_section_lbl("Traçage de la courbe"))
+        form3 = QFormLayout()
+        form3.setSpacing(14)
+        form3.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._tracage_btn = _make_choice_btn(
             ["ALLER-RETOUR", "ALLER", "RETOUR"], "ALLER",
             "Traçage de la courbe", self,
         )
-        form.addRow(t("lbl_curve_tracing"), self._tracage_btn)
+        form3.addRow(t("lbl_curve_tracing"), self._tracage_btn)
+        v.addLayout(form3)
 
-        v.addLayout(form)
-
-        # Indicateur visuel dynamique (mis à jour dans _refresh_tracage_graph)
-        ind_row = QHBoxLayout()
-        ind_row.setSpacing(32)
-        ind_row.addStretch()
+        ind_row2 = QHBoxLayout()
+        ind_row2.setSpacing(32)
+        ind_row2.addStretch()
         self._tracage_lbl_aller = QLabel(t("lbl_stroke_forward"))
         self._tracage_lbl_aller.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ind_row.addWidget(self._tracage_lbl_aller)
+        ind_row2.addWidget(self._tracage_lbl_aller)
         self._tracage_lbl_retour = QLabel(t("lbl_stroke_return"))
         self._tracage_lbl_retour.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ind_row.addWidget(self._tracage_lbl_retour)
-        ind_row.addStretch()
-        v.addLayout(ind_row)
+        ind_row2.addWidget(self._tracage_lbl_retour)
+        ind_row2.addStretch()
+        v.addSpacing(10)
+        v.addLayout(ind_row2)
 
         v.addStretch()
-        return w
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
+
+        # Footer
+        footer = QWidget()
+        footer.setFixedHeight(64)
+        footer.setStyleSheet("background-color: #F0EDE6;")
+        fh = QHBoxLayout(footer)
+        fh.setContentsMargins(24, 10, 24, 10)
+        fh.setSpacing(12)
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
+        btn_cancel.setObjectName("btn_cancel")
+        btn_cancel.clicked.connect(self._cancel)
+        fh.addWidget(btn_cancel)
+        fh.addStretch()
+        btn_save = QPushButton(t("btn_save_check"))
+        btn_save.setObjectName("btn_save")
+        btn_save.clicked.connect(self._save)
+        fh.addWidget(btn_save)
+        root.addWidget(footer)
+
+    # ------------------------------------------------------------------
+    # Refresh helpers
+    # ------------------------------------------------------------------
+
+    def _refresh_mode_indicator(self) -> None:
+        _desc = {
+            "Y (x)":    "Force en fonction de la position",
+            "Y (t)":    "Force en fonction du temps",
+            "X (t)":    "Position en fonction du temps",
+            "Y (x, t)": "Force en fonction de la position et du temps",
+        }
+        mode = self._mode_btn.property("choice_value") or "Y (x)"
+        self._mode_indicator.setText(f"~  {_desc.get(mode, mode)}")
+
+    def _refresh_duree_visibility(self) -> None:
+        is_temps = (self._condition_fin_btn.property("choice_value") == "Temps")
+        self._duree_btn.setEnabled(is_temps)
 
     def _refresh_tracage_graph(self) -> None:
         mode = self._tracage_btn.property("choice_value") or "ALLER"
@@ -2161,10 +2141,12 @@ class _DroitsAccesPage(QWidget):
     """Page droits d'accès — 2 pages internes (QStackedWidget)."""
 
     _LEVELS = [
-        ("pin_operateur",  "🟢", "Opérateur",      "#2E7D32"),
-        ("pin_technicien", "🟡", "Technicien",      "#FF9800"),
-        ("pin_admin",      "🔴", "Administrateur",  "#C62828"),
+        ("pin_operateur",  "🟢", "level_operator", "#2E7D32"),
+        ("pin_technicien", "🟡", "level_tech",     "#FF9800"),
+        ("pin_admin",      "🔴", "level_admin",    "#C62828"),
     ]
+    _AUTO_LOGOUT_CHOICES = ["Jamais", "5 minutes", "15 minutes", "1 heure"]
+    _AUTO_LOGOUT_DEFAULT = "Jamais"
 
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2175,6 +2157,14 @@ class _DroitsAccesPage(QWidget):
     def showEvent(self, event) -> None:
         self._load_config()
         super().showEvent(event)
+
+    def _auto_logout_display_map(self) -> dict[str, str]:
+        return {
+            "Jamais": t("auto_logout_never"),
+            "5 minutes": t("auto_logout_5_min"),
+            "15 minutes": t("auto_logout_15_min"),
+            "1 heure": t("auto_logout_1_hour"),
+        }
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -2215,7 +2205,7 @@ class _DroitsAccesPage(QWidget):
         v.setSpacing(14)
 
         # Activation des droits
-        self._enabled_chk = QCheckBox("Activer les droits d'accès")
+        self._enabled_chk = QCheckBox(t("lbl_access_rights_enable"))
         self._enabled_chk.setStyleSheet("color: #1A1A18; font-size: 14px;")
         v.addWidget(self._enabled_chk)
 
@@ -2224,8 +2214,11 @@ class _DroitsAccesPage(QWidget):
         form.setSpacing(12)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self._auto_logout_btn = _make_choice_btn(
-            ["Jamais", "5 minutes", "15 minutes", "1 heure"],
-            "Jamais", "Déconnexion auto", self,
+            self._AUTO_LOGOUT_CHOICES,
+            self._AUTO_LOGOUT_DEFAULT,
+            t("auto_logout_title"),
+            self,
+            display_map=self._auto_logout_display_map(),
         )
         form.addRow(t("lbl_auto_logout"), self._auto_logout_btn)
         v.addLayout(form)
@@ -2243,7 +2236,8 @@ class _DroitsAccesPage(QWidget):
         _ROW_STYLE = (
             "background-color: #E8E4DC; border-radius: 8px; padding: 6px;"
         )
-        for key, icon, name, color in self._LEVELS:
+        for key, icon, name_key, color in self._LEVELS:
+            name = t(name_key)
             row_w = QWidget()
             row_w.setStyleSheet(_ROW_STYLE)
             rh = QHBoxLayout(row_w)
@@ -2289,9 +2283,9 @@ class _DroitsAccesPage(QWidget):
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
 
         _ROWS = [
-            ("1", "🟢 Opérateur",     "Voir courbes, compteurs, export CSV"),
-            ("2", "🟡 Technicien",    "+ Changer PM, RAZ compteurs"),
-            ("3", "🔴 Administrateur","+ Réglages complets, PM, date/heure"),
+            ("1", f"🟢 {t('level_operator')}", t("access_rights_row_operator")),
+            ("2", f"🟡 {t('level_tech')}",     t("access_rights_row_technician")),
+            ("3", f"🔴 {t('level_admin')}",    t("access_rights_row_admin")),
         ]
         for row, (niv, nom, droits) in enumerate(_ROWS):
             for col, txt in enumerate([niv, nom, droits]):
@@ -2399,15 +2393,17 @@ class _DroitsAccesPage(QWidget):
         cfg = load_config(_CONFIG_PATH)
         ac = cfg.get("access_control", {})
         self._enabled_chk.setChecked(bool(ac.get("enabled", False)))
-        v = ac.get("auto_logout", "Jamais")
+        v = ac.get("auto_logout", self._AUTO_LOGOUT_DEFAULT)
+        if v not in self._AUTO_LOGOUT_CHOICES:
+            v = self._AUTO_LOGOUT_DEFAULT
         self._auto_logout_btn.setProperty("choice_value", v)
-        self._auto_logout_btn.setText(v)
+        self._auto_logout_btn.setText(self._auto_logout_display_map().get(v, v))
 
     def _save(self) -> None:
         cfg = load_config(_CONFIG_PATH)
         ac = cfg.setdefault("access_control", {})
         ac["enabled"]     = self._enabled_chk.isChecked()
-        ac["auto_logout"] = self._auto_logout_btn.property("choice_value") or "Jamais"
+        ac["auto_logout"] = self._auto_logout_btn.property("choice_value") or self._AUTO_LOGOUT_DEFAULT
         # Initialiser les PIN par défaut hashés s'ils n'existent pas encore
         _defaults = {
             "pin_operateur":  "0000",
