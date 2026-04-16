@@ -1071,7 +1071,7 @@ class _Tile(QFrame):
         lbl_icon.setStyleSheet("background: transparent; border: none;")
         pixmap = QPixmap(icon)
         if not pixmap.isNull():
-            pixmap = pixmap.scaled(128, 128, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            pixmap = pixmap.scaled(350, 350, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             lbl_icon.setPixmap(pixmap)
         else:
             lbl_icon.setText(icon)
@@ -4126,27 +4126,114 @@ class _CopyDestDialog(QDialog):
 
 
 # ===========================================================================
-# _LanguePage — sélection de la langue (index 13)
+# _FlagTile — tuile langue avec fond drapeau peint + overlay + texte centré
+# ===========================================================================
+
+class _FlagTile(QWidget):
+    """Tuile cliquable : fond drapeau (QPixmap), overlay semi-transparent, nom centré."""
+
+    clicked = Signal(str)  # émet le code langue
+
+    def __init__(self, code: str, name: str, pixmap: QPixmap, parent=None) -> None:
+        super().__init__(parent)
+        self._code = code
+        self._name = name
+        self._pixmap = pixmap
+        self._selected = False
+        self.setMinimumSize(180, 110)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def set_selected(self, selected: bool) -> None:
+        if self._selected != selected:
+            self._selected = selected
+            self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: ANN001
+        from PySide6.QtGui import QPainterPath
+        from PySide6.QtCore import QRectF
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = self.rect()
+        radius = 12.0
+        pen_width = 3 if self._selected else 1
+
+        # Clip arrondi
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(rect), radius, radius)
+        painter.setClipPath(path)
+
+        # Fond : drapeau ou couleur neutre
+        if not self._pixmap.isNull():
+            scaled = self._pixmap.scaled(
+                rect.size(),
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            ox = (scaled.width() - rect.width()) // 2
+            oy = (scaled.height() - rect.height()) // 2
+            painter.drawPixmap(rect, scaled, scaled.rect().adjusted(ox, oy, -ox, -oy))
+        else:
+            painter.fillRect(rect, QColor("#C8C4BC"))
+
+        # Overlay semi-transparent (plus léger si sélectionné)
+        overlay_alpha = 38 if self._selected else 89   # ~0.15 / ~0.35
+        painter.fillRect(rect, QColor(0, 0, 0, overlay_alpha))
+
+        painter.setClipping(False)
+
+        # Bordure
+        pen_color = QColor("#C49A3C") if self._selected else QColor("#888888")
+        painter.setPen(QPen(pen_color, pen_width))
+        border_rect = QRectF(rect).adjusted(
+            pen_width / 2, pen_width / 2, -pen_width / 2, -pen_width / 2
+        )
+        painter.drawRoundedRect(border_rect, radius, radius)
+
+        # Texte centré
+        font = QFont()
+        font.setPointSize(14)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor("#FFFFFF"))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._name)
+
+        painter.end()
+
+    def mousePressEvent(self, event) -> None:  # noqa: ANN001
+        self.clicked.emit(self._code)
+        super().mousePressEvent(event)
+
+
+# ===========================================================================
+# _LanguePage — sélection de la langue (index 12)
 # ===========================================================================
 
 class _LanguePage(QWidget):
-    """Page de sélection de la langue de l'interface (index 13)."""
-
-    _FLAGS = {
-        "fr": "🇫🇷", "en": "🇬🇧", "it": "🇮🇹",
-        "es": "🇪🇸", "pt": "🇵🇹", "ro": "🇷🇴",
-    }
+    """Page de sélection de la langue — grille 2×3 de tuiles drapeau."""
 
     def __init__(self, stack: QStackedWidget, parent=None) -> None:
         super().__init__(parent)
         self._main_stack = stack
         self._current = "fr"
-        self._lang_buttons: dict[str, QPushButton] = {}
+        self._tiles: dict[str, _FlagTile] = {}
         self._build_ui()
         self._load_config()
 
     def _build_ui(self) -> None:
         from ihm.translations import LANGUAGES
+
+        FLAG_PATHS = {
+            "fr": "assets/icon/flags/fr.png",
+            "en": "assets/icon/flags/en.png",
+            "it": "assets/icon/flags/it.png",
+            "es": "assets/icon/flags/es.png",
+            "pt": "assets/icon/flags/pt.png",
+            "ro": "assets/icon/flags/ro.png",
+        }
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -4169,96 +4256,54 @@ class _LanguePage(QWidget):
         btn_back = QPushButton(t("btn_back_arrow"))
         btn_back.setObjectName("btn_nav")
         btn_back.setFixedHeight(36)
-        btn_back.clicked.connect(
-            lambda: self._main_stack.setCurrentIndex(1)
-        )
+        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
         hh.addWidget(btn_back)
         layout.addWidget(header)
 
-        # Grille 2 colonnes de tuiles langue
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
-        inner = QWidget()
-        grid = QGridLayout(inner)
-        grid.setContentsMargins(30, 30, 30, 30)
+        # Grille 2×3 de tuiles
+        body = QWidget()
+        body.setStyleSheet(f"background-color: {_C['bg']};")
+        grid = QGridLayout(body)
+        grid.setContentsMargins(24, 24, 24, 24)
         grid.setSpacing(16)
-
-        _btn_style = f"""
-            QPushButton {{
-                background-color: {_C['card']};
-                color: {_C['text']};
-                font-size: 18px;
-                font-weight: bold;
-                border: 2px solid {_C['border']};
-                border-radius: 10px;
-            }}
-            QPushButton:checked {{
-                background-color: #F5EDD6;
-                border: 3px solid #C49A3C;
-                color: #C49A3C;
-            }}
-            QPushButton:pressed {{
-                background-color: #A07830;
-                color: #1A1A18;
-            }}
-        """
 
         for idx, (code, name) in enumerate(LANGUAGES.items()):
             row, col = divmod(idx, 2)
-            flag = self._FLAGS.get(code, "🌐")
-            btn = QPushButton(f"{flag}   {name}")
-            btn.setFixedHeight(70)
-            btn.setCheckable(True)
-            btn.setStyleSheet(_btn_style)
-            btn.clicked.connect(lambda _, c=code: self._select_lang(c))
-            grid.addWidget(btn, row, col)
-            self._lang_buttons[code] = btn
+            pixmap = QPixmap(FLAG_PATHS.get(code, ""))
+            tile = _FlagTile(code, name, pixmap, self)
+            tile.clicked.connect(self._select_lang)
+            grid.addWidget(tile, row, col)
+            grid.setRowStretch(row, 1)
+            self._tiles[code] = tile
 
-        scroll.setWidget(inner)
-        layout.addWidget(scroll, stretch=1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
-        # Footer
-        footer = QWidget()
-        footer.setFixedHeight(60)
-        footer.setStyleSheet(
-            f"background-color: {_C['header_bg']}; "
-            f"border-top: 1px solid {_C['border']};"
-        )
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(24, 8, 24, 8)
-        fh.addStretch()
-        btn_apply = QPushButton(t("btn_apply"))
-        btn_apply.setObjectName("btn_save")
-        btn_apply.setFixedHeight(44)
-        btn_apply.clicked.connect(self._apply)
-        fh.addWidget(btn_apply)
-        layout.addWidget(footer)
+        layout.addWidget(body, stretch=1)
 
     def _load_config(self) -> None:
         cfg = load_config(_CONFIG_PATH)
         lang = cfg.get("language", "fr")
         self._current = lang
-        self._update_buttons(lang)
+        self._update_tiles(lang)
 
     def showEvent(self, event) -> None:  # noqa: ANN001
         self._load_config()
         super().showEvent(event)
 
-    def _update_buttons(self, lang: str) -> None:
-        for code, btn in self._lang_buttons.items():
-            btn.setChecked(code == lang)
+    def _update_tiles(self, lang: str) -> None:
+        for code, tile in self._tiles.items():
+            tile.set_selected(code == lang)
 
     def _select_lang(self, lang: str) -> None:
-        self._current = lang
-        self._update_buttons(lang)
-
-    def _apply(self) -> None:
         from ihm.translations import set_language
+        self._current = lang
+        self._update_tiles(lang)
+
         cfg = load_config(_CONFIG_PATH)
-        cfg["language"] = self._current
+        cfg["language"] = lang
         save_config(_CONFIG_PATH, cfg)
-        set_language(self._current)
+        set_language(lang)
 
         main_win = self._main_stack.window()
         if hasattr(main_win, "apply_language"):
