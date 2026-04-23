@@ -669,7 +669,6 @@ class GraphWidget(QWidget):
             painter.fillRect(self.rect(), QColor(self._get_color("bg_graph")))
 
             rect = self._plot_rect()
-            print(f"[IHM] _plot_rect: {rect.x()},{rect.y()} {rect.width()}x{rect.height()}")
 
             # Lignes d'axes (hors clip)
             self._draw_axis_lines(painter, rect)
@@ -3882,7 +3881,6 @@ class MainWindow(QMainWindow):
     @Slot(float, float, float)
     def on_new_point(self, t: float, force_n: float, pos_mm: float) -> None:
         """Accumule un point dans le buffer — pas de redessin immédiat."""
-        print(f"[IHM] on_new_point appelé  force={force_n:.1f} pos={pos_mm:.1f}")
         if not self._cycle_started:
             self._cycle_started = True
             self._update_result_display("running")
@@ -4056,9 +4054,7 @@ class MainWindow(QMainWindow):
 
     # Définition : vide le buffer de points vers le graphique.
     def _flush_buffer(self) -> None:
-        print("[IHM] flush_buffer appelé")
         if self._point_buffer:
-            n = len(self._point_buffer)
             self._graph.add_points(self._point_buffer)
             self._point_buffer.clear()
             self._update_live_values(self._last_force, self._last_pos)
