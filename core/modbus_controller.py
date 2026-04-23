@@ -1,17 +1,28 @@
+# =====================================================
+# TABLE D'ECHANGE MODBUS TCP — Delta DVP-AS228
+# =====================================================
+# Validé et testé le 2026-04-23
+#
+# D2000  (READ,  PLC → Pi)  ◀──▶  0x07D0 (2000 décimal)
+#   bit 0 = DCY, bit 1 = TAR_Y, bit 2 = TAR_X
+#
+# D2100  (WRITE, Pi → PLC)  ◀──▶  0x0834 (2100 décimal)
+#   bit 0 = PRET, bit 1 = OK, bit 2 = NOK,
+#   bit 3 = NOPASS, bit 7 = ALARME
+# =====================================================
 """Contrôleur Modbus TCP — communication avec automate Delta DVP.
 
 Rôle :
-  - Polling du registre D1000 (commandes PLC → Pi) toutes les 100 ms
-  - D1000 bit 0 : départ cycle (DCY mesure)   → on_cycle_start / on_cycle_stop
-  - D1000 bit 1 : tarage Y                    → on_tare_y
-  - D1000 bit 2 : tarage X                    → on_tare_x
-  - Écriture état Pi → PLC :
-      D2000 bit 0 : echo DCY (miroir temps réel de D1000 bit 0)
-      D2003 bit 0 : Prêt (1 dès init, 0 sur alarme critique)
-      D2003 bit 1 : OK (1 si dernier cycle conforme)
-      D2003 bit 2 : NOK-TOTAL (1 si dernier cycle non conforme)
-      D2003 bit 3 : NO-PASS (1 si zone NO-PASS traversée)
-      D2003 bit 7 : Alarme (1 si erreur système ou capteur)
+  - Polling du registre D2000 (commandes PLC → Pi) toutes les 50 ms
+  - D2000 bit 0 : départ cycle (DCY mesure)   → on_cycle_start / on_cycle_stop
+  - D2000 bit 1 : tarage Y                    → on_tare_y
+  - D2000 bit 2 : tarage X                    → on_tare_x
+  - Écriture état Pi → PLC (D2100) :
+      bit 0 : PRET   (1 dès init, 0 sur alarme critique)
+      bit 1 : OK     (1 si dernier cycle conforme)
+      bit 2 : NOK    (1 si dernier cycle non conforme)
+      bit 3 : NOPASS (1 si zone NO-PASS traversée)
+      bit 7 : ALARME (1 si erreur système ou capteur)
 
 Architecture thread-safe :
   ModbusController tourne dans son propre thread daemon.
@@ -30,19 +41,12 @@ from pathlib import Path
 
 import yaml
 
-# ---------------------------------------------------------------------------
-# Adresses Modbus Delta DVP  (D<n>  →  adresse Modbus n, sans offset)
-# ---------------------------------------------------------------------------
-_D1000 = 1000   # Commandes PLC → Pi  (lecture)
-_D2000 = 2000   # Echo DCY       Pi → PLC (écriture)
-_D2003 = 2003   # Status flags   Pi → PLC (écriture)
-
-# Bits D1000 (entrées depuis PLC)
+# Bits D2000 (entrées depuis PLC)
 _BIT_DCY   = 0
 _BIT_TAR_Y = 1
 _BIT_TAR_X = 2
 
-# Bits D2003 (sorties vers PLC)
+# Bits D2100 (sorties vers PLC)
 _BIT_PRET   = 0
 _BIT_OK     = 1
 _BIT_NOK    = 2
@@ -65,7 +69,7 @@ class ModbusController(threading.Thread):
         """Initialise le thread Modbus et ses callbacks applicatifs.
 
         Les callbacks sont optionnels et déclenchés sur fronts détectés
-        dans D1000 (début/fin cycle, tarages Y/X).
+        dans D2000 (début/fin cycle, tarages Y/X).
         """
         super().__init__(name="ModbusController", daemon=True)
         self._stop_event = stop_event or threading.Event()
@@ -77,12 +81,14 @@ class ModbusController(threading.Thread):
         self._client = None
         self._connected = False
 
-        self._last_d1000 = 0       # dernier D1000 lu (détection fronts)
-        self._d2000_shadow = 0     # valeur locale D2000 (écriture par masque)
-        self._d2003_shadow = 0     # valeur locale D2003 (écriture par masque)
+        self._last_cmd = 0          # dernier registre cmd lu (détection fronts)
+        self._status_shadow = 0     # valeur locale D2100 (écriture par masque)
         self._shadow_lock = threading.Lock()
 
         self._config = self._load_config(config_path)
+        self._cmd_read_addr     = int(str(self._config.get("cmd_read_addr",     "0x07D0")), 0)
+        self._status_write_addr = int(str(self._config.get("status_write_addr", "0x0834")), 0)
+        self._unit_id           = int(self._config.get("unit_id", 1))
 
     # ------------------------------------------------------------------
     # Config
@@ -157,13 +163,11 @@ class ModbusController(threading.Thread):
     # ------------------------------------------------------------------
 
     def _init_output_registers(self) -> None:
-        """Après connexion : reset les shadows, puis active le bit Prêt."""
+        """Après connexion : reset le shadow, puis active le bit Prêt."""
         with self._shadow_lock:
-            self._d2000_shadow = 0
-            self._d2003_shadow = 0
-        # Prêt = 1 dès l'initialisation
-        self._write_d2003_bit(_BIT_PRET, True)
-        print("[MODBUS] Registres initialisés — D2003 Prêt = 1")
+            self._status_shadow = 0
+        self._write_status_bit(_BIT_PRET, True)
+        print("[MODBUS] Registres initialisés — D2100 Prêt = 1")
 
     # ------------------------------------------------------------------
     # Primitives lecture / écriture (accès registre brut)
@@ -172,7 +176,9 @@ class ModbusController(threading.Thread):
     def _read_register(self, address: int) -> int | None:
         """Lit un registre Holding. Retourne la valeur ou None si erreur."""
         try:
-            result = self._client.read_holding_registers(address=address, count=1)
+            result = self._client.read_holding_registers(
+                address=address, count=1, device_id=self._unit_id
+            )
             if result.isError():
                 return None
             return result.registers[0]
@@ -180,32 +186,20 @@ class ModbusController(threading.Thread):
             self._connected = False
             return None
 
-    def _write_d2000_bit(self, bit: int, state: bool) -> None:
-        """Modifie un bit de D2000 par masquage sur le shadow local."""
+    def _write_status_bit(self, bit: int, state: bool) -> None:
+        """Modifie un bit de D2100 par masquage sur le shadow local."""
         with self._shadow_lock:
             if state:
-                self._d2000_shadow |= (1 << bit)
+                self._status_shadow |= (1 << bit)
             else:
-                self._d2000_shadow &= ~(1 << bit)
-            value = self._d2000_shadow
+                self._status_shadow &= ~(1 << bit)
+            value = self._status_shadow
         try:
-            self._client.write_register(address=_D2000, value=value)
+            self._client.write_register(
+                address=self._status_write_addr, value=value, device_id=self._unit_id
+            )
         except Exception as e:
-            print(f"[MODBUS] Erreur écriture D2000: {e}")
-            self._connected = False
-
-    def _write_d2003_bit(self, bit: int, state: bool) -> None:
-        """Modifie un bit de D2003 par masquage sur le shadow local."""
-        with self._shadow_lock:
-            if state:
-                self._d2003_shadow |= (1 << bit)
-            else:
-                self._d2003_shadow &= ~(1 << bit)
-            value = self._d2003_shadow
-        try:
-            self._client.write_register(address=_D2003, value=value)
-        except Exception as e:
-            print(f"[MODBUS] Erreur écriture D2003: {e}")
+            print(f"[MODBUS] Erreur écriture D2100: {e}")
             self._connected = False
 
     # ------------------------------------------------------------------
@@ -213,7 +207,7 @@ class ModbusController(threading.Thread):
     # ------------------------------------------------------------------
 
     def write_result(self, result: str, no_pass: bool = False) -> None:
-        """Écrit le résultat du cycle dans D2003.
+        """Écrit le résultat du cycle dans D2100.
 
         OK et NOK sont mutuellement exclusifs : les deux sont remis à 0
         avant d'écrire le nouveau résultat.
@@ -224,45 +218,49 @@ class ModbusController(threading.Thread):
         is_pass = result == "PASS"
         with self._shadow_lock:
             # Effacer OK, NOK et NO-PASS avant de poser le résultat
-            self._d2003_shadow &= ~(
+            self._status_shadow &= ~(
                 (1 << _BIT_OK) | (1 << _BIT_NOK) | (1 << _BIT_NOPASS)
             )
             if is_pass:
-                self._d2003_shadow |= (1 << _BIT_OK)
+                self._status_shadow |= (1 << _BIT_OK)
             else:
-                self._d2003_shadow |= (1 << _BIT_NOK)
+                self._status_shadow |= (1 << _BIT_NOK)
                 if no_pass:
-                    self._d2003_shadow |= (1 << _BIT_NOPASS)
-            value = self._d2003_shadow
+                    self._status_shadow |= (1 << _BIT_NOPASS)
+            value = self._status_shadow
         try:
-            self._client.write_register(address=_D2003, value=value)
-            print(f"[MODBUS] Résultat D2003 = 0x{value:04X} ({result}"
+            self._client.write_register(
+                address=self._status_write_addr, value=value, device_id=self._unit_id
+            )
+            print(f"[MODBUS] Résultat D2100 = 0x{value:04X} ({result}"
                   f"{', NO-PASS' if no_pass else ''})")
         except Exception as e:
             print(f"[MODBUS] Erreur écriture résultat: {e}")
             self._connected = False
 
     def set_nopass(self, active: bool) -> None:
-        """Active/désactive le bit NO-PASS dans D2003 (D2003 bit 3)."""
+        """Active/désactive le bit NO-PASS dans D2100 (bit 3)."""
         if not self._connected or not self._client:
             return
-        self._write_d2003_bit(_BIT_NOPASS, active)
+        self._write_status_bit(_BIT_NOPASS, active)
 
     def set_alarm(self, alarm: bool) -> None:
-        """Active/désactive l'alarme (D2003 bit 7).
+        """Active/désactive l'alarme (D2100 bit 7).
         Une alarme critique efface aussi le bit Prêt."""
         if not self._connected or not self._client:
             return
         with self._shadow_lock:
             if alarm:
-                self._d2003_shadow |= (1 << _BIT_ALARME)
-                self._d2003_shadow &= ~(1 << _BIT_PRET)
+                self._status_shadow |= (1 << _BIT_ALARME)
+                self._status_shadow &= ~(1 << _BIT_PRET)
             else:
-                self._d2003_shadow &= ~(1 << _BIT_ALARME)
-            value = self._d2003_shadow
+                self._status_shadow &= ~(1 << _BIT_ALARME)
+            value = self._status_shadow
         try:
-            self._client.write_register(address=_D2003, value=value)
-            print(f"[MODBUS] Alarme {'ON' if alarm else 'OFF'} — D2003 = 0x{value:04X}")
+            self._client.write_register(
+                address=self._status_write_addr, value=value, device_id=self._unit_id
+            )
+            print(f"[MODBUS] Alarme {'ON' if alarm else 'OFF'} — D2100 = 0x{value:04X}")
         except Exception as e:
             print(f"[MODBUS] Erreur écriture alarme: {e}")
             self._connected = False
@@ -272,12 +270,12 @@ class ModbusController(threading.Thread):
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """Exécute la boucle de polling, gère reconnection et fronts D1000."""
+        """Exécute la boucle de polling, gère reconnection et fronts D2000."""
         if not self._config.get("enabled", True):
             print("[MODBUS] Désactivé dans config.yaml")
             return
 
-        poll_ms = int(self._config.get("poll_interval_ms", 100))
+        poll_ms = int(self._config.get("poll_interval_ms", 50))
 
         while not self._stop_event.is_set() and not self._connected:
             if self._connect():
@@ -301,23 +299,19 @@ class ModbusController(threading.Thread):
                 self._connect()
                 continue
 
-            # --- Lecture D1000 (commandes PLC → Pi) ---
-            d1000 = self._read_register(_D1000)
+            # --- Lecture D2000 (commandes PLC → Pi) ---
+            cmd_value = self._read_register(self._cmd_read_addr)
 
-            if d1000 is None:
+            if cmd_value is None:
                 self._connected = False
                 self._notify_status(False)
                 continue
 
-            prev = self._last_d1000
-
-            # Echo DCY (D2000 bit 0) suit D1000 bit 0 en temps réel
-            dcy_now  = bool(d1000 & (1 << _BIT_DCY))
-            dcy_prev = bool(prev  & (1 << _BIT_DCY))
-            if dcy_now != dcy_prev:
-                self._write_d2000_bit(0, dcy_now)
+            prev = self._last_cmd
 
             # Front montant DCY → départ cycle
+            dcy_now  = bool(cmd_value & (1 << _BIT_DCY))
+            dcy_prev = bool(prev      & (1 << _BIT_DCY))
             if dcy_now and not dcy_prev:
                 print("[MODBUS] DCY ↑ → démarrage cycle")
                 if self._on_cycle_start:
@@ -330,22 +324,22 @@ class ModbusController(threading.Thread):
                     self._on_cycle_stop()
 
             # Front montant TAR_Y → tarage voie Y
-            tar_y_now  = bool(d1000 & (1 << _BIT_TAR_Y))
-            tar_y_prev = bool(prev  & (1 << _BIT_TAR_Y))
+            tar_y_now  = bool(cmd_value & (1 << _BIT_TAR_Y))
+            tar_y_prev = bool(prev      & (1 << _BIT_TAR_Y))
             if tar_y_now and not tar_y_prev:
                 print("[MODBUS] TAR_Y ↑ → tarage Y demandé")
                 if self._on_tare_y:
                     self._on_tare_y()
 
             # Front montant TAR_X → tarage voie X
-            tar_x_now  = bool(d1000 & (1 << _BIT_TAR_X))
-            tar_x_prev = bool(prev  & (1 << _BIT_TAR_X))
+            tar_x_now  = bool(cmd_value & (1 << _BIT_TAR_X))
+            tar_x_prev = bool(prev      & (1 << _BIT_TAR_X))
             if tar_x_now and not tar_x_prev:
                 print("[MODBUS] TAR_X ↑ → tarage X demandé")
                 if self._on_tare_x:
                     self._on_tare_x()
 
-            self._last_d1000 = d1000
+            self._last_cmd = cmd_value
             time.sleep(poll_ms / 1000.0)
 
         self._disconnect()

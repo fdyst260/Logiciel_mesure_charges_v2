@@ -45,11 +45,13 @@ gpio:
   trigger_pin: 17
 language: fr
 modbus:
-  enabled: false
+  enabled: true
   host: 192.168.1.92
-  poll_interval_ms: 100
   port: 502
   unit_id: 1
+  poll_interval_ms: 50
+  cmd_read_addr:     0x07D0   # D2000 — READ  PLC → Pi
+  status_write_addr: 0x0834   # D2100 — WRITE Pi → PLC
 network:
   eth0_ip: 192.168.1.27
   eth0_mask: /24 (255.255.255.0)
