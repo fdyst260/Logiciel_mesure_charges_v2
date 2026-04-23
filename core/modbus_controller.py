@@ -86,6 +86,11 @@ class ModbusController(threading.Thread):
         self._on_tare_x = on_tare_x
         self._status_callback: Callable[[bool], None] | None = None
         self._client = None
+        # Lock protégeant les accès concurrents au client Modbus TCP
+        # (self._client). Toute méthode qui fait une opération réseau
+        # Modbus (read_holding_registers, write_register, connect, close)
+        # DOIT s'exécuter sous ce lock.
+        self._client_lock = threading.Lock()
         self._connected = False
 
         self._last_cmd = 0          # dernier registre cmd lu (détection fronts)
@@ -132,7 +137,16 @@ class ModbusController(threading.Thread):
     # ------------------------------------------------------------------
 
     def _connect(self) -> bool:
-        """Tente de se connecter à l'automate. Retourne True si succès."""
+        """Tente de se connecter à l'automate. Retourne True si succès.
+
+        # _connect() n'est PAS sous _client_lock :
+        # - Appelée uniquement depuis run() au démarrage ou après déconnexion.
+        # - Pendant son exécution, self._connected = False, donc toutes les
+        #   méthodes publiques (write_result, set_alarm, read_position, read_force)
+        #   retournent immédiatement sur leur guard "if not self._connected".
+        # - Locker ici créerait un deadlock via _init_output_registers() →
+        #   _write_status_bit() qui prend _client_lock.
+        """
         try:
             from pymodbus.client import ModbusTcpClient
 
@@ -157,7 +171,16 @@ class ModbusController(threading.Thread):
             return False
 
     def _disconnect(self) -> None:
-        """Ferme proprement le client Modbus et publie l'état déconnecté."""
+        """Ferme proprement le client Modbus et publie l'état déconnecté.
+
+        # _disconnect() n'est PAS sous _client_lock :
+        # - Appelée uniquement depuis run(), toujours après que
+        #   self._connected a été mis à False (par le handler d'exception
+        #   de _read_register() ou en entrée du bloc de reconnexion).
+        # - À ce stade, tous les guards "if not self._connected" des méthodes
+        #   publiques ont déjà renvoyé None/return, aucune n'accède plus
+        #   à self._client concurremment.
+        """
         if self._client:
             try:
                 self._client.close()
@@ -184,16 +207,17 @@ class ModbusController(threading.Thread):
 
     def _read_register(self, address: int) -> int | None:
         """Lit un registre Holding. Retourne la valeur ou None si erreur."""
-        try:
-            result = self._client.read_holding_registers(
-                address=address, count=1, device_id=self._unit_id
-            )
-            if result.isError():
+        with self._client_lock:
+            try:
+                result = self._client.read_holding_registers(
+                    address=address, count=1, device_id=self._unit_id
+                )
+                if result.isError():
+                    return None
+                return result.registers[0]
+            except Exception:
+                self._connected = False
                 return None
-            return result.registers[0]
-        except Exception:
-            self._connected = False
-            return None
 
     def _write_status_bit(self, bit: int, state: bool) -> None:
         """Modifie un bit de D2100 par masquage sur le shadow local."""
@@ -203,13 +227,14 @@ class ModbusController(threading.Thread):
             else:
                 self._status_shadow &= ~(1 << bit)
             value = self._status_shadow
-        try:
-            self._client.write_register(
-                address=self._status_write_addr, value=value, device_id=self._unit_id
-            )
-        except Exception as e:
-            print(f"[MODBUS] Erreur écriture D2100: {e}")
-            self._connected = False
+        with self._client_lock:
+            try:
+                self._client.write_register(
+                    address=self._status_write_addr, value=value, device_id=self._unit_id
+                )
+            except Exception as e:
+                print(f"[MODBUS] Erreur écriture D2100: {e}")
+                self._connected = False
 
     # ------------------------------------------------------------------
     # API publique — appelée depuis le thread Qt / main.py
@@ -221,26 +246,25 @@ class ModbusController(threading.Thread):
         Retourne la valeur en mm, ou None si déconnecté ou erreur.
         Format : Float32 Little Endian (CDAB) — mot bas en r0, mot haut en r1.
 
-        THREAD-SAFETY : doit être appelée UNIQUEMENT depuis le thread de
-        polling Modbus (self.run()). Tout appel depuis un autre thread
-        accéderait à self._client de façon concurrente sans verrou.
+        Thread-safe : protégée par _client_lock.
         """
         if not self._connected or self._client is None:
             return None
-        try:
-            rr = self._client.read_holding_registers(
-                address=self._position_read_addr,
-                count=2,
-                device_id=self._unit_id,
-            )
-            if rr.isError():
+        with self._client_lock:
+            try:
+                rr = self._client.read_holding_registers(
+                    address=self._position_read_addr,
+                    count=2,
+                    device_id=self._unit_id,
+                )
+                if rr.isError():
+                    return None
+                r0, r1 = rr.registers[0], rr.registers[1]
+                raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
+                return struct.unpack(">f", raw)[0]
+            except Exception as e:
+                print(f"[MODBUS] Erreur lecture position: {e}")
                 return None
-            r0, r1 = rr.registers[0], rr.registers[1]
-            raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
-            return struct.unpack(">f", raw)[0]
-        except Exception as e:
-            print(f"[MODBUS] Erreur lecture position: {e}")
-            return None
 
     def read_force(self) -> int | None:
         """Lit la force depuis l'automate (D2003-D2004).
@@ -248,26 +272,25 @@ class ModbusController(threading.Thread):
         Retourne la valeur en DaN (entier signé), ou None si déconnecté ou erreur.
         Format : Int32 signé Little Endian (CDAB) — mot bas en r0, mot haut en r1.
 
-        THREAD-SAFETY : doit être appelée UNIQUEMENT depuis le thread de
-        polling Modbus (self.run()). Tout appel depuis un autre thread
-        accéderait à self._client de façon concurrente sans verrou.
+        Thread-safe : protégée par _client_lock.
         """
         if not self._connected or self._client is None:
             return None
-        try:
-            rr = self._client.read_holding_registers(
-                address=self._force_read_addr,
-                count=2,
-                device_id=self._unit_id,
-            )
-            if rr.isError():
+        with self._client_lock:
+            try:
+                rr = self._client.read_holding_registers(
+                    address=self._force_read_addr,
+                    count=2,
+                    device_id=self._unit_id,
+                )
+                if rr.isError():
+                    return None
+                r0, r1 = rr.registers[0], rr.registers[1]
+                raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
+                return struct.unpack(">i", raw)[0]
+            except Exception as e:
+                print(f"[MODBUS] Erreur lecture force: {e}")
                 return None
-            r0, r1 = rr.registers[0], rr.registers[1]
-            raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
-            return struct.unpack(">i", raw)[0]
-        except Exception as e:
-            print(f"[MODBUS] Erreur lecture force: {e}")
-            return None
 
     def write_result(self, result: str, no_pass: bool = False) -> None:
         """Écrit le résultat du cycle dans D2100.
@@ -291,15 +314,16 @@ class ModbusController(threading.Thread):
                 if no_pass:
                     self._status_shadow |= (1 << _BIT_NOPASS)
             value = self._status_shadow
-        try:
-            self._client.write_register(
-                address=self._status_write_addr, value=value, device_id=self._unit_id
-            )
-            print(f"[MODBUS] Résultat D2100 = 0x{value:04X} ({result}"
-                  f"{', NO-PASS' if no_pass else ''})")
-        except Exception as e:
-            print(f"[MODBUS] Erreur écriture résultat: {e}")
-            self._connected = False
+        with self._client_lock:
+            try:
+                self._client.write_register(
+                    address=self._status_write_addr, value=value, device_id=self._unit_id
+                )
+                print(f"[MODBUS] Résultat D2100 = 0x{value:04X} ({result}"
+                      f"{', NO-PASS' if no_pass else ''})")
+            except Exception as e:
+                print(f"[MODBUS] Erreur écriture résultat: {e}")
+                self._connected = False
 
     def set_nopass(self, active: bool) -> None:
         """Active/désactive le bit NO-PASS dans D2100 (bit 3)."""
@@ -319,14 +343,15 @@ class ModbusController(threading.Thread):
             else:
                 self._status_shadow &= ~(1 << _BIT_ALARME)
             value = self._status_shadow
-        try:
-            self._client.write_register(
-                address=self._status_write_addr, value=value, device_id=self._unit_id
-            )
-            print(f"[MODBUS] Alarme {'ON' if alarm else 'OFF'} — D2100 = 0x{value:04X}")
-        except Exception as e:
-            print(f"[MODBUS] Erreur écriture alarme: {e}")
-            self._connected = False
+        with self._client_lock:
+            try:
+                self._client.write_register(
+                    address=self._status_write_addr, value=value, device_id=self._unit_id
+                )
+                print(f"[MODBUS] Alarme {'ON' if alarm else 'OFF'} — D2100 = 0x{value:04X}")
+            except Exception as e:
+                print(f"[MODBUS] Erreur écriture alarme: {e}")
+                self._connected = False
 
     # ------------------------------------------------------------------
     # Boucle principale
