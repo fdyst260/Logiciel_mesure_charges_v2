@@ -9,8 +9,8 @@
 # D2001-D2002  (READ, PLC → Pi)  ◀──▶  0x07D1 (2001 décimal)
 #   Float32 Little Endian (CDAB) — position en mm
 #
-# D2003-D2004  (READ, PLC → Pi)  ◀──▶  0x07D3 (2003 décimal)
-#   Int32 signé Little Endian (CDAB) — force en DaN (non branché)
+# D2003  (READ, PLC → Pi)  ◀──▶  0x07D3 (2003 décimal)
+#   Int16 signé (1 mot) — force en DaN
 #
 # D2100  (WRITE, Pi → PLC)  ◀──▶  0x0834 (2100 décimal)
 #   bit 0 = PRET, bit 1 = OK, bit 2 = NOK,
@@ -267,11 +267,10 @@ class ModbusController(threading.Thread):
                 return None
 
     def read_force(self) -> int | None:
-        """Lit la force depuis l'automate (D2003-D2004).
+        """Lit la force depuis l'automate (D2003).
 
-        Retourne la valeur en DaN (entier signé), ou None si déconnecté ou erreur.
-        Format : Int32 signé Little Endian (CDAB) — mot bas en r0, mot haut en r1.
-
+        Retourne la valeur en DaN (Int16 signé), ou None si déconnecté
+        ou erreur. Format : 1 registre 16 bits signé.
         Thread-safe : protégée par _client_lock.
         """
         if not self._connected or self._client is None:
@@ -280,14 +279,16 @@ class ModbusController(threading.Thread):
             try:
                 rr = self._client.read_holding_registers(
                     address=self._force_read_addr,
-                    count=2,
+                    count=1,
                     device_id=self._unit_id,
                 )
                 if rr.isError():
                     return None
-                r0, r1 = rr.registers[0], rr.registers[1]
-                raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
-                return struct.unpack(">i", raw)[0]
+                raw = rr.registers[0]
+                # Conversion Uint16 → Int16 signé
+                if raw >= 0x8000:
+                    raw -= 0x10000
+                return raw
             except Exception as e:
                 print(f"[MODBUS] Erreur lecture force: {e}")
                 return None
