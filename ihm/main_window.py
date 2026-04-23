@@ -199,7 +199,6 @@ QProgressBar[alarm="true"]::chunk {{
 
 /* Style de base de tous les boutons de l'IHM. */
 QPushButton {{
-    transition: none;
     border: 1.5px solid #1A1A18;
 }}
 QPushButton:pressed {{
@@ -4443,7 +4442,6 @@ QProgressBar::chunk {{
     background-color: {c['ok_text']};
 }}
 QPushButton {{
-    transition: none;
     border: 1.5px solid #1A1A18;
 }}
 QPushButton:pressed {{
