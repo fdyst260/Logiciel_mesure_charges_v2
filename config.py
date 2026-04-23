@@ -268,7 +268,27 @@ def volts_to_force(voltage: float) -> float:
 
 
 def volts_to_position(voltage: float) -> float:
-    """Convertit une tension CH1 (0-10V) en mm."""
+    """Convertit une tension CH1 (0-10V) en mm via calibration 2 points voie_x.
+
+    Fallback sur la conversion gain lineaire si calibration.voie_x est absent.
+    """
+    try:
+        import yaml
+        cfg_path = Path(__file__).parent / "config.yaml"
+        with open(cfg_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        cal = cfg.get("calibration", {}).get("voie_x", {})
+        if cal:
+            p1d = float(cal["p1_display"])
+            p1s = float(cal["p1_signal"])
+            p2d = float(cal["p2_display"])
+            p2s = float(cal["p2_signal"])
+            denom = p2s - p1s
+            if abs(denom) > 1e-9:
+                signal_pct = (voltage / 10.0) * 100.0
+                return p1d + (signal_pct - p1s) / denom * (p2d - p1d)
+    except Exception:
+        pass
     return (voltage / POSITION_VOLT_MAX) * POSITION_MM_MAX
 
 

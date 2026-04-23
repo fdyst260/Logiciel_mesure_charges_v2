@@ -16,7 +16,7 @@ if [ ! -f "$PYTHON" ]; then
 fi
 
 echo "Python: $PYTHON"
-echo "Lancement main.py --sim ..."
+echo "Lancement main.py (mode reel) ..."
 
-"$PYTHON" main.py --sim
+"$PYTHON" main.py
 echo "=== ACM terminé (code $?) ==="

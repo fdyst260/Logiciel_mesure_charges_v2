@@ -12,7 +12,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +38,28 @@ _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 _ACQ_READ_TIMEOUT = 10.0  # secondes avant warning "aucune donnee depuis Xs"
 
 
+def _load_voie_x_calibration() -> tuple[float, float, float, float] | None:
+    """Lit la calibration 2 points voie X depuis config.yaml.
+
+    Retourne (p1_display, p1_signal_pct, p2_display, p2_signal_pct) ou None.
+    """
+    try:
+        import yaml
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        cal = cfg.get("calibration", {}).get("voie_x", {})
+        if not cal:
+            return None
+        return (
+            float(cal["p1_display"]),
+            float(cal["p1_signal"]),
+            float(cal["p2_display"]),
+            float(cal["p2_signal"]),
+        )
+    except Exception:
+        return None
+
+
 def _read_trigger_mode() -> str:
     """Lit trigger_mode depuis config.yaml. Defaut: 'modbus'."""
     try:
@@ -55,19 +77,54 @@ class AcquisitionError(Exception):
 
 @dataclass(frozen=True)
 class SensorCalibrator:
-    """Etalonnage lineaire simple des capteurs.
+    """Etalonnage des capteurs.
 
     - force_n = voltage_force * force_gain
-    - position_mm = voltage_pos * position_gain
+    - position_mm : interpolation 2 points si calibration voie_x disponible,
+                    sinon gain lineaire simple (fallback).
     """
 
     force_gain: float = FORCE_NEWTON_MAX / FORCE_VOLT_MAX
     position_gain: float = POSITION_MM_MAX / POSITION_VOLT_MAX
+    # Calibration 2 points voie X (None = absente -> fallback gain lineaire)
+    voie_x_p1_display: float | None = field(default=None)
+    voie_x_p1_signal_pct: float | None = field(default=None)
+    voie_x_p2_display: float | None = field(default=None)
+    voie_x_p2_signal_pct: float | None = field(default=None)
+
+    @classmethod
+    def from_config(cls) -> "SensorCalibrator":
+        """Cree un SensorCalibrator avec la calibration voie_x lue depuis config.yaml."""
+        cal = _load_voie_x_calibration()
+        if cal is not None:
+            p1d, p1s, p2d, p2s = cal
+            return cls(
+                voie_x_p1_display=p1d,
+                voie_x_p1_signal_pct=p1s,
+                voie_x_p2_display=p2d,
+                voie_x_p2_signal_pct=p2s,
+            )
+        return cls()
 
     def calibrate_force(self, voltage: float) -> float:
         return voltage * self.force_gain
 
     def calibrate_position(self, voltage: float) -> float:
+        if None not in (
+            self.voie_x_p1_display,
+            self.voie_x_p1_signal_pct,
+            self.voie_x_p2_display,
+            self.voie_x_p2_signal_pct,
+        ):
+            signal_pct = (voltage / 10.0) * 100.0
+            denom = self.voie_x_p2_signal_pct - self.voie_x_p1_signal_pct  # type: ignore[operator]
+            if abs(denom) < 1e-9:
+                return voltage * self.position_gain  # fallback: points confondus
+            return (
+                self.voie_x_p1_display  # type: ignore[return-value]
+                + (signal_pct - self.voie_x_p1_signal_pct) / denom  # type: ignore[operator]
+                * (self.voie_x_p2_display - self.voie_x_p1_display)  # type: ignore[operator]
+            )
         return voltage * self.position_gain
 
     def calibrate_pair(self, voltage_force: float, voltage_position: float) -> tuple[float, float]:
@@ -135,6 +192,43 @@ def _wait_until_triggered(hat: Any, stop_event: threading.Event) -> None:
         time.sleep(0.002)
 
 
+def read_single_voltage_ch1(board_num: int = BOARD_NUM) -> float:
+    """Lecture on-demand d'une tension instantanee sur CH1 (MCC 118).
+
+    Effectue un scan unique non-continu (1 echantillon, sans CONTINUOUS).
+    Utilise le meme pattern d'initialisation que acquisition_loop.
+
+    Retourne la tension en volts (float).
+
+    Raises:
+        AcquisitionError: si la carte est absente ou en erreur materielle.
+    """
+    HatError, HatIDs, OptionFlags, _, hat_list_fn, mcc118_cls = _load_daqhats()
+    _check_mcc118_available(board_num, hat_list_fn=hat_list_fn, hat_ids=HatIDs)
+
+    hat = mcc118_cls(board_num)
+    channel_mask = 1 << POSITION_CHANNEL  # CH1 uniquement
+    try:
+        hat.a_in_scan_start(
+            channel_mask=channel_mask,
+            samples_per_channel=1,
+            sample_rate_per_channel=1000.0,
+            options=OptionFlags.DEFAULT,
+        )
+        result = hat.a_in_scan_read(samples_per_channel=1, timeout=5.0)
+        if result.data:
+            return float(result.data[0])
+        raise AcquisitionError("Aucune donnee recue lors du scan unitaire CH1.")
+    except HatError as exc:
+        raise AcquisitionError(f"Erreur MCC 118 lecture CH1: {exc}") from exc
+    finally:
+        try:
+            hat.a_in_scan_stop()
+            hat.a_in_scan_cleanup()
+        except Exception:
+            pass
+
+
 
 def acquisition_loop(
     data_queue: queue.Queue,
@@ -158,7 +252,7 @@ def acquisition_loop(
     - list[tuple[t, force_n, position_mm]]
       Chaque bloc correspond a CHUNK_SIZE points (si disponibles).
     """
-    calibrator = calibrator or SensorCalibrator()
+    calibrator = calibrator or SensorCalibrator.from_config()
 
     HatError, HatIDs, OptionFlags, TriggerModes, hat_list_fn, mcc118_cls = _load_daqhats()
     _check_mcc118_available(BOARD_NUM, hat_list_fn=hat_list_fn, hat_ids=HatIDs)

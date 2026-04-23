@@ -1,10 +1,13 @@
 """Simulateur d'acquisition sans hardware (remplace acquisition_loop).
 
-Genere UN seul cycle de rivetage realiste en 3 phases sans aucune carte MCC 118 :
-  - Phase 1 "approche"   (position  0 -> 20 mm) : force faible ~50 N
-  - Phase 2 "sertissage" (position 20 -> 80 mm) : force montante 0 -> 3800 N
-                                                   avec bruit gaussien (sigma=80 N)
-  - Phase 3 "retour"     (position 80 -> 100 mm): force chute rapide vers 0 N
+Genere UN seul cycle de rivetage plausible avec course 0 -> 20 mm :
+    - Approche libre : force faible et peu bruitee
+    - Prise de contact : montee progressive
+    - Sertissage plastique : montee rapide
+    - Fin de course : pic puis leger tassement
+
+Un cycle nominal reste autour de 1300 kgf max (~12750 N).
+Si inject_fault=True, un pic local depasse la zone nominale pour forcer un NOK.
 
 Apres le cycle, la fonction se termine. Le bouton "NOUVEAU CYCLE" dans l'IHM
 permet de relancer manuellement un nouveau cycle.
@@ -20,10 +23,11 @@ import time
 
 import numpy as np
 
-from config import CHUNK_SIZE, SAMPLE_RATE_HZ
+from config import CHUNK_SIZE, POSITION_MM_MAX, SAMPLE_RATE_HZ
 
 # Duree totale d'un cycle simule : ~2 secondes
 _TOTAL_SAMPLES = int(SAMPLE_RATE_HZ * 2.0)
+_NOMINAL_MAX_FORCE_N = 12750.0  # ~1300 kgf
 
 
 def fake_acquisition_loop(
@@ -39,7 +43,7 @@ def fake_acquisition_loop(
     data_queue   : queue partagee avec DataProcessor
     stop_event   : evenement d'arret global
     calibrator   : ignore (valeurs generees directement en unites physiques)
-    inject_fault : si True, injecte un pic a 5200 N a position 55 mm (NOK)
+    inject_fault : si True, injecte un pic de force hors nominal (NOK)
     """
     # Attente avant trigger simule (~1 seconde, interruptible)
     print("[SIM] Attente trigger simule (1 s)...")
@@ -57,7 +61,7 @@ def fake_acquisition_loop(
         block: list[tuple[float, float, float]] = []
         for i in range(samples_sent, chunk_end):
             t = t_start + i / SAMPLE_RATE_HZ
-            pos_mm = i * 100.0 / _TOTAL_SAMPLES
+            pos_mm = i * POSITION_MM_MAX / max(_TOTAL_SAMPLES - 1, 1)
             force_n = _compute_force(pos_mm, inject_fault)
             block.append((t, force_n, pos_mm))
         try:
@@ -77,28 +81,41 @@ def fake_acquisition_loop(
 
 
 def _compute_force(pos_mm: float, inject_fault: bool) -> float:
-    """Calcule la force simulee en Newton selon la position."""
-    noise = float(np.random.normal(0.0, 80.0))
+    """Calcule la force simulee (N) en fonction de la position (mm)."""
+    pos = float(np.clip(pos_mm, 0.0, POSITION_MM_MAX))
 
-    if pos_mm < 5.0:
-        # Phase 1 : approche — force faible avec bruit reduit
-        return max(0.0, 50.0 + noise * 0.2)
+    # Profil nominal multi-phases pour reproduire une courbe de rivetage réaliste.
+    if pos < 6.0:
+        # Approche libre : quasi pas d'effort.
+        base = 20.0 + 35.0 * pos
+    elif pos < 14.0:
+        # Prise de contact : montée progressive, non linéaire.
+        u = (pos - 6.0) / 8.0
+        base = 230.0 + 4200.0 * (u ** 1.45)
+    elif pos < 18.2:
+        # Sertissage plastique : raideur apparente plus forte.
+        u = (pos - 14.0) / 4.2
+        base = 4450.0 + 7000.0 * (u ** 1.2)
+    elif pos < 19.4:
+        # Fin de course : pic proche de 1300 kgf.
+        u = (pos - 18.2) / 1.2
+        base = 11450.0 + 1300.0 * u
+    else:
+        # Tassement final : légère détente sans retomber à 0 pendant l'avance.
+        u = (pos - 19.4) / 0.6
+        base = 12750.0 - 1100.0 * u
 
-    if pos_mm <= 10.0:
-        # Phase 2 : sertissage
-        if inject_fault and 53.0 <= pos_mm <= 57.0:
-            # Pic de defaut a 5200 N (doit declencher NOK)
-            return 5200.0 + noise
+    # Bruit proportionnel au niveau de force + petite composante périodique.
+    sigma = 18.0 + 0.010 * base
+    noise = float(np.random.normal(0.0, sigma))
+    ripple = 85.0 * np.sin(2.0 * np.pi * pos / 1.7)
+    force = base + noise + ripple
 
-        if pos_mm <= 18.0:
-            # Montee lineaire 0 -> 3800 N entre 20 et 60 mm
-            force = (pos_mm - 20.0) / 40.0 * 3800.0
-        else:
-            # Descente lineaire 3800 -> 2000 N entre 60 et 80 mm
-            force = 3800.0 - (pos_mm - 60.0) / 20.0 * 1800.0
+    if inject_fault and 18.8 <= pos <= 19.2:
+        # Défaut : sur-effort local qui dépasse le seuil NOK.
+        force += 2200.0
 
-        return max(0.0, force + noise)
+    if not inject_fault:
+        force = min(force, _NOMINAL_MAX_FORCE_N)
 
-    # Phase 3 : retour (80 -> 100 mm) — chute rapide vers 0 N
-    force = 2000.0 * (1.0 - (pos_mm - 80.0) / 20.0)
-    return max(0.0, force + noise * 0.5)
+    return max(0.0, force)

@@ -180,7 +180,7 @@ QLabel {{ background-color: transparent; font-size: 15px; }}
 QPushButton#btn_back {{
     background-color: {_C['btn_bg']};
     color: {_C['text']};
-    font-size: 14px;
+    font-size: 30px;
     font-weight: 600;
     border: 1px solid {_C['btn_border']};
     border-radius: 0px;
@@ -292,7 +292,7 @@ QPushButton#btn_cancel:pressed { background-color: #E8E4DC; }
 QPushButton#btn_nav {
     background-color: #A07830;
     color: #1A1A18;
-    font-size: 14px;
+    font-size: 30px;
     font-weight: bold;
     border: none;
     border-radius: 8px;
@@ -1139,8 +1139,14 @@ class _ChoiceDialog(QDialog):
         current: str,
         title: str = "Choisir",
         parent: QWidget | None = None,
+        title_font_size: int | None = None,
+        item_font_size: int | None = None,
+        item_min_height: int | None = None,
     ) -> None:
         super().__init__(parent)
+        title_font_size = title_font_size or 15
+        item_font_size = item_font_size or 15
+        item_min_height = item_min_height or 48
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setModal(True)
         self.setStyleSheet(_DIALOG_STYLE)
@@ -1157,17 +1163,19 @@ class _ChoiceDialog(QDialog):
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
         lbl = QLabel(title)
-        lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #1A1A18;")
+        lbl.setStyleSheet(
+            f"font-size: {title_font_size}px; font-weight: bold; color: #1A1A18;"
+        )
         hh.addWidget(lbl)
         root.addWidget(hdr)
 
         # Boutons de choix
         for c in choices:
             b = QPushButton(c)
-            b.setMinimumHeight(48)
+            b.setMinimumHeight(item_min_height)
             bg = "#A07830" if c == current else "#E8E4DC"
             b.setStyleSheet(
-                f"background-color: {bg}; color: #1A1A18; font-size: 15px;"
+                f"background-color: {bg}; color: #1A1A18; font-size: {item_font_size}px;"
                 " border: none; border-bottom: 1px solid #333;"
                 " text-align: left; padding-left: 16px;"
             )
@@ -1180,7 +1188,7 @@ class _ChoiceDialog(QDialog):
         btn_x.clicked.connect(self.reject)
         root.addWidget(btn_x)
 
-        self.setFixedSize(320, 46 + len(choices) * 48 + 54)
+        self.setFixedSize(320, 46 + len(choices) * item_min_height + 54)
 
     def _pick(self, v: str) -> None:
         self._value = v
@@ -1200,6 +1208,10 @@ def _make_choice_btn(
     title: str,
     parent: QWidget | None = None,
     display_map: dict[str, str] | None = None,
+    dialog_width: int | None = None,
+    dialog_title_font_size: int | None = None,
+    dialog_item_font_size: int | None = None,
+    dialog_item_height: int | None = None,
 ) -> QPushButton:
     """Retourne un QPushButton qui ouvre _ChoiceDialog au clic."""
     reverse_display_map = {v: k for k, v in (display_map or {}).items()}
@@ -1214,7 +1226,17 @@ def _make_choice_btn(
     def _open(_chk: bool = False) -> None:
         current_value = btn.property("choice_value") or current
         shown_choices = [_display(c) for c in choices]
-        dlg = _ChoiceDialog(shown_choices, _display(current_value), title, parent)
+        dlg = _ChoiceDialog(
+            shown_choices,
+            _display(current_value),
+            title,
+            parent,
+            title_font_size=dialog_title_font_size,
+            item_font_size=dialog_item_font_size,
+            item_min_height=dialog_item_height,
+        )
+        if dialog_width is not None:
+            dlg.setFixedWidth(dialog_width)
         if dlg.exec():
             picked = dlg.value()
             v = reverse_display_map.get(picked, picked)
@@ -1340,10 +1362,10 @@ class _VoieXPage(QWidget):
             "0.0", suffix=" %", title=t("lbl_point1"), parent=self
         )
         grid.addWidget(self._p1_signal, 1, 2)
-        btn_t1 = QPushButton(t("btn_teach"))
-        btn_t1.setObjectName("btn_nav")
-        btn_t1.setEnabled(False)
-        grid.addWidget(btn_t1, 1, 3)
+        self._btn_teach1 = QPushButton(t("btn_teach"))
+        self._btn_teach1.setObjectName("btn_nav")
+        self._btn_teach1.clicked.connect(lambda: self._teach_point(1))
+        grid.addWidget(self._btn_teach1, 1, 3)
 
         # Point 2
         grid.addWidget(QLabel(t("lbl_point2")), 2, 0)
@@ -1355,10 +1377,10 @@ class _VoieXPage(QWidget):
             "100.0", suffix=" %", title=t("lbl_point2"), parent=self
         )
         grid.addWidget(self._p2_signal, 2, 2)
-        btn_t2 = QPushButton(t("btn_teach"))
-        btn_t2.setObjectName("btn_nav")
-        btn_t2.setEnabled(False)
-        grid.addWidget(btn_t2, 2, 3)
+        self._btn_teach2 = QPushButton(t("btn_teach"))
+        self._btn_teach2.setObjectName("btn_nav")
+        self._btn_teach2.clicked.connect(lambda: self._teach_point(2))
+        grid.addWidget(self._btn_teach2, 2, 3)
 
         v.addLayout(grid)
         v.addStretch()
@@ -1407,6 +1429,23 @@ class _VoieXPage(QWidget):
         self._stack.setCurrentIndex(1)
         self._footer.setCurrentIndex(1)
         self._header_lbl.setText(t("hdr_voie_x_scale"))
+
+    # ------------------------------------------------------------------
+    def _teach_point(self, point: int) -> None:
+        """Lit la tension instantanee CH1 et injecte le % dans le champ Signal % correspondant."""
+        try:
+            from core.acquisition import read_single_voltage_ch1
+            voltage = read_single_voltage_ch1()
+        except Exception as exc:
+            QMessageBox.warning(self, "TEACH", str(exc))
+            return
+
+        signal_pct = round((voltage / 10.0) * 100.0, 1)
+        val_str = str(signal_pct)
+        btn = self._p1_signal if point == 1 else self._p2_signal
+        sfx = btn.property("numpad_suffix") or ""
+        btn.setProperty("numpad_value", val_str)
+        btn.setText(f"{val_str}{sfx}")
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -2214,7 +2253,7 @@ def _check_pin(entered: str, stored: str) -> bool:
 
 
 class _DroitsAccesPage(QWidget):
-    """Page droits d'accès — 2 pages internes (QStackedWidget)."""
+    """Page droits d'accès — page unique fusionnée."""
 
     _LEVELS = [
         ("pin_operateur",  "🟢", "level_operator", "#2E7D32"),
@@ -2250,113 +2289,123 @@ class _DroitsAccesPage(QWidget):
 
         # Header
         hdr = QWidget()
-        hdr.setFixedHeight(50)
+        hdr.setFixedHeight(76)
         hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
         hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel(t("hdr_access_rights"))
-        lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
+        lbl_hdr = QLabel(t("hdr_access_rights"))
+        lbl_hdr.setStyleSheet(
+            "font-size: 34px; font-weight: bold; color: #1A1A18; background: transparent;"
         )
-        hh.addWidget(lbl)
+        hh.addWidget(lbl_hdr)
         root.addWidget(hdr)
 
-        # Contenu (2 pages)
-        self._inner_stack = QStackedWidget()
-        self._inner_stack.addWidget(self._build_page0())
-        self._inner_stack.addWidget(self._build_page1())
-        root.addWidget(self._inner_stack, stretch=1)
-
-        # Footer (2 états)
-        self._footer_stack = QStackedWidget()
-        self._footer_stack.setFixedHeight(64)
-        self._footer_stack.addWidget(self._build_footer0())
-        self._footer_stack.addWidget(self._build_footer1())
-        root.addWidget(self._footer_stack)
-
-    def _build_page0(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 14)
-        v.setSpacing(14)
+        # Contenu unique scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(16)
 
         # Activation des droits
         self._enabled_chk = QCheckBox(t("lbl_access_rights_enable"))
-        self._enabled_chk.setStyleSheet("color: #1A1A18; font-size: 14px;")
+        self._enabled_chk.setStyleSheet("color: #1A1A18; font-size: 24px;")
         v.addWidget(self._enabled_chk)
 
         # Déconnexion auto
-        form = QFormLayout()
-        form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        row_logout = QHBoxLayout()
+        row_logout.setSpacing(12)
+        lbl_logout = QLabel(t("lbl_auto_logout"))
+        lbl_logout.setStyleSheet("color: #1A1A18; font-size: 24px;")
         self._auto_logout_btn = _make_choice_btn(
             self._AUTO_LOGOUT_CHOICES,
             self._AUTO_LOGOUT_DEFAULT,
             t("auto_logout_title"),
             self,
             display_map=self._auto_logout_display_map(),
+            dialog_width=520,
+            dialog_title_font_size=24,
+            dialog_item_font_size=24,
+            dialog_item_height=70,
         )
-        form.addRow(t("lbl_auto_logout"), self._auto_logout_btn)
-        v.addLayout(form)
+        self._auto_logout_btn.setFixedSize(320, 70)
+        auto_logout_font = self._auto_logout_btn.font()
+        auto_logout_font.setPointSize(24)
+        self._auto_logout_btn.setFont(auto_logout_font)
+        row_logout.addWidget(lbl_logout)
+        row_logout.addWidget(self._auto_logout_btn)
+        row_logout.addStretch()
+        v.addLayout(row_logout)
 
-        # Séparateur + titre
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #C8C4BC;")
-        v.addWidget(sep)
-        lbl_pin = QLabel(t("lbl_modify_pin"))
-        lbl_pin.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
-        v.addWidget(lbl_pin)
+        # Séparateur + titre PIN
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.Shape.HLine)
+        sep1.setStyleSheet("color: #C8C4BC;")
+        v.addWidget(sep1)
+        lbl_pin_title = QLabel(t("lbl_modify_pin"))
+        lbl_pin_title.setStyleSheet("color: #4A4844; font-size: 24px; font-weight: bold;")
+        v.addWidget(lbl_pin_title)
 
         # 3 lignes PIN
-        _ROW_STYLE = (
-            "background-color: #E8E4DC; border-radius: 8px; padding: 6px;"
+        _ROW_STYLE = "background-color: #E8E4DC; border-radius: 8px; padding: 8px;"
+        _BTN_MOD_STYLE = (
+            "QPushButton {"
+            "  background-color: #A07830; color: #1A1A18;"
+            "  font-size: 22px; font-weight: bold;"
+            "  border: none; border-radius: 8px;"
+            "  min-height: 58px; min-width: 190px; padding: 0 16px;"
+            "}"
+            "QPushButton:pressed { background-color: #7a5c24; }"
         )
         for key, icon, name_key, color in self._LEVELS:
             name = t(name_key)
             row_w = QWidget()
             row_w.setStyleSheet(_ROW_STYLE)
             rh = QHBoxLayout(row_w)
-            rh.setContentsMargins(10, 4, 10, 4)
+            rh.setContentsMargins(12, 6, 12, 6)
             rh.setSpacing(12)
-            lbl = QLabel(f"{icon}  {name}")
-            lbl.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold; min-width: 160px;")
-            rh.addWidget(lbl)
+            lbl_name = QLabel(f"{icon}  {name}")
+            lbl_name.setStyleSheet(
+                f"color: {color}; font-size: 24px; font-weight: bold; min-width: 260px;"
+            )
+            rh.addWidget(lbl_name)
             rh.addStretch()
             pin_lbl = QLabel(t("lbl_pin_masked"))
-            pin_lbl.setStyleSheet("color: #666666; font-size: 13px;")
+            pin_lbl.setStyleSheet("color: #666666; font-size: 22px;")
             rh.addWidget(pin_lbl)
             btn_mod = QPushButton(t("btn_edit"))
-            btn_mod.setObjectName("btn_nav")
-            btn_mod.setFixedWidth(120)
+            btn_mod.setStyleSheet(_BTN_MOD_STYLE)
             btn_mod.clicked.connect(
                 lambda _c=False, k=key, n=name: self._change_pin(k, n)
             )
             rh.addWidget(btn_mod)
             v.addWidget(row_w)
 
-        v.addStretch()
-        return w
-
-    def _build_page1(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(14)
-
-        lbl = QLabel(t("lbl_access_levels_table"))
-        lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
-        v.addWidget(lbl)
+        # Séparateur + tableau des niveaux (page1 intégrée)
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet("color: #C8C4BC;")
+        v.addWidget(sep2)
+        lbl_table = QLabel(t("lbl_access_levels_table"))
+        lbl_table.setStyleSheet("color: #4A4844; font-size: 24px; font-weight: bold;")
+        v.addWidget(lbl_table)
 
         table = QTableWidget(3, 3)
         table.setHorizontalHeaderLabels([
             t("table_col_level"), t("table_col_name"), t("table_col_rights")
         ])
         table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setDefaultSectionSize(90)
+        table.horizontalHeader().setDefaultSectionSize(120)
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        tbl_font = QFont()
+        tbl_font.setPixelSize(21)
+        table.setFont(tbl_font)
+        table.horizontalHeader().setFont(tbl_font)
+        table.verticalHeader().setDefaultSectionSize(56)
 
         _ROWS = [
             ("1", f"🟢 {t('level_operator')}", t("access_rights_row_operator")),
@@ -2369,50 +2418,46 @@ class _DroitsAccesPage(QWidget):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 table.setItem(row, col, item)
 
-        v.addWidget(table, stretch=1)
-        return w
+        v.addWidget(table)
+        v.addStretch()
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
 
-    def _build_footer0(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
+        # Footer unique
+        _BTN_BACK_STYLE = (
+            "QPushButton {"
+            "  background-color: #FAFAF8; color: #4A4844;"
+            "  font-size: 22px; font-weight: bold;"
+            "  border: 1px solid #C8C4BC; border-radius: 8px;"
+            "  min-height: 58px; min-width: 220px;"
+            "}"
+            "QPushButton:pressed { background-color: #E8E4DC; }"
+        )
+        _BTN_SAVE_STYLE = (
+            "QPushButton {"
+            "  background-color: #C49A3C; color: #1A1A18;"
+            "  font-size: 22px; font-weight: bold;"
+            "  border: 1px solid #A07830; border-radius: 8px;"
+            "  min-height: 58px; min-width: 220px;"
+            "}"
+            "QPushButton:pressed { background-color: #A07830; }"
+        )
+        footer = QWidget()
+        footer.setFixedHeight(90)
+        footer.setStyleSheet("background-color: #F0EDE6;")
+        h = QHBoxLayout(footer)
+        h.setContentsMargins(24, 14, 24, 14)
         h.setSpacing(12)
         btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
+        btn_back.setStyleSheet(_BTN_BACK_STYLE)
         btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
         h.addWidget(btn_back)
         btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
+        btn_save.setStyleSheet(_BTN_SAVE_STYLE)
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
         h.addStretch()
-        btn_niveaux = QPushButton(t("btn_view_levels"))
-        btn_niveaux.setObjectName("btn_nav")
-        btn_niveaux.clicked.connect(self._go_page1)
-        h.addWidget(btn_niveaux)
-        return w
-
-    def _build_footer1(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(12)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(self._go_page0)
-        h.addWidget(btn_back)
-        h.addStretch()
-        return w
-
-    def _go_page0(self) -> None:
-        self._inner_stack.setCurrentIndex(0)
-        self._footer_stack.setCurrentIndex(0)
-
-    def _go_page1(self) -> None:
-        self._inner_stack.setCurrentIndex(1)
-        self._footer_stack.setCurrentIndex(1)
+        root.addWidget(footer)
 
     # ------------------------------------------------------------------
     def _change_pin(self, level_key: str, level_name: str) -> None:
@@ -3714,8 +3759,21 @@ class _ExtrasPage(QWidget):
             "Masque réseau",
             self,
         )
+        _gw_default, _dns_default = self._read_current_eth0_gw_dns()
+        self._eth0_gw_btn = _make_alpha_btn(
+            net.get("eth0_gw", _gw_default),
+            title=t("lbl_gateway"),
+            parent=self,
+        )
+        self._eth0_dns_btn = _make_alpha_btn(
+            net.get("eth0_dns", _dns_default),
+            title=t("lbl_dns"),
+            parent=self,
+        )
         form_net.addRow(QLabel(t("lbl_eth0_ip")), self._eth0_ip_btn)
         form_net.addRow(QLabel(t("lbl_netmask")), self._eth0_mask_btn)
+        form_net.addRow(QLabel(t("lbl_gateway")), self._eth0_gw_btn)
+        form_net.addRow(QLabel(t("lbl_dns")), self._eth0_dns_btn)
 
         btn_apply_eth0 = QPushButton(t("btn_apply_eth0"))
         btn_apply_eth0.setObjectName("btn_save")
@@ -3781,7 +3839,14 @@ class _ExtrasPage(QWidget):
         mask = net.get("eth0_mask", "/24 (255.255.255.0)")
         self._eth0_mask_btn.setProperty("choice_value", mask)
         self._eth0_mask_btn.setText(mask)
-        # Réseau
+        gw = net.get("eth0_gw", "")
+        dns = net.get("eth0_dns", "")
+        if not gw or not dns:
+            sys_gw, sys_dns = self._read_current_eth0_gw_dns()
+            gw = gw or sys_gw
+            dns = dns or sys_dns
+        _btn_set_alpha(self._eth0_gw_btn, gw)
+        _btn_set_alpha(self._eth0_dns_btn, dns)
         self._refresh_network()
 
     # ------------------------------------------------------------------
@@ -3806,38 +3871,120 @@ class _ExtrasPage(QWidget):
     # ------------------------------------------------------------------
     def _apply_eth0(self) -> None:
         import subprocess
-        ip = self._eth0_ip_btn.property("alpha_value") or "10.0.0.2"
+        ip        = self._eth0_ip_btn.property("alpha_value")  or "10.0.0.2"
         mask_full = self._eth0_mask_btn.property("choice_value") or "/24 (255.255.255.0)"
+        gw        = (self._eth0_gw_btn.property("alpha_value")  or "").strip()
+        dns       = (self._eth0_dns_btn.property("alpha_value") or "").strip()
+
         # Extraire juste le préfixe "/24" depuis "/24 (255.255.255.0)"
-        prefix = mask_full.split()[0]  # "/24"
+        prefix  = mask_full.split()[0]
         address = f"{ip}{prefix}"
 
-        nmcli_args = [
-            "sudo", "nmcli", "connection", "modify", "Wired connection 1",
-            "ipv4.addresses", address,
-            "ipv4.method", "manual",
-        ]
-        try:
-            result = subprocess.run(nmcli_args, capture_output=True, text=True)
-            if result.returncode != 0:
-                # Réessai avec "eth0"
-                nmcli_args[4] = "eth0"
-                result = subprocess.run(nmcli_args, capture_output=True, text=True)
-            if result.returncode == 0:
-                cfg = _load_cfg_safe()
-                cfg.setdefault("network", {})
-                cfg["network"]["eth0_ip"] = ip
-                cfg["network"]["eth0_mask"] = mask_full
-                save_config(_CONFIG_PATH, cfg)
-                QMessageBox.information(
-                    self, "Réseau", f"eth0 configurée : {address}\nRedémarrez pour appliquer."
-                )
+        # Sous-réseau machine 10.0.0.x : passerelle et DNS facultatifs
+        is_machine_net = ip.startswith("10.0.0.")
+
+        if not is_machine_net and not gw:
+            QMessageBox.warning(
+                self, t("dlg_network_title"),
+                "Veuillez saisir une passerelle (ex : 192.168.1.1)."
+            )
+            return
+
+        def _run_modify(conn: str) -> "subprocess.CompletedProcess[str]":
+            args = [
+                "sudo", "nmcli", "connection", "modify", conn,
+                "ipv4.method",    "manual",
+                "ipv4.addresses", address,
+            ]
+            if gw:
+                args += ["ipv4.gateway", gw]
             else:
+                args += ["ipv4.gateway", ""]   # effacer la passerelle précédente
+            if dns:
+                args += ["ipv4.dns", dns]
+            else:
+                args += ["ipv4.dns", ""]       # effacer le DNS précédent
+            return subprocess.run(args, capture_output=True, text=True)
+
+        def _run_up(conn: str) -> "subprocess.CompletedProcess[str]":
+            return subprocess.run(
+                ["sudo", "nmcli", "connection", "up", conn],
+                capture_output=True, text=True,
+            )
+
+        try:
+            conn = "Wired connection 1"
+            res = _run_modify(conn)
+            if res.returncode != 0:
+                conn = "eth0"
+                res = _run_modify(conn)
+
+            if res.returncode != 0:
                 QMessageBox.warning(
-                    self, "Réseau", f"Erreur nmcli :\n{result.stderr.strip()}"
+                    self, t("dlg_network_title"),
+                    f"Erreur nmcli modify :\n{res.stderr.strip()}"
                 )
+                return
+
+            res_up = _run_up(conn)
+            if res_up.returncode != 0:
+                QMessageBox.warning(
+                    self, t("dlg_network_title"),
+                    f"Erreur nmcli up :\n{res_up.stderr.strip()}"
+                )
+                return
+
+            cfg = _load_cfg_safe()
+            cfg.setdefault("network", {})
+            cfg["network"]["eth0_ip"]   = ip
+            cfg["network"]["eth0_mask"] = mask_full
+            cfg["network"]["eth0_gw"]   = gw
+            cfg["network"]["eth0_dns"]  = dns
+            save_config(_CONFIG_PATH, cfg)
+
+            detail = f"IP : {address}"
+            if gw:
+                detail += f"\nPasserelle : {gw}"
+            if dns:
+                detail += f"\nDNS : {dns}"
+            QMessageBox.information(
+                self, t("dlg_network_title"),
+                f"eth0 configurée :\n{detail}"
+            )
         except Exception as e:
             QMessageBox.warning(self, t("dlg_network_title"), f"Erreur : {e}")
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _read_current_eth0_gw_dns() -> tuple[str, str]:
+        """Lit la passerelle et le DNS actifs sur eth0 depuis le système."""
+        import subprocess
+        gw  = ""
+        dns = "8.8.8.8"
+        try:
+            res = subprocess.run(
+                ["ip", "route", "show", "default", "dev", "eth0"],
+                capture_output=True, text=True, timeout=3,
+            )
+            for line in res.stdout.splitlines():
+                if "via" in line:
+                    parts = line.split()
+                    gw = parts[parts.index("via") + 1]
+                    break
+        except Exception:
+            pass
+        try:
+            res = subprocess.run(
+                ["nmcli", "dev", "show", "eth0"],
+                capture_output=True, text=True, timeout=3,
+            )
+            for line in res.stdout.splitlines():
+                if "IP4.DNS" in line:
+                    dns = line.split(":", 1)[-1].strip()
+                    break
+        except Exception:
+            pass
+        return gw, dns
 
     # ------------------------------------------------------------------
     def _refresh_network(self) -> None:
@@ -4138,11 +4285,22 @@ class _FlagTile(QWidget):
         super().__init__(parent)
         self._code = code
         self._name = name
-        self._pixmap = pixmap
+        self._flag_pixmap = pixmap
         self._selected = False
         self.setMinimumSize(180, 110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # Texte centré par-dessus le drapeau
+        self._lbl = QLabel(name, self)
+        self._lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._lbl.setStyleSheet(
+            "color: white; font-size: 14pt; font-weight: bold; background: transparent;"
+        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._lbl)
 
     def set_selected(self, selected: bool) -> None:
         if self._selected != selected:
@@ -4165,16 +4323,9 @@ class _FlagTile(QWidget):
         path.addRoundedRect(QRectF(rect), radius, radius)
         painter.setClipPath(path)
 
-        # Fond : drapeau ou couleur neutre
-        if not self._pixmap.isNull():
-            scaled = self._pixmap.scaled(
-                rect.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            ox = (scaled.width() - rect.width()) // 2
-            oy = (scaled.height() - rect.height()) // 2
-            painter.drawPixmap(rect, scaled, scaled.rect().adjusted(ox, oy, -ox, -oy))
+        # Fond : drapeau étiré aux dimensions exactes de la tuile (sans rognage)
+        if not self._flag_pixmap.isNull():
+            painter.drawPixmap(self.rect(), self._flag_pixmap)
         else:
             painter.fillRect(rect, QColor("#C8C4BC"))
 
@@ -4191,14 +4342,6 @@ class _FlagTile(QWidget):
             pen_width / 2, pen_width / 2, -pen_width / 2, -pen_width / 2
         )
         painter.drawRoundedRect(border_rect, radius, radius)
-
-        # Texte centré
-        font = QFont()
-        font.setPointSize(14)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.setPen(QColor("#FFFFFF"))
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._name)
 
         painter.end()
 
@@ -4226,12 +4369,12 @@ class _LanguePage(QWidget):
         from ihm.translations import LANGUAGES
 
         FLAG_PATHS = {
-            "fr": "assets/icon/flags/fr.png",
-            "en": "assets/icon/flags/en.png",
-            "it": "assets/icon/flags/it.png",
-            "es": "assets/icon/flags/es.png",
-            "pt": "assets/icon/flags/pt.png",
-            "ro": "assets/icon/flags/ro.png",
+            "fr": "assets/icon/flags/drapeau_francais.png",
+            "en": "assets/icon/flags/drapeau_anglais.png",
+            "it": "assets/icon/flags/drapeau_italien.png",
+            "es": "assets/icon/flags/drapeau_espagnol.png",
+            "pt": "assets/icon/flags/drapeau_portugais.png",
+            "ro": "assets/icon/flags/drapeau_roumain.png",
         }
 
         layout = QVBoxLayout(self)
@@ -4240,7 +4383,7 @@ class _LanguePage(QWidget):
 
         # Header
         header = QWidget()
-        header.setFixedHeight(50)
+        header.setFixedHeight(80)
         header.setStyleSheet(
             f"background-color: {_C['header_bg']}; "
             f"border-bottom: 1px solid {_C['border']};"
@@ -4249,13 +4392,17 @@ class _LanguePage(QWidget):
         hh.setContentsMargins(16, 0, 16, 0)
         lbl = QLabel(t("hdr_language"))
         lbl.setStyleSheet(
-            f"color: {_C['text']}; font-size: 18px; font-weight: bold;"
+            f"color: {_C['text']}; font-size: 25px; font-weight: bold;"
         )
         hh.addWidget(lbl)
         hh.addStretch()
         btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_nav")
-        btn_back.setFixedHeight(36)
+        btn_back.setStyleSheet(
+            "QPushButton { background-color: #FAFAF8; color: #4A4844; font-size: 22px;"
+            " font-weight: bold; border: 1px solid #C8C4BC; border-radius: 8px;"
+            " min-height: 44px; min-width: 200px; padding: 0 16px; }"
+            "QPushButton:pressed { background-color: #E8E4DC; }"
+        )
         btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
         hh.addWidget(btn_back)
         layout.addWidget(header)
@@ -4264,7 +4411,7 @@ class _LanguePage(QWidget):
         body = QWidget()
         body.setStyleSheet(f"background-color: {_C['bg']};")
         grid = QGridLayout(body)
-        grid.setContentsMargins(24, 24, 24, 24)
+        grid.setContentsMargins(8, 8, 8, 8)
         grid.setSpacing(16)
 
         for idx, (code, name) in enumerate(LANGUAGES.items()):
@@ -4393,7 +4540,7 @@ class SettingsPage(QWidget):
         header.setFixedHeight(50)
         header.setStyleSheet(
             f"background-color: {_C['header_bg']}; "
-            f"border-bottom: 1px solid {_C['border']};"
+            f"border-bottom: 5px solid {_C['border']};"
         )
         h = QHBoxLayout(header)
         h.setContentsMargins(16, 0, 0, 0)

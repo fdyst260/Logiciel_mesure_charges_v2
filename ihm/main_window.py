@@ -349,6 +349,11 @@ class GraphWidget(QWidget):
         self._tools_config: dict = {}
         self._current_result: str | None = None
         self._auto_scale: bool = False
+        self._manual_axis_bounds: bool = False
+        self._x_min: float = 0.0
+        self._x_max: float = float(POSITION_MM_MAX)
+        self._y_min: float = 0.0
+        self._y_max: float = float(FORCE_NEWTON_MAX)
         self._edit_mode: bool = False
         self._edit_handles: list[dict] = []
         self._dragging_handle: dict | None = None
@@ -375,6 +380,7 @@ class GraphWidget(QWidget):
     # Change le mode d'affichage (F-X, F-t, X-t) et vide la courbe courante.
     def set_display_mode(self, mode: DisplayMode) -> None:
         self._display_mode = mode
+        self.reset_axis_bounds(redraw=False)
         self._current_points.clear()
         self.update()
 
@@ -386,7 +392,60 @@ class GraphWidget(QWidget):
     # Bascule l'auto-echelle pour adapter dynamiquement les axes.
     def toggle_auto_scale(self) -> None:
         self._auto_scale = not self._auto_scale
+        if self._auto_scale:
+            self._manual_axis_bounds = False
         self.update()
+
+    # Recale manuellement les axes sur la courbe actuellement visible.
+    def auto_scale_current_curve(self) -> None:
+        self._auto_scale = False
+        points: list[tuple[float, float, float]] = []
+        if self._current_points:
+            points = self._current_points
+        elif self._history_mode and self._history:
+            for pts, _ in self._history:
+                points.extend(pts)
+
+        if not points:
+            self.reset_axis_bounds()
+            return
+
+        positions: list[float] = []
+        forces: list[float] = []
+        for point in points:
+            try:
+                if len(point) != 3:
+                    continue
+                _t, f, x = float(point[0]), float(point[1]), float(point[2])
+                positions.append(x)
+                forces.append(f)
+            except (TypeError, ValueError):
+                continue
+
+        if not positions or not forces:
+            self.reset_axis_bounds()
+            return
+
+        self._x_min = min(positions)
+        self._x_max = max(positions)
+        if self._x_max <= self._x_min:
+            self._x_max = self._x_min + 1.0
+
+        self._y_min = 0.0
+        self._y_max = max(max(forces) * 1.10, 1.0)
+        self._manual_axis_bounds = True
+        self._auto_scale = False
+        self.update()
+
+    # Restaure les bornes d'axes par defaut.
+    def reset_axis_bounds(self, redraw: bool = True) -> None:
+        self._manual_axis_bounds = False
+        self._x_min = 0.0
+        self._x_max = float(POSITION_MM_MAX)
+        self._y_min = 0.0
+        self._y_max = float(FORCE_NEWTON_MAX)
+        if redraw:
+            self.update()
 
     # Active/desactive le mode edition des zones et prepare les poignees.
     def set_edit_mode(self, enabled: bool) -> None:
@@ -440,13 +499,15 @@ class GraphWidget(QWidget):
             return
 
         rect = self._plot_rect()
-        xr, yr = self._get_ranges()
+        x_min, x_max, y_min, y_max = self._get_axis_bounds()
+        xr = max(x_max - x_min, 1.0)
+        yr = max(y_max - y_min, 1.0)
 
         px = max(rect.left(), min(px, rect.right()))
         py = max(rect.top(), min(py, rect.bottom()))
 
-        new_x = (px - rect.left()) / rect.width() * xr
-        new_y = yr - (py - rect.top()) / rect.height() * yr
+        new_x = x_min + (px - rect.left()) / rect.width() * xr
+        new_y = y_max - (py - rect.top()) / rect.height() * yr
         new_x = max(0.0, round(new_x, 1))
         new_y = max(0.0, round(new_y, 0))
 
@@ -504,38 +565,64 @@ class GraphWidget(QWidget):
         axis_font = QFont("Arial", 9)
         fm = QFontMetrics(axis_font)
 
-        _xr, yr = self._get_ranges()
+        _x_min, _x_max, y_min, y_max = self._get_axis_bounds()
+        yr = y_max - y_min
         if self._display_mode == DisplayMode.POSITION_TIME:
-            y_labels = [f"{(i * yr / self._GRID_DIVS):.0f}" for i in range(self._GRID_DIVS + 1)]
+            y_labels = [
+                f"{(y_min + i * yr / self._GRID_DIVS):.0f}"
+                for i in range(self._GRID_DIVS + 1)
+            ]
         else:
-            y_labels = [fmt_force_dan(i * yr / self._GRID_DIVS) for i in range(self._GRID_DIVS + 1)]
+            y_labels = [
+                fmt_force_dan(y_min + i * yr / self._GRID_DIVS)
+                for i in range(self._GRID_DIVS + 1)
+            ]
             # Garantit qu'un label de référence large reste visible en mode force.
             y_labels.append(fmt_force_dan(10000.0))
 
         max_label_width = max((fm.horizontalAdvance(lbl) for lbl in y_labels), default=0)
         self._ML = max(self._MIN_LEFT_MARGIN, max_label_width + 8)
 
-    # Donne les bornes X/Y actives selon le mode et l'auto-echelle.
-    def _get_ranges(self) -> tuple[float, float]:
+    # Donne les bornes X/Y actives selon le mode, l'auto-echelle et le recalage manuel.
+    def _get_axis_bounds(self) -> tuple[float, float, float, float]:
         if self._display_mode == DisplayMode.FORCE_POSITION:
-            xr, yr = POSITION_MM_MAX, FORCE_NEWTON_MAX
+            x_min, x_max = 0.0, float(POSITION_MM_MAX)
+            y_min, y_max = 0.0, float(FORCE_NEWTON_MAX)
+
+            if self._manual_axis_bounds:
+                x_min, x_max = self._x_min, self._x_max
+                y_min, y_max = self._y_min, self._y_max
+            elif self._auto_scale and self._current_points:
+                max_f = max(f for _, f, _ in self._current_points)
+                max_x = max(x for _, _, x in self._current_points)
+                y_max = max(max_f * 1.15, 100.0)
+                x_max = max(max_x * 1.15, 1.0)
         elif self._display_mode == DisplayMode.FORCE_TIME:
-            xr, yr = 2.0, FORCE_NEWTON_MAX
+            x_min, x_max = 0.0, 2.0
+            y_min, y_max = 0.0, float(FORCE_NEWTON_MAX)
+
+            if self._auto_scale and self._current_points:
+                max_f = max(f for _, f, _ in self._current_points)
+                y_max = max(max_f * 1.15, 100.0)
         else:
-            xr, yr = 2.0, POSITION_MM_MAX
+            x_min, x_max = 0.0, 2.0
+            y_min, y_max = 0.0, float(POSITION_MM_MAX)
 
-        if self._auto_scale and self._current_points:
-            max_f = max(f for _, f, _ in self._current_points)
-            max_x = max(x for _, _, x in self._current_points)
-            if self._display_mode == DisplayMode.FORCE_POSITION:
-                yr = max(max_f * 1.15, 100.0)
-                xr = max(max_x * 1.15, 1.0)
-            elif self._display_mode == DisplayMode.FORCE_TIME:
-                yr = max(max_f * 1.15, 100.0)
-            else:
-                yr = max(max_x * 1.15, 1.0)
+            if self._auto_scale and self._current_points:
+                max_x = max(x for _, _, x in self._current_points)
+                y_max = max(max_x * 1.15, 1.0)
 
-        return xr, yr
+        if x_max <= x_min:
+            x_max = x_min + 1.0
+        if y_max <= y_min:
+            y_max = y_min + 1.0
+
+        return x_min, x_max, y_min, y_max
+
+    # Donne les bornes max X/Y actives pour la logique existante (zones, presets).
+    def _get_ranges(self) -> tuple[float, float]:
+        _x_min, x_max, _y_min, y_max = self._get_axis_bounds()
+        return x_max, y_max
 
     # Convertit un point brut (t, F, X) vers les coordonnees du mode courant.
     def _pt_to_data(self, t: float, f: float, x: float) -> tuple[float, float]:
@@ -547,9 +634,11 @@ class GraphWidget(QWidget):
 
     # Convertit une coordonnee metier (X/Y) en pixel dans le rectangle de trace.
     def _to_px(self, xd: float, yd: float, rect: QRect) -> tuple[int, int]:
-        xr, yr = self._get_ranges()
-        px = rect.left() + xd / xr * rect.width()
-        py = rect.bottom() - yd / yr * rect.height()
+        x_min, x_max, y_min, y_max = self._get_axis_bounds()
+        xr = max(x_max - x_min, 1.0)
+        yr = max(y_max - y_min, 1.0)
+        px = rect.left() + (xd - x_min) / xr * rect.width()
+        py = rect.bottom() - (yd - y_min) / yr * rect.height()
         return int(px), int(py)
 
     # Applique la palette de theme au graphe puis force un redraw.
@@ -985,7 +1074,9 @@ class GraphWidget(QWidget):
 
     # Dessine les labels des axes et les unites affichees une seule fois.
     def _draw_axes(self, painter: QPainter, rect: QRect) -> None:
-        xr, yr = self._get_ranges()
+        x_min, x_max, y_min, y_max = self._get_axis_bounds()
+        xr = x_max - x_min
+        yr = y_max - y_min
         x_unit = "mm" if self._display_mode == DisplayMode.FORCE_POSITION else "s"
         y_unit = "mm" if self._display_mode == DisplayMode.POSITION_TIME else "daN"
 
@@ -999,13 +1090,13 @@ class GraphWidget(QWidget):
         # 6 valeurs (GRID_DIVS + 1)
         for i in range(self._GRID_DIVS + 1):
             # Labels Y — alignés à droite dans la marge gauche
-            val_y = i * yr / self._GRID_DIVS
+            val_y = y_min + i * yr / self._GRID_DIVS
             py = rect.bottom() - int(i * rect.height() / self._GRID_DIVS)
             lbl_y = f"{val_y:.0f}" if y_unit == "mm" else fmt_force_dan(val_y)
             painter.drawText(QRect(0, py - 10, self._ML - 4, 20), Qt.AlignmentFlag.AlignRight, lbl_y)
 
             # Labels X — centrés sous chaque graduation
-            val_x = i * xr / self._GRID_DIVS
+            val_x = x_min + i * xr / self._GRID_DIVS
             px = rect.left() + int(i * rect.width() / self._GRID_DIVS)
             lbl_x = f"{val_x:.0f}"
             painter.drawText(QRect(px - 20, rect.bottom() + 4, 40, 16), Qt.AlignmentFlag.AlignCenter, lbl_x)
@@ -2179,6 +2270,270 @@ class LevelSelectorDialog(QDialog):
 
 
 # ===========================================================================
+# LoginDialog — sélection niveau + saisie PIN en une seule page
+# ===========================================================================
+
+class LoginDialog(QDialog):
+    """Dialogue unique combinant choix du niveau d'accès et saisie PIN."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setModal(True)
+        self.setFixedSize(640, 480)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #FAFAF8;
+                border: 2px solid #C49A3C;
+                border-radius: 14px;
+            }
+        """)
+        self.selected_level: int = AccessLevel.NONE
+        self._pin_value: str = ""
+        self._level_btns: dict[int, QPushButton] = {}
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(12)
+
+        # Titre
+        title = QLabel(f"🔐  {t('btn_login')}")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(
+            "color: #C49A3C; font-size: 22px; font-weight: bold; background: transparent;"
+        )
+        root.addWidget(title)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background-color: #C49A3C; max-height: 1px;")
+        root.addWidget(sep)
+
+        # Corps : colonne gauche (niveaux) + colonne droite (PIN)
+        body = QHBoxLayout()
+        body.setSpacing(16)
+
+        # --- Colonne gauche : boutons niveau ---
+        left_col = QVBoxLayout()
+        left_col.setSpacing(8)
+
+        lbl_choose = QLabel(t("dlg_level_select_title"))
+        lbl_choose.setStyleSheet(
+            "color: #6B6860; font-size: 16px; font-weight: bold; background: transparent;"
+        )
+        lbl_choose.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_col.addWidget(lbl_choose)
+
+        levels = [
+            (AccessLevel.OPERATEUR,  "🟢", t("level_operator"),  t("level_desc_operator"),  "#2E7D32", "#F1F8E9"),
+            (AccessLevel.TECHNICIEN, "🟡", t("level_tech"),       t("level_desc_tech"),       "#C49A3C", "#FFF8E1"),
+            (AccessLevel.ADMIN,      "🔴", t("level_admin"),      t("level_desc_admin"),      "#A07830", "#FFF3E0"),
+        ]
+        for level, icon, name, desc, color, bg in levels:
+            btn = QPushButton()
+            btn.setFixedHeight(76)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {bg};
+                    border: 2px solid transparent;
+                    border-radius: 10px;
+                    text-align: left;
+                    padding: 0 12px;
+                }}
+                QPushButton:pressed {{ border: 2px solid {color}; background-color: #E8E4DC; }}
+            """)
+            btn_layout = QHBoxLayout(btn)
+            btn_layout.setContentsMargins(10, 6, 10, 6)
+            name_lbl = QLabel(f"{icon}  {name}")
+            name_lbl.setStyleSheet(
+                f"color: {color}; font-size: 18px; font-weight: bold; "
+                "background: transparent; border: none;"
+            )
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(
+                "color: #6B6860; font-size: 13px; background: transparent; border: none;"
+            )
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            col.addWidget(name_lbl)
+            col.addWidget(desc_lbl)
+            btn_layout.addLayout(col)
+            btn_layout.addStretch()
+            btn.clicked.connect(lambda _, lv=level, c=color, b=bg: self._select_level(lv, c, b))
+            left_col.addWidget(btn)
+            self._level_btns[level] = btn
+
+        left_col.addStretch()
+        body.addLayout(left_col, stretch=4)
+
+        # Séparateur vertical
+        vsep = QFrame()
+        vsep.setFrameShape(QFrame.Shape.VLine)
+        vsep.setStyleSheet("background-color: #E0DCD4; max-width: 1px;")
+        body.addWidget(vsep)
+
+        # --- Colonne droite : afficheur PIN + pavé ---
+        right_col = QVBoxLayout()
+        right_col.setSpacing(8)
+
+        lbl_pin = QLabel(t("dlg_pin_title") if "dlg_pin_title" in (t("dlg_pin_title"),) else "Code PIN")
+        lbl_pin.setStyleSheet(
+            "color: #6B6860; font-size: 16px; font-weight: bold; background: transparent;"
+        )
+        lbl_pin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_col.addWidget(lbl_pin)
+
+        # Afficheur PIN masqué
+        self._pin_display = QLineEdit()
+        self._pin_display.setReadOnly(True)
+        self._pin_display.setEchoMode(QLineEdit.EchoMode.Password)
+        self._pin_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._pin_display.setStyleSheet("""
+            QLineEdit {
+                background-color: #FFFFFF;
+                color: #2C2C2A;
+                border: 2px solid #C49A3C;
+                border-radius: 8px;
+                font-size: 30px;
+                font-weight: bold;
+                min-height: 52px;
+                padding: 4px 12px;
+            }
+        """)
+        right_col.addWidget(self._pin_display)
+
+        # Grille de touches
+        from PySide6.QtWidgets import QGridLayout
+        grid = QGridLayout()
+        grid.setSpacing(6)
+
+        key_style = """
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #2C2C2A;
+                font-size: 22px;
+                font-weight: bold;
+                border: 1px solid #E8E4DC;
+                border-radius: 8px;
+                min-height: 52px;
+            }
+            QPushButton:pressed { background-color: #A07830; color: #ffffff; }
+        """
+        back_style = """
+            QPushButton {
+                background-color: #FFF3F3;
+                color: #C62828;
+                font-size: 20px;
+                font-weight: bold;
+                border: 1px solid #C62828;
+                border-radius: 8px;
+                min-height: 52px;
+            }
+            QPushButton:pressed { background-color: #C62828; color: #ffffff; }
+        """
+
+        for label, row, col in [
+            ("7", 0, 0), ("8", 0, 1), ("9", 0, 2),
+            ("4", 1, 0), ("5", 1, 1), ("6", 1, 2),
+            ("1", 2, 0), ("2", 2, 1), ("3", 2, 2),
+            ("0", 3, 0), (".", 3, 1),
+        ]:
+            btn_k = QPushButton(label)
+            btn_k.setStyleSheet(key_style)
+            btn_k.clicked.connect(lambda _, c=label: self._key_press(c))
+            grid.addWidget(btn_k, row, col)
+
+        btn_back = QPushButton(t("btn_backspace"))
+        btn_back.setStyleSheet(back_style)
+        btn_back.clicked.connect(self._backspace)
+        grid.addWidget(btn_back, 3, 2)
+
+        right_col.addLayout(grid)
+        body.addLayout(right_col, stretch=5)
+        root.addLayout(body, stretch=1)
+
+        # --- Ligne de boutons Annuler / Valider ---
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+
+        btn_cancel = QPushButton(t("btn_cancel_x"))
+        btn_cancel.setFixedHeight(48)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #FFF3F3; color: #C62828;
+                font-size: 18px; font-weight: bold;
+                border: 1px solid #C62828; border-radius: 8px;
+            }
+            QPushButton:pressed { background-color: #C62828; color: #ffffff; }
+        """)
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_ok = QPushButton(t("btn_ok_check"))
+        btn_ok.setFixedHeight(48)
+        btn_ok.setStyleSheet("""
+            QPushButton {
+                background-color: #F1F8E9; color: #2E7D32;
+                font-size: 18px; font-weight: bold;
+                border: 2px solid #2d7a2d; border-radius: 8px;
+            }
+            QPushButton:pressed { background-color: #2d7a2d; color: #ffffff; }
+        """)
+        btn_ok.clicked.connect(self.accept)
+
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        root.addLayout(btn_row)
+
+    def _select_level(self, level: int, color: str, bg: str) -> None:
+        self.selected_level = level
+        # Réinitialise tous les boutons puis met en évidence le sélectionné
+        _borders = {
+            AccessLevel.OPERATEUR:  ("#2E7D32", "#F1F8E9"),
+            AccessLevel.TECHNICIEN: ("#C49A3C", "#FFF8E1"),
+            AccessLevel.ADMIN:      ("#A07830", "#FFF3E0"),
+        }
+        for lv, btn in self._level_btns.items():
+            c, b = _borders[lv]
+            selected = lv == level
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {b if not selected else c};
+                    border: 2px solid {c if selected else 'transparent'};
+                    border-radius: 10px; text-align: left; padding: 0 12px;
+                }}
+                QPushButton:pressed {{ border: 2px solid {c}; background-color: #E8E4DC; }}
+            """)
+            # Recolore les labels internes selon sélection
+            for child in btn.findChildren(QLabel):
+                if child.styleSheet().startswith(f"color: {c}"):
+                    child.setStyleSheet(
+                        f"color: {'#FFFFFF' if selected else c}; font-size: 18px; "
+                        "font-weight: bold; background: transparent; border: none;"
+                    )
+                else:
+                    child.setStyleSheet(
+                        f"color: {'#E0E0D8' if selected else '#6B6860'}; "
+                        "font-size: 13px; background: transparent; border: none;"
+                    )
+
+    def _key_press(self, char: str) -> None:
+        if char == "." and "." in self._pin_value:
+            return
+        self._pin_value += char
+        self._pin_display.setText(self._pin_value)
+
+    def _backspace(self) -> None:
+        self._pin_value = self._pin_value[:-1]
+        self._pin_display.setText(self._pin_value)
+
+    def pin(self) -> str:
+        return self._pin_value
+
+
+# ===========================================================================
 # PinDialog — saisie PIN avec verrouillage
 # ===========================================================================
 
@@ -2355,6 +2710,7 @@ class MainWindow(QMainWindow):
         self._restart_callback = None
         self._stop_callback = None
         self._restart_btn = None
+        self._stop_cycle_btn = None
         self._manual_cycle_enabled: bool = False
         self._modbus_connected: bool = False
 
@@ -2376,7 +2732,7 @@ class MainWindow(QMainWindow):
         edit_layout.setSpacing(10)
 
         # QPushButton : applique les modifications de zones.
-        self._btn_apply_zones = QPushButton("✓  Appliquer")
+        self._btn_apply_zones = QPushButton(t("btn_apply"))
         self._btn_apply_zones.setFixedHeight(44)
         self._btn_apply_zones.setStyleSheet("""
             QPushButton {
@@ -2393,7 +2749,7 @@ class MainWindow(QMainWindow):
         self._btn_apply_zones.clicked.connect(self._apply_zone_edits)
 
         # QPushButton : annule les modifications de zones.
-        self._btn_cancel_zones = QPushButton("✗  Annuler")
+        self._btn_cancel_zones = QPushButton(t("btn_cancel_cross"))
         self._btn_cancel_zones.setFixedHeight(44)
         self._btn_cancel_zones.setStyleSheet("""
             QPushButton {
@@ -2441,6 +2797,26 @@ class MainWindow(QMainWindow):
             }
         """)
         self._auto_scale_btn.clicked.connect(self._on_auto_scale_toggled)
+
+        # QPushButton : recalage ponctuel des axes sur la courbe affichée.
+        self._auto_scale_once_btn = QPushButton("⊡ Auto-scale", self._graph)
+        self._auto_scale_once_btn.setMinimumHeight(36)
+        self._auto_scale_once_btn.setFixedWidth(118)
+        self._auto_scale_once_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(242, 240, 235, 200);
+                color: #6B6860;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid #E8E4DC;
+                border-radius: 4px;
+                padding: 0 10px;
+            }
+            QPushButton:pressed {
+                background-color: rgba(218, 213, 204, 220);
+            }
+        """)
+        self._auto_scale_once_btn.clicked.connect(self._on_auto_scale_once_clicked)
         self._position_auto_scale_btn()
 
         self._apply_state_style("idle")
@@ -2585,7 +2961,7 @@ class MainWindow(QMainWindow):
 
 
         # QPushButton : connexion/déconnexion utilisateur.
-        self._access_btn = QPushButton("👤  Se connecter")
+        self._access_btn = QPushButton(f"👤  {t('btn_login')}")
         self._access_btn.setFixedHeight(32)
         self._access_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._access_btn.clicked.connect(self._on_login_clicked)
@@ -2635,9 +3011,9 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
 
         # QLabel : titre de section du mode édition.
-        title = QLabel("✏  Édition des zones")
-        title.setStyleSheet("color: #C49A3C; font-size: 14px; font-weight: bold; background: transparent;")
-        layout.addWidget(title)
+        self._edit_panel_title_label = QLabel(t("edit_zones_title"))
+        self._edit_panel_title_label.setStyleSheet("color: #C49A3C; font-size: 14px; font-weight: bold; background: transparent;")  # titre section
+        layout.addWidget(self._edit_panel_title_label)
 
         # --- Ligne de boutons Z1-Z5 ---
         zone_btn_row = QHBoxLayout()
@@ -2707,22 +3083,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(make_hseparator())
 
         # QPushButton : réinitialise le zoom du graphique.
-        reset_zoom_btn = QPushButton("↺  Réinitialiser zoom")
-        reset_zoom_btn.setStyleSheet(
-            "background-color: #FAFAF8; color: #A07830; font-size: 13px; "
+        self._reset_zoom_btn = QPushButton(t("btn_reset_zoom"))
+        self._reset_zoom_btn.setStyleSheet(
+            "background-color: #FAFAF8; color: #A07830; font-size: 19px; "
             "border: 1px solid #C49A3C; border-radius: 6px; padding: 6px;"
         )
-        reset_zoom_btn.clicked.connect(lambda: (
-            setattr(self._graph, '_auto_scale', False),
-            self._graph.update(),
-        ))
-        layout.addWidget(reset_zoom_btn)
+        self._reset_zoom_btn.clicked.connect(self._reset_graph_zoom)
+        layout.addWidget(self._reset_zoom_btn)
 
         # QLabel : aide rapide pour l'édition des poignées.
-        hint = QLabel("Cliquez sur ✏ pour modifier\nune coordonnée précisément")
-        hint.setStyleSheet("color: #888; font-size: 11px; font-style: italic; background: transparent;")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(hint)
+        self._edit_panel_hint_label = QLabel(t("hint_edit_precise_coord"))
+        self._edit_panel_hint_label.setStyleSheet("color: #888; font-size: 15px; font-style: italic; background: transparent;")
+        self._edit_panel_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._edit_panel_hint_label)
 
         self._handle_coord_labels: dict[str, QLabel] = {}
         return panel
@@ -2824,16 +3197,16 @@ class MainWindow(QMainWindow):
 
     # NO-PASS : 3 lignes — lm=1 Pos.min  tm=2 Haut.max  rm=3 Pos.max
     _COORD_ROWS_NO_PASS = [
-        ("1 — Pos. min",  "lm", "mm",  False),
-        ("2 — Haut. max", "tm", "daN", False),
-        ("3 — Pos. max",  "rm", "mm",  False),
+        ("coord_pos_min",   "lm", "mm",  False),
+        ("coord_haut_max",  "tm", "daN", False),
+        ("coord_pos_max",   "rm", "mm",  False),
     ]
     # UNI-BOX : 4 lignes — lm=1 Pos.min  tm=2 Haut.max  rm=3 Pos.max  bm=4 Haut.min
     _COORD_ROWS_UNIBOX = [
-        ("1 — Pos. min",  "lm", "mm",  False),
-        ("2 — Haut. max", "tm", "daN", False),
-        ("3 — Pos. max",  "rm", "mm",  False),
-        ("4 — Haut. min", "bm", "daN", False),
+        ("coord_pos_min",   "lm", "mm",  False),
+        ("coord_haut_max",  "tm", "daN", False),
+        ("coord_pos_max",   "rm", "mm",  False),
+        ("coord_haut_min",  "bm", "daN", False),
     ]
 
     # Définition : formate le texte affiché pour une poignée de zone.
@@ -2902,7 +3275,7 @@ class MainWindow(QMainWindow):
             # QLabel : en-tête de bloc pour une zone NO-PASS active.
             lbl_title = QLabel(f"Z{zone_idx + 1} — NO-PASS")
             lbl_title.setStyleSheet(
-                "color: #C62828; font-weight: bold; font-size: 13px; background: transparent;"
+                "color: #C62828; font-weight: bold; font-size: 22px; background: transparent;"
             )
             self._edit_panel_content.addWidget(lbl_title)
             self._add_handle_rows("no_pass", zone_idx)
@@ -2917,7 +3290,7 @@ class MainWindow(QMainWindow):
             # QLabel : en-tête de bloc pour une zone UNI-BOX active.
             lbl_title = QLabel(f"UB{zone_idx + 1} — UNI-BOX")
             lbl_title.setStyleSheet(
-                "color: #FF9800; font-weight: bold; font-size: 13px; background: transparent;"
+                "color: #FF9800; font-weight: bold; font-size: 22px; background: transparent;"
             )
             self._edit_panel_content.addWidget(lbl_title)
             self._add_handle_rows("uni_box", zone_idx)
@@ -2930,7 +3303,7 @@ class MainWindow(QMainWindow):
             if zone_type == "no_pass"
             else self._COORD_ROWS_UNIBOX
         )
-        for label_txt, hid, unit, disabled in coord_rows:
+        for label_key, hid, unit, disabled in coord_rows:
             key = f"{zone_type}|{zone_idx}|{hid}"
             # QWidget : ligne d'édition d'une coordonnée.
             row = QWidget()
@@ -2939,31 +3312,31 @@ class MainWindow(QMainWindow):
             row_layout.setSpacing(4)
 
             # QLabel : nom du paramètre de coordonnée.
-            lbl_num = QLabel(f"{label_txt} :")
+            lbl_num = QLabel(f"{t(label_key)} :")
             lbl_num.setStyleSheet(
-                "color: #C49A3C; font-size: 11px; background: transparent; min-width: 80px;"
+                "color: #C49A3C; font-size: 19px; background: transparent; min-width: 80px;"
             )
 
             # QLabel : valeur courante de la coordonnée.
             lbl_coord = QLabel(self._get_handle_text(zone_type, zone_idx, hid))
             lbl_coord.setStyleSheet(
-                "color: #1A1A18; font-size: 11px; background: transparent;"
+                "color: #1A1A18; font-size: 19px; font-weight: bold; background: transparent;"
             )
             self._handle_coord_labels[key] = lbl_coord
 
             # QPushButton : ouvre la saisie numérique de la coordonnée.
             btn_edit = QPushButton("✏")
-            btn_edit.setFixedSize(26, 24)
+            btn_edit.setFixedSize(44, 44)
             if disabled:
                 btn_edit.setEnabled(False)
                 btn_edit.setStyleSheet(
                     "background: #E8E4DC; color: #9C9890; border: 1px solid #C8C4BC; "
-                    "border-radius: 4px; font-size: 12px; padding: 0;"
+                    "border-radius: 4px; font-size: 20px; padding: 0;"
                 )
             else:
                 btn_edit.setStyleSheet(
                     "background: #FAFAF8; color: #A07830; border: 1px solid #C49A3C; "
-                    "border-radius: 4px; font-size: 12px; padding: 0;"
+                    "border-radius: 4px; font-size: 20px; padding: 0;"
                 )
                 btn_edit.clicked.connect(
                     lambda _checked, zt=zone_type, zi=zone_idx, h=hid:
@@ -3553,52 +3926,110 @@ class MainWindow(QMainWindow):
         if manual_btn is not None:
             manual_btn.setText("▶  Démarrer cycle")
 
+        if self._stop_cycle_btn is not None:
+            self._stop_cycle_btn.setVisible(False)
+            self._stop_cycle_btn.setEnabled(True)
+
         if self._sim_mode:
             self._show_restart_button()
 
     # Définition : affiche le bouton flottant de redémarrage de cycle.
     def _show_restart_button(self) -> None:
         """Affiche un bouton flottant 'NOUVEAU CYCLE' au centre du graphique."""
-        if self._restart_btn is not None:
-            self._restart_btn.show()
-            self._center_restart_btn()
-            return
-        # QPushButton : lance un nouveau cycle depuis le graphique.
-        self._restart_btn = QPushButton(f"▶   {t('btn_new_cycle')}", self._graph)
-        self._restart_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1565c0;
-                color: #ffffff;
-                font-size: 18px;
-                font-weight: bold;
-                border-radius: 10px;
-                border: 2px solid #42a5f5;
-                padding: 14px 30px;
-            }
-            QPushButton:pressed { background-color: #0d47a1; }
-        """)
-        self._restart_btn.adjustSize()
+        self._ensure_cycle_action_buttons()
+        self._restart_btn.setVisible(True)
+        self._stop_cycle_btn.setVisible(False)
         self._center_restart_btn()
-        self._restart_btn.clicked.connect(self._on_restart_clicked)
-        self._restart_btn.show()
+
+    # Définition : affiche le bouton flottant d'arrêt du cycle en cours.
+    def _show_stop_cycle_button(self) -> None:
+        self._ensure_cycle_action_buttons()
+        self._restart_btn.setVisible(False)
+        self._stop_cycle_btn.setEnabled(True)
+        self._stop_cycle_btn.setVisible(True)
+        self._center_restart_btn()
+
+    # Définition : crée (si nécessaire) les boutons flottants NOUVEAU/ARRÊTER CYCLE.
+    def _ensure_cycle_action_buttons(self) -> None:
+        if self._restart_btn is None:
+            # QPushButton : lance un nouveau cycle depuis le graphique.
+            self._restart_btn = QPushButton(f"▶   {t('btn_new_cycle')}", self._graph)
+            self._restart_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #1565c0;
+                    color: #ffffff;
+                    font-size: 18px;
+                    font-weight: bold;
+                    border-radius: 10px;
+                    border: 2px solid #42a5f5;
+                    padding: 14px 30px;
+                }
+                QPushButton:pressed { background-color: #0d47a1; }
+            """)
+            self._restart_btn.clicked.connect(self._on_restart_clicked)
+
+        if self._stop_cycle_btn is None:
+            # QPushButton : arrête proprement le cycle en cours.
+            self._stop_cycle_btn = QPushButton(t("btn_stop_cycle"), self._graph)
+            self._stop_cycle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #C62828;
+                    color: #ffffff;
+                    font-size: 18px;
+                    font-weight: bold;
+                    border-radius: 10px;
+                    border: 2px solid #8E0000;
+                    padding: 14px 30px;
+                }
+                QPushButton:pressed { background-color: #8E0000; }
+            """)
+            self._stop_cycle_btn.clicked.connect(self._on_stop_cycle_clicked)
+
+        self._sync_cycle_action_btn_sizes()
+
+    # Définition : impose une taille identique aux boutons NOUVEAU/ARRÊTER CYCLE.
+    def _sync_cycle_action_btn_sizes(self) -> None:
+        if self._restart_btn is None or self._stop_cycle_btn is None:
+            return
+        self._restart_btn.adjustSize()
+        self._stop_cycle_btn.adjustSize()
+        width = max(self._restart_btn.sizeHint().width(), self._stop_cycle_btn.sizeHint().width())
+        height = max(self._restart_btn.sizeHint().height(), self._stop_cycle_btn.sizeHint().height())
+        self._restart_btn.setFixedSize(width, height)
+        self._stop_cycle_btn.setFixedSize(width, height)
 
     # Définition : centre le bouton de redémarrage sur le graphique.
     def _center_restart_btn(self) -> None:
-        if self._restart_btn is None:
+        if self._restart_btn is None and self._stop_cycle_btn is None:
             return
         gw = self._graph
-        bw = self._restart_btn.width()
-        bh = self._restart_btn.height()
-        self._restart_btn.move((gw.width() - bw) // 2, (gw.height() - bh) // 2)
+        if self._restart_btn is not None:
+            bw = self._restart_btn.width()
+            bh = self._restart_btn.height()
+            self._restart_btn.move((gw.width() - bw) // 2, (gw.height() - bh) // 2)
+        if self._stop_cycle_btn is not None:
+            bw = self._stop_cycle_btn.width()
+            bh = self._stop_cycle_btn.height()
+            self._stop_cycle_btn.move((gw.width() - bw) // 2, (gw.height() - bh) // 2)
 
     # Définition : gère le clic sur redémarrage de cycle.
     def _on_restart_clicked(self) -> None:
         if self._restart_btn is not None:
-            self._restart_btn.hide()
+            self._restart_btn.setVisible(False)
+        if self._stop_cycle_btn is not None:
+            self._stop_cycle_btn.setVisible(True)
+            self._stop_cycle_btn.setEnabled(True)
         self._graph.start_new_cycle()
         self._update_result_display("idle")
         if self._restart_callback:
             self._restart_callback()
+
+    # Définition : gère le clic sur arrêt manuel de cycle.
+    def _on_stop_cycle_clicked(self) -> None:
+        if self._stop_cycle_btn is not None:
+            self._stop_cycle_btn.setEnabled(False)
+        if self._stop_callback:
+            self._stop_callback()
 
     # Définition : initialise l'état lors du démarrage d'un cycle.
     def on_cycle_started(self) -> None:
@@ -3611,10 +4042,13 @@ class MainWindow(QMainWindow):
         self._graph.start_new_cycle()
         self._update_result_display("idle")
 
+        if self._sim_mode:
+            self._show_stop_cycle_button()
+
         # Basculer le bouton en mode "Arrêter"
         manual_btn = self._nav_buttons.get("manual")
         if manual_btn is not None:
-            manual_btn.setText("⏹  Arrêter cycle")
+            manual_btn.setText(f"⏹  {t('btn_stop_cycle')}")
 
     # ------------------------------------------------------------------
     # Timer 30 FPS
@@ -3691,6 +4125,8 @@ class MainWindow(QMainWindow):
     # Définition : stoppe manuellement le cycle en cours.
     def _stop_manual_cycle(self) -> None:
         """Arrête manuellement le cycle en cours."""
+        if self._sim_mode and self._stop_cycle_btn is not None:
+            self._stop_cycle_btn.setEnabled(False)
         if self._stop_callback:
             self._stop_callback()
 
@@ -3803,6 +4239,10 @@ class MainWindow(QMainWindow):
             )
         if hasattr(self, '_auto_scale_btn'):
             self._position_auto_scale_btn()
+        if (hasattr(self, "_restart_btn") and self._restart_btn is not None) or (
+            hasattr(self, "_stop_cycle_btn") and self._stop_cycle_btn is not None
+        ):
+            self._center_restart_btn()
         if hasattr(self, "_pm_label"):
             self._refresh_datetime_line()
 
@@ -3869,7 +4309,18 @@ class MainWindow(QMainWindow):
     # Définition : positionne le bouton auto-scale sur le graphique.
     def _position_auto_scale_btn(self) -> None:
         gw = self._graph
-        self._auto_scale_btn.move(gw.width() - 80, 10)
+        right_margin = 10
+        top_margin = 10
+        gap = 8
+
+        x = gw.width() - right_margin
+        if hasattr(self, "_auto_scale_btn"):
+            x -= self._auto_scale_btn.width()
+            self._auto_scale_btn.move(x, top_margin)
+            x -= gap
+        if hasattr(self, "_auto_scale_once_btn"):
+            x -= self._auto_scale_once_btn.width()
+            self._auto_scale_once_btn.move(x, top_margin)
 
     # Définition : bascule l'auto-scale et son libellé.
     def _on_auto_scale_toggled(self) -> None:
@@ -3878,6 +4329,19 @@ class MainWindow(QMainWindow):
             self._auto_scale_btn.setText("⤢ Fixe")
         else:
             self._auto_scale_btn.setText("⤢ Auto")
+
+    # Définition : applique un auto-scale ponctuel sur la courbe affichée.
+    def _on_auto_scale_once_clicked(self) -> None:
+        self._graph.auto_scale_current_curve()
+        self._auto_scale_btn.setChecked(False)
+        self._auto_scale_btn.setText("⤢ Auto")
+
+    # Définition : réinitialise le zoom/échelle du graphique aux valeurs par défaut.
+    def _reset_graph_zoom(self) -> None:
+        self._graph._auto_scale = False
+        self._graph.reset_axis_bounds()
+        self._auto_scale_btn.setChecked(False)
+        self._auto_scale_btn.setText("⤢ Auto")
 
     # Définition : enregistre le callback de redémarrage de cycle.
     def set_restart_callback(self, callback) -> None:
@@ -4121,9 +4585,27 @@ QPushButton#nav_btn_red:pressed {{
 
         if hasattr(self, "_restart_btn") and self._restart_btn is not None:
             self._restart_btn.setText(f"▶   {t('btn_new_cycle')}")
+            self._sync_cycle_action_btn_sizes()
+
+        if hasattr(self, "_stop_cycle_btn") and self._stop_cycle_btn is not None:
+            self._stop_cycle_btn.setText(t("btn_stop_cycle"))
+            self._sync_cycle_action_btn_sizes()
 
         if hasattr(self, "_stats_widget"):
             self._stats_widget.apply_language()
+
+        if hasattr(self, "_btn_apply_zones"):
+            self._btn_apply_zones.setText(t("btn_apply"))
+        if hasattr(self, "_btn_cancel_zones"):
+            self._btn_cancel_zones.setText(t("btn_cancel_cross"))
+        if hasattr(self, "_edit_panel_title_label"):
+            self._edit_panel_title_label.setText(t("edit_zones_title"))
+        if hasattr(self, "_reset_zoom_btn"):
+            self._reset_zoom_btn.setText(t("btn_reset_zoom"))
+        if hasattr(self, "_edit_panel_hint_label"):
+            self._edit_panel_hint_label.setText(t("hint_edit_precise_coord"))
+        if hasattr(self, "_edit_panel_content"):
+            self._build_edit_panel_content()
 
         settings_page = self.stack.widget(1) if hasattr(self, "stack") else None
         if settings_page is not None and hasattr(settings_page, "apply_language"):
@@ -4147,16 +4629,16 @@ QPushButton#nav_btn_red:pressed {{
         if not hasattr(self, "_access_btn"):
             return
         if not self._access_enabled:
-            text, fg, bg, border = ("👤  Libre", "#6B6860", "#F2F0EB", "#E8E4DC")
+            text, fg, bg, border = (t("level_free_icon"), "#6B6860", "#F2F0EB", "#E8E4DC")
         else:
             configs = {
-                AccessLevel.NONE:       ("👤  Se connecter",   "#4A4844", "#F2F0EB", "#C8C4BC"),
-                AccessLevel.OPERATEUR:  ("🟢  Opérateur",      "#2E7D32", "#F1F8E9", "#2E7D32"),
-                AccessLevel.TECHNICIEN: ("🟡  Technicien",     "#A07830", "#FFF8E1", "#C49A3C"),
-                AccessLevel.ADMIN:      ("🔴  Administrateur", "#A07830", "#FFF8E1", "#C49A3C"),
+                AccessLevel.NONE:       (f"👤  {t('btn_login')}",   "#4A4844", "#F2F0EB", "#C8C4BC"),
+                AccessLevel.OPERATEUR:  (f"🟢  {t('level_operator')}", "#2E7D32", "#F1F8E9", "#2E7D32"),
+                AccessLevel.TECHNICIEN: (f"🟡  {t('level_tech')}",     "#A07830", "#FFF8E1", "#C49A3C"),
+                AccessLevel.ADMIN:      (f"🔴  {t('level_admin')}",    "#A07830", "#FFF8E1", "#C49A3C"),
             }
             text, fg, bg, border = configs.get(
-                self._access_level, ("👤  Se connecter", "#4A4844", "#F2F0EB", "#C8C4BC")
+                self._access_level, (f"👤  {t('btn_login')}", "#4A4844", "#F2F0EB", "#C8C4BC")
             )
         self._access_btn.setText(text)
         self._access_btn.setStyleSheet(
@@ -4225,30 +4707,30 @@ QPushButton#nav_btn_red:pressed {{
             self.set_access_level(AccessLevel.NONE)
             return
 
-        # Étape 1 — Choisir le niveau
-        level_dlg = LevelSelectorDialog(self)
-        if level_dlg.exec() != QDialog.DialogCode.Accepted:
+        # Dialog unique : choix niveau + saisie PIN en une seule page
+        dlg = LoginDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        chosen_level = level_dlg.selected_level
 
-        # Étape 2 — Saisir le PIN
+        chosen_level = dlg.selected_level
+        if chosen_level == AccessLevel.NONE:
+            QMessageBox.warning(
+                self,
+                t("dlg_access_denied_title"),
+                t("dlg_level_select_title") + ".",
+            )
+            return
+
+        # Vérifier le PIN
+        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
+        ac = cfg.get("access_control", {})
+        pin_hash = hashlib.sha256(dlg.pin().encode()).hexdigest()
+
         level_names = {
             AccessLevel.OPERATEUR:  t("level_operator"),
             AccessLevel.TECHNICIEN: t("level_tech"),
             AccessLevel.ADMIN:      t("level_admin"),
         }
-        dlg = NumpadDialog(
-            title=f"PIN — {level_names.get(chosen_level, '')}",
-            unit="", value="", parent=self,
-        )
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-
-        # Étape 3 — Vérifier le PIN
-        cfg = load_config(Path(__file__).parent.parent / "config.yaml")
-        ac = cfg.get("access_control", {})
-        pin_hash = hashlib.sha256(dlg.value().encode()).hexdigest()
-
         pin_keys = {
             AccessLevel.OPERATEUR:  ("pin_operateur",  "0000"),
             AccessLevel.TECHNICIEN: ("pin_technicien", "2222"),

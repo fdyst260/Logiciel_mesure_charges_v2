@@ -1,7 +1,7 @@
 access_control:
   auto_logout: Jamais
   enabled: true
-  pin_admin: 03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4
+  pin_admin: c565fe03ca9b6242e01dfddefe9bba3d98b270e19cd02fd85ceaf75e2b25bf12
   pin_operateur: 9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0
   pin_technicien: edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9
 acquisition:
@@ -17,6 +17,11 @@ affichage_prod:
   histogramme: OK-NOK en %
   indication_es: true
 calibration:
+  voie_x:
+    p1_display: 0.0
+    p1_signal: 0.0
+    p2_display: 20.0
+    p2_signal: 100.0
   voie_y:
     couple_dcy: false
     filter: Aucun
@@ -42,10 +47,12 @@ language: fr
 modbus:
   enabled: false
   host: 192.168.1.92
-  poll_interval_ms: 50
+  poll_interval_ms: 100
   port: 502
-  result_register: 4297
-  trigger_register: 4296
+  unit_id: 1
+network:
+  eth0_ip: 192.168.1.27
+  eth0_mask: /24 (255.255.255.0)
 programmes:
   1:
     description: Rivetage standard
@@ -65,9 +72,9 @@ programmes:
           - 5000.0
       no_pass_zones:
       - enabled: true
-        x_max: 6.0
-        x_min: 3.0
-        y_limit: 10075.0
+        x_max: 19.0
+        x_min: 15.8
+        y_limit: 11425.0
       - enabled: false
         x_max: 50.0
         x_min: 25.0
@@ -85,17 +92,17 @@ programmes:
         x_min: 0.0
         y_limit: 0.0
       uni_box_zones:
-      - box_x_max: 11.4
-        box_x_min: 6.1
-        box_y_max: 9275.0
-        box_y_min: 4400.0
+      - box_x_max: 8.4
+        box_x_min: 5.3
+        box_y_max: 9500.0
+        box_y_min: 4975.0
         enabled: true
         entry_side: left
         exit_side: left
-      - box_x_max: 14.1
-        box_x_min: 10.6
-        box_y_max: 13575.0
-        box_y_min: 11350.0
+      - box_x_max: 16.1
+        box_x_min: 13.4
+        box_y_max: 8550.0
+        box_y_min: 5425.0
         enabled: true
         entry_side: left
         exit_side: left
@@ -177,21 +184,21 @@ programmes:
         box_x_min: 13.4
         box_y_max: 10150.0
         box_y_min: 4500.0
-        enabled: true
+        enabled: false
         entry_side: left
         exit_side: left
       - box_x_max: 12.0
         box_x_min: 4.0
         box_y_max: 10500.0
         box_y_min: 4500.0
-        enabled: true
+        enabled: false
         entry_side: left
         exit_side: left
       - box_x_max: 12.0
         box_x_min: 4.0
         box_y_max: 10500.0
         box_y_min: 4500.0
-        enabled: true
+        enabled: false
         entry_side: left
         exit_side: left
     view_mode: FORCE_POSITION
@@ -610,8 +617,77 @@ programmes:
     view_mode: FORCE_POSITION
   15:
     description: ''
-    name: PM15
-    tools: *id001
+    name: Copie de PM01_STANDARD
+    tools:
+      envelope:
+        enabled: false
+        lower_curve:
+        - - 0.0
+          - 0.0
+        - - 100.0
+          - 3000.0
+        upper_curve:
+        - - 0.0
+          - 500.0
+        - - 100.0
+          - 5000.0
+      no_pass_zones:
+      - enabled: true
+        x_max: 19.0
+        x_min: 15.8
+        y_limit: 11425.0
+      - enabled: false
+        x_max: 50.0
+        x_min: 25.0
+        y_limit: 1500.0
+      - enabled: false
+        x_max: 75.0
+        x_min: 65.0
+        y_limit: 4500.0
+      - enabled: false
+        x_max: 0.0
+        x_min: 0.0
+        y_limit: 0.0
+      - enabled: false
+        x_max: 0.0
+        x_min: 0.0
+        y_limit: 0.0
+      uni_box_zones:
+      - box_x_max: 8.4
+        box_x_min: 5.3
+        box_y_max: 9500.0
+        box_y_min: 4975.0
+        enabled: true
+        entry_side: left
+        exit_side: left
+      - box_x_max: 16.1
+        box_x_min: 13.4
+        box_y_max: 8550.0
+        box_y_min: 5425.0
+        enabled: true
+        entry_side: left
+        exit_side: left
+      - box_x_max: 12.0
+        box_x_min: 8.5
+        box_y_max: 9625.0
+        box_y_min: 4500.0
+        enabled: false
+        entry_side: left
+        exit_side: left
+      - box_x_max: 12.0
+        box_x_min: 4.0
+        box_y_max: 10500.0
+        box_y_min: 4500.0
+        enabled: false
+        entry_side: left
+        exit_side: left
+      - box_x_max: 0.0
+        box_x_min: 0.0
+        box_y_max: 0.0
+        box_y_min: 0.0
+        enabled: false
+        entry_side: left
+        exit_side: left
     view_mode: FORCE_POSITION
   16:
     description: ''

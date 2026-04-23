@@ -294,6 +294,14 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
         start_event.set()
         print("[MAIN] Nouveau cycle démarré, start_event set")
 
+    def _request_cycle_stop() -> None:
+        """Demande un arrêt propre du cycle courant avec finalisation."""
+        stop_event.set()
+        try:
+            data_queue.put(None, timeout=0.5)
+        except Exception:
+            pass
+
     # 5. Modbus (mode réel) ou bouton relance (mode sim)
     modbus_controller = None
     if not use_simulator:
@@ -304,15 +312,20 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             _start_cycle(acquisition_loop, {}, sim_mode=False)
 
         def _on_modbus_cycle_stop() -> None:
-            try:
-                data_queue.put_nowait(None)
-            except Exception:
-                pass
+            _request_cycle_stop()
+
+        def _on_modbus_tare_y() -> None:
+            print("[MAIN] Tare Y demandée par automate — non câblé")
+
+        def _on_modbus_tare_x() -> None:
+            print("[MAIN] Tare X demandée par automate — non câblé")
 
         modbus_controller = ModbusController(
             config_path=_Path(__file__).parent / "config.yaml",
             on_cycle_start=_on_modbus_cycle_start,
             on_cycle_stop=_on_modbus_cycle_stop,
+            on_tare_y=_on_modbus_tare_y,
+            on_tare_x=_on_modbus_tare_x,
         )
         modbus_controller.set_status_callback(window.set_modbus_status)
         modbus_controller.start()
@@ -321,10 +334,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
             _start_cycle(acquisition_loop, {}, sim_mode=False)
 
         def _stop_real_cycle() -> None:
-            try:
-                data_queue.put_nowait(None)
-            except Exception:
-                pass
+            _request_cycle_stop()
 
         window.set_restart_callback(_restart_real_cycle)
         window.set_stop_callback(_stop_real_cycle)
@@ -341,7 +351,12 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
                 {"inject_fault": inject_fault},
                 sim_mode=True,
             )
+
+        def _stop_sim_cycle() -> None:
+            _request_cycle_stop()
+
         window.set_restart_callback(_restart_sim_cycle)
+        window.set_stop_callback(_stop_sim_cycle)
         window.set_manual_cycle_enabled(False)
 
     # 6. Fermeture splash et démarrage
@@ -382,7 +397,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fault",
         action="store_true",
-        help="Injecter un defaut dans le simulateur (force 5200 N -> NOK)",
+        help="Injecter un defaut dans le simulateur (pic de sur-effort -> NOK)",
     )
     parser.add_argument(
         "--windowed",
