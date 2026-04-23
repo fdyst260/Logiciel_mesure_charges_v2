@@ -6,6 +6,12 @@
 # D2000  (READ,  PLC → Pi)  ◀──▶  0x07D0 (2000 décimal)
 #   bit 0 = DCY, bit 1 = TAR_Y, bit 2 = TAR_X
 #
+# D2001-D2002  (READ, PLC → Pi)  ◀──▶  0x07D1 (2001 décimal)
+#   Float32 Little Endian (CDAB) — position en mm
+#
+# D2003-D2004  (READ, PLC → Pi)  ◀──▶  0x07D3 (2003 décimal)
+#   Int32 signé Little Endian (CDAB) — force en DaN (non branché)
+#
 # D2100  (WRITE, Pi → PLC)  ◀──▶  0x0834 (2100 décimal)
 #   bit 0 = PRET, bit 1 = OK, bit 2 = NOK,
 #   bit 3 = NOPASS, bit 7 = ALARME
@@ -34,6 +40,7 @@ Architecture thread-safe :
 
 from __future__ import annotations
 
+import struct
 import threading
 import time
 from collections.abc import Callable
@@ -86,9 +93,11 @@ class ModbusController(threading.Thread):
         self._shadow_lock = threading.Lock()
 
         self._config = self._load_config(config_path)
-        self._cmd_read_addr     = int(str(self._config.get("cmd_read_addr",     "0x07D0")), 0)
-        self._status_write_addr = int(str(self._config.get("status_write_addr", "0x0834")), 0)
-        self._unit_id           = int(self._config.get("unit_id", 1))
+        self._cmd_read_addr      = int(str(self._config.get("cmd_read_addr",      "0x07D0")), 0)
+        self._status_write_addr  = int(str(self._config.get("status_write_addr",  "0x0834")), 0)
+        self._unit_id            = int(self._config.get("unit_id", 1))
+        self._position_read_addr = int(str(self._config.get("position_read_addr", "0x07D1")), 0)
+        self._force_read_addr    = int(str(self._config.get("force_read_addr",    "0x07D3")), 0)
 
     # ------------------------------------------------------------------
     # Config
@@ -205,6 +214,60 @@ class ModbusController(threading.Thread):
     # ------------------------------------------------------------------
     # API publique — appelée depuis le thread Qt / main.py
     # ------------------------------------------------------------------
+
+    def read_position(self) -> float | None:
+        """Lit la position depuis l'automate (D2001-D2002).
+
+        Retourne la valeur en mm, ou None si déconnecté ou erreur.
+        Format : Float32 Little Endian (CDAB) — mot bas en r0, mot haut en r1.
+
+        THREAD-SAFETY : doit être appelée UNIQUEMENT depuis le thread de
+        polling Modbus (self.run()). Tout appel depuis un autre thread
+        accéderait à self._client de façon concurrente sans verrou.
+        """
+        if not self._connected or self._client is None:
+            return None
+        try:
+            rr = self._client.read_holding_registers(
+                address=self._position_read_addr,
+                count=2,
+                device_id=self._unit_id,
+            )
+            if rr.isError():
+                return None
+            r0, r1 = rr.registers[0], rr.registers[1]
+            raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
+            return struct.unpack(">f", raw)[0]
+        except Exception as e:
+            print(f"[MODBUS] Erreur lecture position: {e}")
+            return None
+
+    def read_force(self) -> int | None:
+        """Lit la force depuis l'automate (D2003-D2004).
+
+        Retourne la valeur en DaN (entier signé), ou None si déconnecté ou erreur.
+        Format : Int32 signé Little Endian (CDAB) — mot bas en r0, mot haut en r1.
+
+        THREAD-SAFETY : doit être appelée UNIQUEMENT depuis le thread de
+        polling Modbus (self.run()). Tout appel depuis un autre thread
+        accéderait à self._client de façon concurrente sans verrou.
+        """
+        if not self._connected or self._client is None:
+            return None
+        try:
+            rr = self._client.read_holding_registers(
+                address=self._force_read_addr,
+                count=2,
+                device_id=self._unit_id,
+            )
+            if rr.isError():
+                return None
+            r0, r1 = rr.registers[0], rr.registers[1]
+            raw = struct.pack(">HH", r1, r0)   # inversion des mots : CDAB → ABCD
+            return struct.unpack(">i", raw)[0]
+        except Exception as e:
+            print(f"[MODBUS] Erreur lecture force: {e}")
+            return None
 
     def write_result(self, result: str, no_pass: bool = False) -> None:
         """Écrit le résultat du cycle dans D2100.

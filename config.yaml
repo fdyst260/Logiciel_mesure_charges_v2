@@ -50,8 +50,10 @@ modbus:
   port: 502
   unit_id: 1
   poll_interval_ms: 50
-  cmd_read_addr:     0x07D0   # D2000 — READ  PLC → Pi
-  status_write_addr: 0x0834   # D2100 — WRITE Pi → PLC
+  cmd_read_addr:      0x07D0   # D2000 — READ  PLC → Pi
+  status_write_addr:  0x0834   # D2100 — WRITE Pi → PLC
+  position_read_addr: 0x07D1   # D2001-D2002 — Float32 LE (CDAB), mm
+  force_read_addr:    0x07D3   # D2003-D2004 — Int32 signé LE (CDAB), DaN
 network:
   eth0_ip: 192.168.1.27
   eth0_mask: /24 (255.255.255.0)
