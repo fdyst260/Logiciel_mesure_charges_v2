@@ -1,5 +1,12 @@
 """Fenêtre principale IHM riveteuse — 1280×720 paysage, plein écran sans barre.
 
+# DIAGNOSTIC ECRAN (raspberry pi, 2026-05-11) :
+#   Resolution physique : 800 x 800
+#   Zone disponible     : 800 x 800
+#   DPI logique         : 96.0
+#   Device pixel ratio  : 1.0
+# Layout cible : PanneauHaut(200) + graphe(stretch) + NavBar(100) = 800px
+
 Architecture Qt :
   MainWindow
   └── Widget central
@@ -2666,7 +2673,313 @@ class PinDialog(QDialog):
 # MainWindow — fenêtre principale 1280×720
 # ===========================================================================
 
+class PanneauHaut(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(400)
+        self.setStyleSheet("background:#ede9e0; border-bottom:2px solid #cccccc;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(5)
+
+        # A) Badge résultat
+        self._badge = QLabel()
+        self._badge.setFixedHeight(85)
+        self._badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.set_result("idle")
+        layout.addWidget(self._badge)
+
+        # B) Compteurs
+        self._ctr_widget = QWidget()
+        self._ctr_widget.setFixedHeight(80)
+        c_layout = QHBoxLayout(self._ctr_widget)
+        c_layout.setContentsMargins(0, 0, 0, 0)
+        c_layout.setSpacing(8)
+        self._lbl_ok = QLabel("0")
+        self._lbl_nok = QLabel("0")
+        self._lbl_total = QLabel("0")
+        f_val = QFont()
+        f_val.setBold(True)
+        f_val.setPixelSize(24)
+        for lbl, color, text, card_style in [
+            (
+                self._lbl_ok,
+                "#2e7d32",
+                "✓ OK",
+                "background:#ffffff; border:1.5px solid #a5d6a7; border-radius:8px;",
+            ),
+            (
+                self._lbl_nok,
+                "#c62828",
+                "✗ NOK",
+                "background:#ffffff; border:1.5px solid #ef9a9a; border-radius:8px;",
+            ),
+            (
+                self._lbl_total,
+                "#444444",
+                "Σ Total",
+                "background:#ffffff; border:1.5px solid #bdbdbd; border-radius:8px;",
+            ),
+        ]:
+            bloc = QWidget()
+            bloc.setStyleSheet(card_style)
+            b_layout = QVBoxLayout(bloc)
+            b_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            b_layout.setContentsMargins(0, 0, 0, 0)
+            b_layout.setSpacing(2)
+            lbl.setFont(f_val)
+            lbl.setStyleSheet(
+                f"color:{color}; font-size:24px; font-weight:bold; border:none; background:transparent;"
+            )
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_text = QLabel(text)
+            lbl_text.setStyleSheet(
+                "color:#888888; font-size:10px; border:none; background:transparent;"
+            )
+            lbl_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            b_layout.addWidget(lbl)
+            b_layout.addWidget(lbl_text)
+            c_layout.addWidget(bloc, stretch=1)
+        layout.addWidget(self._ctr_widget)
+
+        # C) Ligne PM
+        pm_widget = QWidget()
+        pm_widget.setFixedHeight(34)
+        pm_layout = QHBoxLayout(pm_widget)
+        pm_layout.setContentsMargins(0, 0, 0, 0)
+        pm_layout.setSpacing(6)
+        self._btn_pm = QPushButton("PM-01")
+        f_pm = QFont()
+        f_pm.setBold(True)
+        f_pm.setPixelSize(13)
+        self._btn_pm.setFont(f_pm)
+        self._btn_pm.setFixedHeight(34)
+        self._btn_pm.setStyleSheet(
+            "QPushButton {"
+            " background:#ffffff;"
+            " border:2px solid #378ADD;"
+            " border-radius:7px;"
+            " color:#378ADD;"
+            " font-size:13px;"
+            " font-weight:bold;"
+            " padding: 0 12px;"
+            " }"
+            "QPushButton:hover {"
+            " background:#e8f0fe;"
+            " border:2px solid #185FA5;"
+            " color:#185FA5;"
+            " }"
+        )
+        self._lbl_pm_name = QLabel("PM01_STANDARD")
+        self._lbl_pm_name.setStyleSheet("color:#999999; font-size:10px; background:transparent;")
+        pm_layout.addWidget(self._btn_pm, stretch=0)
+        pm_layout.addWidget(self._lbl_pm_name, stretch=1)
+        layout.addWidget(pm_widget)
+
+        # D) Carte Fmax/Xmax
+        self._card_fxmax = QWidget()
+        self._card_fxmax.setStyleSheet(
+            "background:#ffffff; border:1.5px solid #dddddd; border-radius:8px;"
+        )
+        self._card_fxmax.setMinimumHeight(90)
+        fxmax_layout = QVBoxLayout(self._card_fxmax)
+        fxmax_layout.setContentsMargins(14, 10, 14, 10)
+        fxmax_layout.setSpacing(8)
+
+        ligne_fmax = QWidget()
+        fmax_row = QHBoxLayout(ligne_fmax)
+        fmax_row.setContentsMargins(0, 4, 0, 4)
+        fmax_row.setSpacing(0)
+        lbl_ftext = QLabel("Fmax")
+        lbl_ftext.setStyleSheet(
+            "color:#888888; font-size:14px; border:none; background:transparent;"
+        )
+        fmax_row.addWidget(lbl_ftext)
+        fmax_row.addStretch(1)
+        self._lbl_fmax = QLabel("0.0 daN")
+        self._lbl_fmax.setStyleSheet(
+            "font-size:22px; font-weight:bold; color:#C49A3C;"
+            " border:none; background:transparent;"
+        )
+        self._lbl_fmax.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        fmax_row.addWidget(self._lbl_fmax)
+        fmax_row.addSpacing(12)
+        fxmax_layout.addWidget(ligne_fmax)
+
+        sep_fxmax = QFrame()
+        sep_fxmax.setFixedHeight(1)
+        sep_fxmax.setStyleSheet("background:#eeeeee; border:none;")
+        fxmax_layout.addWidget(sep_fxmax)
+
+        ligne_xmax = QWidget()
+        xmax_row = QHBoxLayout(ligne_xmax)
+        xmax_row.setContentsMargins(0, 4, 0, 4)
+        xmax_row.setSpacing(0)
+        lbl_xtext = QLabel("Xmax")
+        lbl_xtext.setStyleSheet(
+            "color:#888888; font-size:14px; border:none; background:transparent;"
+        )
+        xmax_row.addWidget(lbl_xtext)
+        xmax_row.addStretch(1)
+        self._lbl_xmax = QLabel("0.0 mm")
+        self._lbl_xmax.setStyleSheet(
+            "font-size:22px; font-weight:bold; color:#C49A3C;"
+            " border:none; background:transparent;"
+        )
+        self._lbl_xmax.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        xmax_row.addWidget(self._lbl_xmax)
+        xmax_row.addSpacing(12)
+        fxmax_layout.addWidget(ligne_xmax)
+        layout.addWidget(self._card_fxmax)
+
+        # E) Carte Force/Position
+        self._card_live = QWidget()
+        self._card_live.setStyleSheet(
+            "background:#ffffff; border:1.5px solid #dddddd; border-radius:8px;"
+        )
+        self._card_live.setMinimumHeight(110)
+        live_layout = QVBoxLayout(self._card_live)
+        live_layout.setContentsMargins(14, 10, 14, 10)
+        live_layout.setSpacing(8)
+
+        ligne_force = QWidget()
+        layout_f = QHBoxLayout(ligne_force)
+        layout_f.setContentsMargins(0, 4, 0, 4)
+        layout_f.setSpacing(0)
+        lbl_force_titre = QLabel("Force")
+        lbl_force_titre.setStyleSheet(
+            "color:#888888; font-size:14px; border:none; background:transparent;"
+        )
+        layout_f.addWidget(lbl_force_titre)
+        layout_f.addStretch(1)
+        self._lbl_force = QLabel("0.0 daN")
+        self._lbl_force.setStyleSheet(
+            "font-size:22px; font-weight:bold; color:#333333;"
+            " border:none; background:transparent;"
+        )
+        self._lbl_force.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        layout_f.addWidget(self._lbl_force)
+        self._dot = QLabel()
+        self._dot.setFixedSize(8, 8)
+        self._dot.setStyleSheet("background:#2e7d32; border-radius:4px; border:none;")
+        layout_f.addSpacing(4)
+        layout_f.addWidget(self._dot)
+        layout_f.setAlignment(self._dot, Qt.AlignmentFlag.AlignVCenter)
+        layout_f.addSpacing(0)
+        live_layout.addWidget(ligne_force)
+
+        sep_live = QFrame()
+        sep_live.setFixedHeight(1)
+        sep_live.setStyleSheet("background:#eeeeee; border:none;")
+        live_layout.addWidget(sep_live)
+
+        ligne_position = QWidget()
+        layout_p = QHBoxLayout(ligne_position)
+        layout_p.setContentsMargins(0, 4, 0, 4)
+        layout_p.setSpacing(0)
+        lbl_pos_titre = QLabel("Position")
+        lbl_pos_titre.setStyleSheet(
+            "color:#888888; font-size:14px; border:none; background:transparent;"
+        )
+        layout_p.addWidget(lbl_pos_titre)
+        layout_p.addStretch(1)
+        self._lbl_position = QLabel("0.0 mm")
+        self._lbl_position.setStyleSheet(
+            "font-size:22px; font-weight:bold; color:#333333;"
+            " border:none; background:transparent;"
+        )
+        self._lbl_position.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        layout_p.addWidget(self._lbl_position)
+        layout_p.addSpacing(12)
+        live_layout.addWidget(ligne_position)
+
+        self._pos_bar_bg = QWidget()
+        self._pos_bar_bg.setFixedHeight(8)
+        self._pos_bar_bg.setStyleSheet("background:#eeeeee; border-radius:4px;")
+        self._pos_fill = QWidget(self._pos_bar_bg)
+        self._pos_fill.setFixedHeight(8)
+        self._pos_fill.setStyleSheet("background:#2e7d32; border-radius:4px;")
+        self._pos_fill.setFixedWidth(0)
+        live_layout.addWidget(self._pos_bar_bg)
+        layout.addWidget(self._card_live)
+
+        self._lbl_force_live = self._lbl_force
+        self._lbl_pos_live = self._lbl_position
+        self._dot_force = self._dot
+        self._pos_bar_fill = self._pos_fill
+
+    def set_result(self, etat):
+        if etat == "OK":
+            self._badge.setText("OK")
+            self._badge.setStyleSheet(
+                "background:#e8f5e9; border:2px solid #a5d6a7;"
+                " border-radius:8px; color:#2e7d32; font-size:46px; font-weight:bold;"
+            )
+        elif etat == "NOK":
+            self._badge.setText("NOK")
+            self._badge.setStyleSheet(
+                "background:#fce4ec; border:2px solid #c62828;"
+                " border-radius:8px; color:#c62828; font-size:46px; font-weight:bold;"
+            )
+        else:
+            self._badge.setText("En Attente")
+            self._badge.setStyleSheet(
+                "background:#f0f0f0; border:2px solid #cccccc;"
+                " border-radius:8px; color:#aaaaaa; font-size:26px; font-weight:bold;"
+            )
+
+    def update_result(self, ok):
+        if ok is True:
+            self.set_result("OK")
+        elif ok is False:
+            self.set_result("NOK")
+        else:
+            self.set_result("idle")
+
+    def update_counters(self, ok, nok, total):
+        self._lbl_ok.setText(str(ok))
+        self._lbl_nok.setText(str(nok))
+        self._lbl_total.setText(str(total))
+
+    def update_fmax(self, val: str):
+        self._lbl_fmax.setText(val)
+
+    def update_xmax(self, val: str):
+        self._lbl_xmax.setText(val)
+
+    def update_force_live(self, val: str):
+        self._lbl_force.setText(val)
+
+    def update_position_live(self, val: str):
+        self._lbl_position.setText(val)
+
+    def update_pos_bar(self, ratio: float):
+        new_w = int(ratio * self._pos_bar_bg.width())
+        self._pos_fill.setFixedWidth(max(0, new_w))
+
 class MainWindow(QMainWindow):
+    def update_result(self, ok):
+        if not hasattr(self, "_panneau_haut"):
+            return
+        if ok is True:
+            self._panneau_haut.set_result("OK")
+        elif ok is False:
+            self._panneau_haut.set_result("NOK")
+        elif isinstance(ok, str) and ok.upper() in {"OK", "NOK"}:
+            self._panneau_haut.set_result(ok.upper())
+        else:
+            self._panneau_haut.set_result("idle")
+
+    def update_counters(self, ok, nok, total):
+        if hasattr(self, "_panneau_haut"): self._panneau_haut.update_counters(ok, nok, total)
+
+    def update_fmax(self, val):
+        if hasattr(self, "_panneau_haut"): self._panneau_haut.update_fmax(val)
+
+    def update_xmax(self, val):
+        if hasattr(self, "_panneau_haut"): self._panneau_haut.update_xmax(val)
+
     """Fenêtre principale IHM riveteuse (1280×720, plein écran sans barre)."""
 
     # Définition : initialise l'état global de la fenêtre principale.
@@ -2861,11 +3174,11 @@ class MainWindow(QMainWindow):
         screen_w = screen_size.width()
         screen_h = screen_size.height()
 
-        print(f"[IHM] Résolution détectée : {screen_w}×{screen_h}")
+        print(f"[IHM] Résolution détectée : 720×1280")
 
         # Plein écran sans barre de titre
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.setGeometry(0, 0, screen_w, screen_h)
+        self.setGeometry(0, 0, 720, 1280)
         self.showFullScreen()
 
     # ------------------------------------------------------------------
@@ -2897,109 +3210,126 @@ class MainWindow(QMainWindow):
 
     # Définition : construit la page de production complète.
     def _build_production_page(self) -> QWidget:
-        # QWidget : racine de la page production.
         page = QWidget()
         page.setObjectName("production_page")
-        v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
 
-        # Ligne contenu : graphique | panneau droit
-        # QWidget : zone horizontale graphique + panneau droit.
-        content = QWidget()
-        h = QHBoxLayout(content)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(0)
+        layout_principal = QVBoxLayout(page)
+        layout_principal.setContentsMargins(0, 0, 0, 0)
+        layout_principal.setSpacing(0)
 
-        # Graphique (QStackedWidget : courbe ou table données)
-        # QStackedWidget : bascule courbe / table / stats.
+        self._panneau_stack = QStackedWidget()
+        self._panneau_stack.setFixedHeight(440)
+        self._panneau_normal = self._build_panneau_normal()
+        self._panneau_zones = self._build_panneau_zones()
+        self._panneau_stack.addWidget(self._panneau_normal)
+        self._panneau_stack.addWidget(self._panneau_zones)
+        self._panneau_stack.setCurrentIndex(0)
+
         self._content_stack = QStackedWidget()
         self._graph = GraphWidget()
         self._graph.set_tools(self._tools)
+        self._graph.setMinimumHeight(150)
+        self._graph.setMaximumHeight(550)
+        self._graph_frame = QWidget()
+        self._graph_frame.setStyleSheet(
+            "background:#ffffff; border:2px solid #bbbbbb; border-radius:8px;"
+        )
+        graph_frame_layout = QVBoxLayout(self._graph_frame)
+        graph_frame_layout.setContentsMargins(6, 6, 6, 6)
+        graph_frame_layout.setSpacing(0)
+        graph_frame_layout.addWidget(self._graph, stretch=1)
+
+        graph_outer = QWidget()
+        graph_outer_layout = QVBoxLayout(graph_outer)
+        graph_outer_layout.setContentsMargins(8, 6, 8, 6)
+        graph_outer_layout.setSpacing(0)
+        graph_outer_layout.addWidget(self._graph_frame, stretch=1)
+        self._graph_page = graph_outer
+
         self._data_table = self._build_data_table()
         self._stats_widget = _StatsWidget()
-        self._content_stack.addWidget(self._graph)        # index 0
-        self._content_stack.addWidget(self._data_table)   # index 1
-        self._content_stack.addWidget(self._stats_widget) # index 2
-        self._graph.setMinimumWidth(860)
-        h.addWidget(self._content_stack, stretch=1)
+        self._content_stack.addWidget(self._graph_page)
+        self._content_stack.addWidget(self._data_table)
+        self._content_stack.addWidget(self._stats_widget)
 
-        # Panneau droit — 330px fixe (normal + édition)
-        # QStackedWidget : bascule panneau droit normal / édition.
+        # Dummy _right_stack — requis par _toggle_edit_mode (no-op)
         self._right_stack = QStackedWidget()
-        self._right_stack.setFixedWidth(330)
-        right = self._build_right_panel()
-        self._right_stack.addWidget(right)           # index 0 : normal
-        self._edit_panel = self._build_edit_panel()
-        self._right_stack.addWidget(self._edit_panel) # index 1 : édition
-        h.addWidget(self._right_stack)
 
-        v.addWidget(content, stretch=1)
-        v.addWidget(self._build_nav_bar())
+        layout_principal.addWidget(self._panneau_stack)             # 440px
+        layout_principal.addWidget(self._content_stack, stretch=1)  # graph stretch=1
+
+        self._tabs_bar = self._build_tabs_bar()
+        layout_principal.addWidget(self._tabs_bar)                  # 136px
+
+        self._barre_nav = self._build_nav_bar()
+        layout_principal.addWidget(self._barre_nav)                 # 100px
+
         return page
+
+    def _build_panneau_normal(self) -> QWidget:
+        self._panneau_haut = PanneauHaut(self)
+        self._panneau_haut._btn_pm.clicked.connect(self._on_pm_clicked)
+        pm = PM_DEFINITIONS.get(self._pm_id)
+        self._panneau_haut._btn_pm.setText(f"PM-{self._pm_id:02d}")
+        self._panneau_haut._lbl_pm_name.setText(pm.name if pm else f"PM-{self._pm_id:02d}")
+        return self._panneau_haut
+
+    def _build_panneau_zones(self) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet("background:#f5f4f0;")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        panel = self._build_edit_panel()
+        layout.addWidget(panel, stretch=1)
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(12, 0, 12, 12)
+        actions.setSpacing(8)
+
+        self._btn_zone_apply = QPushButton("✓ Appliquer")
+        self._btn_zone_apply.setFixedHeight(44)
+        self._btn_zone_apply.setStyleSheet(
+            "background:#e8f5e9; border:1.5px solid #a5d6a7; border-radius:7px;"
+            " color:#2e7d32; font-size:13px; font-weight:bold;"
+        )
+        self._btn_zone_apply.clicked.connect(self._on_zone_apply_clicked)
+
+        self._btn_zone_cancel = QPushButton("✗ Annuler")
+        self._btn_zone_cancel.setFixedHeight(44)
+        self._btn_zone_cancel.setStyleSheet(
+            "background:#fce4ec; border:1.5px solid #ef9a9a; border-radius:7px;"
+            " color:#c62828; font-size:13px; font-weight:bold;"
+        )
+        self._btn_zone_cancel.clicked.connect(self._on_zone_cancel_clicked)
+
+        actions.addWidget(self._btn_zone_apply, stretch=1)
+        actions.addWidget(self._btn_zone_cancel, stretch=1)
+        layout.addLayout(actions)
+        return container
+
+    def _on_zone_apply_clicked(self) -> None:
+        self._apply_zone_edits()
+        if hasattr(self, "_panneau_stack"):
+            self._panneau_stack.setCurrentIndex(0)
+        self._set_active_tab(self._btn_courbe)
+
+    def _on_zone_cancel_clicked(self) -> None:
+        self._cancel_zone_edits()
+        if hasattr(self, "_panneau_stack"):
+            self._panneau_stack.setCurrentIndex(0)
+        self._set_active_tab(self._btn_courbe)
 
     # ------------------------------------------------------------------
     # Panneau droit — résultat + compteurs + PM + peaks + live + réglages
     # ------------------------------------------------------------------
 
     # Définition : construit le panneau droit de supervision.
-    def _build_right_panel(self) -> QWidget:
-        # QWidget : conteneur du panneau droit.
-        panel = QWidget()
-        self._right_panel = panel
-        self._right_panel.setFixedWidth(330)
-        panel.setStyleSheet(
-            f"background-color: {get_colors()['panel_bg']}; "
-            f"border-left: 1px solid {get_colors()['separator']};"
-        )
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(2)
-
-
-
-        # QPushButton : connexion/déconnexion utilisateur.
-        self._access_btn = QPushButton(f"👤  {t('btn_login')}")
-        self._access_btn.setFixedHeight(32)
-        self._access_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._access_btn.clicked.connect(self._on_login_clicked)
-        layout.addWidget(self._access_btn)
-
-        layout.addWidget(self._build_result_badge())
-        layout.addWidget(self._build_counters_section())
-        layout.addSpacing(1)
-        layout.addWidget(self._build_datetime_section())
-        sep_pm = make_hseparator(get_colors()["separator"])
-        sep_pm.setFixedHeight(1)
-        layout.addWidget(sep_pm)
-        layout.addWidget(self._build_peaks_section())
-        sep_peaks = make_hseparator(get_colors()["separator"])
-        sep_peaks.setFixedHeight(1)
-        layout.addWidget(sep_peaks)
-        layout.addStretch()
-        self._build_live_section(layout)
-        layout.addStretch()
-        # QWidget : ligne basse horloge + bouton réglages.
-        bottom_row = QWidget()
-        bottom_row.setFixedHeight(48)
-        bottom_h = QHBoxLayout(bottom_row)
-        bottom_h.setContentsMargins(6, 4, 6, 4)
-        bottom_h.setSpacing(6)
-        # QLabel : horloge temps réel.
-        self._clock_label = QLabel(datetime.now().strftime("%d/%m/%Y  %H:%M:%S"))
-        self._clock_label.setObjectName("datetime_label")
-        self._clock_label.setFixedHeight(24)
-        self._clock_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._clock_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        bottom_h.addWidget(self._clock_label, stretch=1)
-        bottom_h.addWidget(self._build_settings_button(), stretch=0)
-        layout.addWidget(bottom_row)
-        return panel
-
-    # Définition : construit le panneau d'édition des zones.
     def _build_edit_panel(self) -> QWidget:
         # QWidget : conteneur du panneau d'édition.
         panel = QWidget()
+        panel.setFixedHeight(400)
         panel.setStyleSheet(
             f"background-color: {get_colors()['panel_bg']}; "
             f"border-left: 1px solid {get_colors()['separator']};"
@@ -3020,7 +3350,8 @@ class MainWindow(QMainWindow):
         for i in range(MAX_NO_PASS_ZONES):
             # QPushButton : active/désactive une zone NO-PASS.
             btn = QPushButton(f"Z{i + 1}")
-            btn.setFixedSize(44, 36)
+            btn.setFixedHeight(44)
+            btn.setMinimumWidth(0)
             btn.setCheckable(True)
             btn.setStyleSheet(
                 "background-color: #FAFAF8; color: #4A4844; "
@@ -3030,9 +3361,8 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(
                 lambda checked, idx=i: self._on_zone_btn_clicked(idx, checked)
             )
-            zone_btn_row.addWidget(btn)
+            zone_btn_row.addWidget(btn, stretch=1)
             self._zone_btns.append(btn)
-        zone_btn_row.addStretch()
         layout.addLayout(zone_btn_row)
 
         # --- Ligne de boutons UB1-UB5 ---
@@ -3042,19 +3372,19 @@ class MainWindow(QMainWindow):
         for i in range(MAX_NO_PASS_ZONES):  # MAX_UNI_BOX_ZONES = 5 = MAX_NO_PASS_ZONES
             # QPushButton : active/désactive une zone UNI-BOX.
             btn = QPushButton(f"UB{i + 1}")
-            btn.setFixedSize(44, 36)
+            btn.setFixedHeight(44)
+            btn.setMinimumWidth(0)
             btn.setCheckable(True)
             btn.setStyleSheet(
                 "background-color: #FAFAF8; color: #4A4844; "
                 "border: 1px solid #C8C4BC; border-radius: 6px; "
-                "font-size: 11px; font-weight: bold;"
+                "font-size: 13px; font-weight: bold;"
             )
             btn.clicked.connect(
                 lambda checked, idx=i: self._on_ub_btn_clicked(idx, checked)
             )
-            ub_btn_row.addWidget(btn)
+            ub_btn_row.addWidget(btn, stretch=1)
             self._ub_btns.append(btn)
-        ub_btn_row.addStretch()
         layout.addLayout(ub_btn_row)
 
         layout.addWidget(make_hseparator())
@@ -3611,7 +3941,7 @@ class MainWindow(QMainWindow):
 
     _SETTINGS_BTN_STYLE = (
         "background-color: #FAFAF8; color: #1A1A18;"
-        " font-size: 13px; font-weight: 600;"
+        " font-size: 18px; font-weight: 600;"
         " border: 1px solid #888480; border-radius: 4px;"
         " padding: 0 8px; outline: none;"
     )
@@ -3646,98 +3976,181 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(150, lambda: btn.setStyleSheet(base_style))
 
     # ------------------------------------------------------------------
+    # Barre d'onglets (tabs) — sous le graphe
+    # ------------------------------------------------------------------
+
+    _TAB_NORMAL = (
+        "background:#ffffff; border:1px solid #dddddd; border-radius:6px;"
+        " color:#888888; font-size:16px; font-weight:bold;"
+    )
+    _TAB_ACTIVE = (
+        "background:#fffbf0; border:1px solid #C49A3C; border-radius:6px;"
+        " color:#C49A3C; font-size:16px; font-weight:bold;"
+    )
+    _TAB_RAZ = (
+        "background:#fff5f5; border:1px solid #ef9a9a; border-radius:6px;"
+        " color:#c62828; font-size:16px; font-weight:bold;"
+    )
+
+    def _set_active_tab(self, btn: QPushButton) -> None:
+        for b in [
+            self._btn_courbe,
+            self._btn_historique,
+            self._btn_donnees,
+            self._btn_stats,
+            self._btn_zones,
+            self._btn_raz,
+        ]:
+            if b is self._btn_raz:
+                b.setStyleSheet(self._TAB_RAZ)
+            else:
+                b.setStyleSheet(self._TAB_NORMAL)
+
+        if btn is not self._btn_raz:
+            btn.setStyleSheet(self._TAB_ACTIVE)
+
+        if btn is not self._btn_zones:
+            if hasattr(self, "_panneau_stack"):
+                self._panneau_stack.setCurrentIndex(0)
+            if hasattr(self, "_edit_mode") and self._edit_mode:
+                self._cancel_zone_edits()
+
+    def _build_tabs_bar(self) -> QWidget:
+        bar = QWidget()
+        bar.setFixedHeight(136)
+        bar.setStyleSheet(
+            "background:#e8e4db; border-top:1px solid #cccccc;"
+            " border-bottom:1px solid #cccccc;"
+        )
+        v = QVBoxLayout(bar)
+        v.setContentsMargins(6, 5, 6, 5)
+        v.setSpacing(4)
+        h1 = QHBoxLayout()
+        h1.setSpacing(4)
+        h2 = QHBoxLayout()
+        h2.setSpacing(4)
+
+        self._btn_courbe     = QPushButton("Courbe")
+        self._btn_historique = QPushButton("Historique")
+        self._btn_donnees    = QPushButton("Données")
+        self._btn_stats      = QPushButton("Stats")
+        self._btn_zones      = QPushButton("Zones")
+        self._btn_raz        = QPushButton("RAZ")
+
+        self._tab_buttons = [
+            self._btn_courbe, self._btn_historique, self._btn_donnees,
+            self._btn_stats, self._btn_zones, self._btn_raz,
+        ]
+
+        for btn in self._tab_buttons:
+            btn.setFixedHeight(58)
+            btn.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+
+        self._btn_raz.setStyleSheet(self._TAB_RAZ)
+        self._btn_raz.setObjectName("nav_btn_red")
+
+        for btn in [self._btn_courbe, self._btn_historique, self._btn_donnees]:
+            h1.addWidget(btn, stretch=1)
+        for btn in [self._btn_stats, self._btn_zones, self._btn_raz]:
+            h2.addWidget(btn, stretch=1)
+
+        v.addLayout(h1)
+        v.addLayout(h2)
+
+        self._btn_courbe.clicked.connect(lambda: (
+            self._show_current_curve(),
+            self._set_active_tab(self._btn_courbe),
+        ))
+        self._btn_historique.clicked.connect(lambda: (
+            self._show_history(),
+            self._set_active_tab(self._btn_historique),
+        ))
+        self._btn_donnees.clicked.connect(lambda: (
+            self._show_data_table(),
+            self._set_active_tab(self._btn_donnees),
+        ))
+        self._btn_stats.clicked.connect(lambda: (
+            self._show_stats(),
+            self._set_active_tab(self._btn_stats),
+        ))
+        self._btn_zones.clicked.connect(self._show_zones_panel)
+        self._btn_raz.clicked.connect(self._reset_counters)
+
+        self._set_active_tab(self._btn_courbe)
+        return bar
+
+    def _show_zones_panel(self) -> None:
+        if hasattr(self, "_panneau_stack"):
+            self._panneau_stack.setCurrentIndex(1)
+        self._set_active_tab(self._btn_zones)
+        if not getattr(self, "_edit_mode", False):
+            self._toggle_edit_mode()
+
+    # ------------------------------------------------------------------
     # Barre de navigation bas
     # ------------------------------------------------------------------
 
     # Définition : construit la barre de navigation inférieure.
     def _build_nav_bar(self) -> QWidget:
-        # QWidget : conteneur de la barre de navigation.
-        bar = QWidget()
-        bar.setFixedHeight(70)
-        bar.setStyleSheet(
-            f"background-color: {get_colors()['panel_bg']}; "
-            f"border-top: 1px solid {get_colors()['separator']};"
+        _NAV_NORMAL = (
+            "background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:10px; color:#888888;"
+            " font-size:18px; font-weight:bold;"
         )
+
+        bar = QWidget()
+        bar.setFixedHeight(100)
+        bar.setVisible(True)
+        bar.setStyleSheet("background:#ede9e0; border-top:1px solid #cccccc;")
+
         h = QHBoxLayout(bar)
-        h.setContentsMargins(6, 6, 6, 6)
-        h.setSpacing(6)
+        h.setContentsMargins(12, 10, 12, 10)
+        h.setSpacing(12)
 
-        self._nav_btn_group = QButtonGroup(self)
-        self._nav_btn_group.setExclusive(True)
+        nav_font = QFont("Arial", 16)
 
-        self._nav_buttons: dict[str, QPushButton] = {}
-        specs = [
-            ("current", f"📈  {t('nav_current')}", "nav_btn",    self._show_current_curve, True),
-            ("history", f"🕐  {t('nav_history')}", "nav_btn",    self._show_history,       False),
-            ("data",    f"📊  {t('nav_data')}",    "nav_btn",    self._show_data_table,    False),
-            ("stats",   f"📊  {t('nav_stats')}",   "nav_btn",    self._show_stats,         False),
-            ("zones",   "✏  Zones",               "nav_btn",    self._toggle_edit_mode,   False),
-            ("manual",  "▶  Démarrer cycle",      "nav_btn",    self._start_manual_cycle, False),
-            ("raz",     f"🔄  {t('nav_raz')}",     "nav_btn_red", self._reset_counters,     False),
-        ]
+        self._btn_settings = QPushButton("RÉGLAGES")
+        self._btn_settings.setFixedHeight(76)
+        self._btn_settings.setFont(nav_font)
+        self._btn_settings.setStyleSheet(_NAV_NORMAL)
+        self._btn_settings.setToolTip("Réglages")
+        self._btn_settings.clicked.connect(self._on_settings_clicked)
 
-        for key, label, obj_name, callback, checked in specs:
-            # QPushButton : bouton de navigation/action.
-            btn = QPushButton(label)
-            btn.setObjectName(obj_name)
-            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            btn.clicked.connect(callback)
-            btn.clicked.connect(lambda checked=False, b=btn: self._flash_nav_button(b))
-            self._nav_buttons[key] = btn
-            if obj_name == "nav_btn" and key not in ("zones", "manual"):
-                btn.setCheckable(True)
-                btn.setChecked(checked)
-                self._nav_btn_group.addButton(btn)
-            h.addWidget(btn, stretch=1)
+        btn_access_widget = QWidget()
+        btn_access_widget.setFixedHeight(76)
+        access_layout = QVBoxLayout(btn_access_widget)
+        access_layout.setContentsMargins(0, 0, 0, 0)
+        access_layout.setSpacing(2)
 
-        manual_btn = self._nav_buttons.get("manual")
-        if manual_btn is not None:
-            manual_btn.setVisible(False)
+        self._btn_access_inner = QPushButton("ACCÈS")
+        self._btn_access_inner.setFixedHeight(58)
+        self._btn_access_inner.setFont(nav_font)
+        self._btn_access_inner.setStyleSheet(_NAV_NORMAL)
+        self._btn_access_inner.setToolTip("Gestion des accès")
+        self._btn_access_inner.clicked.connect(self._on_login_clicked)
+        self._btn_access = self._btn_access_inner
 
-        self._nav_btn_group.buttonClicked.connect(lambda _: self._update_tab_buttons())
-        self._update_tab_buttons()
+        self._lbl_role = QLabel("OPÉ")
+        self._lbl_role.setFixedHeight(16)
+        self._lbl_role.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        access_layout.addWidget(self._btn_access_inner)
+        access_layout.addWidget(self._lbl_role)
+
+        h.addWidget(self._btn_settings, stretch=1)
+        h.addWidget(btn_access_widget, stretch=1)
+        self.update_access_badge("OPÉ")
 
         return bar
 
-    # Définition : applique le style actif/inactif des onglets nav.
     def _update_tab_buttons(self) -> None:
         """Applique le style actif/inactif sur les boutons de navigation cochables."""
-        for btn in self._nav_btn_group.buttons():
-            if btn.isChecked():
-                btn.setStyleSheet(
-                    "background-color: #7A5A20; color: #FFFFFF;"
-                    " border: 1px solid #A07830; border-radius: 6px;"
-                )
-            else:
-                btn.setStyleSheet("")
+        pass  # remplacé par _set_active_tab
 
     # Définition : applique un flash visuel sur le bouton de nav cliqué.
     def _flash_nav_button(self, btn: QPushButton) -> None:
         """Flash doré bref sur le bouton nav cliqué."""
-        btn.setStyleSheet(
-            "background-color: #A07830; color: #ffffff;"
-            " border: 1px solid #A07830; border-radius: 6px;"
-        )
-
-        # Définition : restaure le style normal après le flash.
-        def _restore() -> None:
-            # Conserve le style de sélection sur les onglets checkables.
-            if btn in self._nav_btn_group.buttons() and btn.isChecked():
-                self._update_tab_buttons()
-                return
-
-            # Conserve le style actif du bouton Zones pendant l'édition.
-            zones_btn = self._nav_buttons.get("zones") if hasattr(self, "_nav_buttons") else None
-            if zones_btn is btn and self._graph._edit_mode:
-                btn.setStyleSheet(
-                    "background-color: #7A5A20; color: #FFFFFF;"
-                    " border: 1px solid #A07830; border-radius: 6px;"
-                )
-                return
-
-            btn.setStyleSheet("")
-
-        QTimer.singleShot(150, _restore)
+        pass  # non utilisé dans la nouvelle nav
 
     # Définition : construit la table des cycles de production.
     def _build_data_table(self) -> QTableWidget:
@@ -3813,42 +4226,52 @@ class MainWindow(QMainWindow):
         content = badge_content.get(
             self._badge_style, badge_content["Texte"]
         )
-        self._result_badge.setText(content[status])
+        if hasattr(self, "_panneau_haut"):
+            etat = "OK" if status == "ok" else "NOK" if status == "nok" else "idle"
+            self._panneau_haut.set_result(etat)
+        elif hasattr(self, "_result_badge"):
+            self._result_badge.setText(content[status])
 
         if status == "ok":
-            self._result_badge.setStyleSheet(
-                f"background-color: {get_colors()['ok_bg']}; color: {get_colors()['ok_text']}; "
-                f"border: 2px solid {get_colors()['ok_border']}; border-radius: 10px; "
-                "font-size: 36px; font-weight: bold; padding: 8px;"
-            )
+            if hasattr(self, "_result_badge"):
+                self._result_badge.setStyleSheet(
+                    f"background-color: {get_colors()['ok_bg']}; color: {get_colors()['ok_text']}; "
+                    f"border: 2px solid {get_colors()['ok_border']}; border-radius: 10px; "
+                    "font-size: 36px; font-weight: bold; padding: 8px;"
+                )
             self._apply_state_style("ok")
             self._flash_badge()
         elif status == "nok":
-            self._result_badge.setStyleSheet(
-                f"background-color: {get_colors()['nok_bg']}; color: {get_colors()['nok_text']}; "
-                f"border: 2px solid {get_colors()['nok_border']}; border-radius: 10px; "
-                "font-size: 36px; font-weight: bold; padding: 8px;"
-            )
+            if hasattr(self, "_result_badge"):
+                self._result_badge.setStyleSheet(
+                    f"background-color: {get_colors()['nok_bg']}; color: {get_colors()['nok_text']}; "
+                    f"border: 2px solid {get_colors()['nok_border']}; border-radius: 10px; "
+                    "font-size: 36px; font-weight: bold; padding: 8px;"
+                )
             self._apply_state_style("nok")
             self._flash_badge()
         elif status == "running":
-            self._result_badge.setStyleSheet(
-                f"background-color: {get_colors()['running_bg']}; color: {get_colors()['nav_active']}; "
-                f"border: 2px solid {get_colors()['running_border']}; border-radius: 10px; "
-                "font-size: 36px; font-weight: bold; padding: 10px;"
-            )
+            if hasattr(self, "_result_badge"):
+                self._result_badge.setStyleSheet(
+                    f"background-color: {get_colors()['running_bg']}; color: {get_colors()['nav_active']}; "
+                    f"border: 2px solid {get_colors()['running_border']}; border-radius: 10px; "
+                    "font-size: 36px; font-weight: bold; padding: 10px;"
+                )
             self._apply_state_style("acquiring")
         else:  # idle
-            self._result_badge.setStyleSheet(
-                f"background-color: {get_colors()['idle_bg']}; color: {get_colors()['idle_text']}; "
-                f"border: 2px solid {get_colors()['border']}; border-radius: 10px; "
-                "font-size: 36px; font-weight: bold; padding: 10px;"
-            )
+            if hasattr(self, "_result_badge"):
+                self._result_badge.setStyleSheet(
+                    f"background-color: {get_colors()['idle_bg']}; color: {get_colors()['idle_text']}; "
+                    f"border: 2px solid {get_colors()['border']}; border-radius: 10px; "
+                    "font-size: 36px; font-weight: bold; padding: 10px;"
+                )
             self._apply_state_style("idle")
 
     # Définition : déclenche une animation de clignotement du badge.
     def _flash_badge(self) -> None:
         """Clignote 2 fois rapidement pour attirer l'attention."""
+        if not hasattr(self, "_result_badge"):
+            return
         original_style = self._result_badge.styleSheet()
 
         # Définition : étape 1 du clignotement du badge.
@@ -3904,8 +4327,9 @@ class MainWindow(QMainWindow):
             self._update_result_display("nok")
 
         self._update_counters()
-        self._fmax_label.setText(f"{fmt_force_dan(self._cycle_fmax)} daN")
-        self._xmax_label.setText(f"{self._cycle_xmax:.1f} mm")
+        if hasattr(self, "_panneau_haut"):
+            self._panneau_haut.update_fmax(f"{fmt_force_dan(self._cycle_fmax)} daN")
+            self._panneau_haut.update_xmax(f"{self._cycle_xmax:.1f} mm")
 
         now = datetime.now().strftime("%H:%M:%S")
         cycle_num = self._count_ok + self._count_nok
@@ -4060,24 +4484,13 @@ class MainWindow(QMainWindow):
 
     # Définition : met à jour les valeurs live et alarmes visuelles.
     def _update_live_values(self, force_n: float, pos_mm: float) -> None:
-        self._force_value.setText(f"{fmt_force_dan(force_n)} daN")
-        self._force_bar.setValue(int(min(force_n, FORCE_NEWTON_MAX)))
-        alarm_f = "true" if force_n >= FORCE_THRESHOLD_N else "false"
-        if self._force_bar.property("alarm") != alarm_f:
-            self._force_bar.setProperty("alarm", alarm_f)
-            self._force_bar.style().unpolish(self._force_bar)
-            self._force_bar.style().polish(self._force_bar)
-
-        self._pos_value.setText(f"{pos_mm:.1f} mm")
-        self._pos_bar.setValue(int(min(pos_mm, POSITION_MM_MAX)))
-        alarm_p = "true" if pos_mm >= POSITION_THRESHOLD_MM else "false"
-        if self._pos_bar.property("alarm") != alarm_p:
-            self._pos_bar.setProperty("alarm", alarm_p)
-            self._pos_bar.style().unpolish(self._pos_bar)
-            self._pos_bar.style().polish(self._pos_bar)
-
-        self._fmax_label.setText(f"{fmt_force_dan(self._cycle_fmax)} daN")
-        self._xmax_label.setText(f"{self._cycle_xmax:.1f} mm")
+        if hasattr(self, "_panneau_haut"):
+            self._panneau_haut.update_force_live(f"{fmt_force_dan(force_n)} daN")
+            self._panneau_haut.update_position_live(f"{pos_mm:.1f} mm")
+            ratio = min(pos_mm / POSITION_MM_MAX, 1.0) if POSITION_MM_MAX > 0 else 0.0
+            self._panneau_haut.update_pos_bar(ratio)
+            self._panneau_haut.update_fmax(f"{fmt_force_dan(self._cycle_fmax)} daN")
+            self._panneau_haut.update_xmax(f"{self._cycle_xmax:.1f} mm")
 
     # ------------------------------------------------------------------
     # Actions barre de navigation
@@ -4128,8 +4541,11 @@ class MainWindow(QMainWindow):
     # Définition : active/désactive le mode d'édition des zones.
     def _toggle_edit_mode(self) -> None:
         new_mode = not self._graph._edit_mode
+        self._edit_mode = new_mode
         self._graph.set_edit_mode(new_mode)
         if new_mode:
+            if hasattr(self, "_panneau_stack"):
+                self._panneau_stack.setCurrentIndex(1)
             self._edit_bar.setVisible(True)
             gw = self._graph
             bar_h = 60
@@ -4139,20 +4555,10 @@ class MainWindow(QMainWindow):
             self._refresh_edit_panel()
             self._update_zone_buttons()
         else:
+            if hasattr(self, "_panneau_stack"):
+                self._panneau_stack.setCurrentIndex(0)
             self._edit_bar.setVisible(False)
             self._right_stack.setCurrentIndex(0)
-        for btn in self.findChildren(QPushButton):
-            if "Zones" in btn.text():
-                if new_mode:
-                    btn.setText("✏  Zones ●")
-                    btn.setStyleSheet(
-                        "background-color: #7A5A20; color: #FFFFFF;"
-                        " border: 1px solid #A07830; border-radius: 6px;"
-                    )
-                else:
-                    btn.setText("✏  Zones")
-                    btn.setStyleSheet("")
-                break
 
     # Définition : sauvegarde les zones éditées dans la configuration.
     def _apply_zone_edits(self) -> None:
@@ -4184,15 +4590,12 @@ class MainWindow(QMainWindow):
         self._graph.set_tools(new_tools)
 
         self._graph.set_edit_mode(False)
+        self._edit_mode = False
         self._edit_bar.setVisible(False)
         self._graph._tools_config_backup = None
         self._right_stack.setCurrentIndex(0)
-
-        for btn in self.findChildren(QPushButton):
-            if "Zones" in btn.text():
-                btn.setText("✏  Zones")
-                btn.setStyleSheet("")
-                break
+        if hasattr(self, "_panneau_stack"):
+            self._panneau_stack.setCurrentIndex(0)
 
         QMessageBox.information(
             self, "Zones sauvegardées",
@@ -4208,14 +4611,11 @@ class MainWindow(QMainWindow):
             )
 
         self._graph.set_edit_mode(False)
+        self._edit_mode = False
         self._edit_bar.setVisible(False)
         self._right_stack.setCurrentIndex(0)
-
-        for btn in self.findChildren(QPushButton):
-            if "Zones" in btn.text():
-                btn.setText("✏  Zones")
-                btn.setStyleSheet("")
-                break
+        if hasattr(self, "_panneau_stack"):
+            self._panneau_stack.setCurrentIndex(0)
 
         self._graph.update()
 
@@ -4258,13 +4658,8 @@ class MainWindow(QMainWindow):
     # Définition : met à jour les compteurs OK/NOK/TOTAL.
     def _update_counters(self) -> None:
         total = self._count_ok + self._count_nok
-        self._ok_count_label.setText(f"✓  {self._count_ok}")
-        self._nok_count_label.setText(f"✗  {self._count_nok}")
-        self._total_count_label.setText(f"Σ  {total}")
-        if self._count_ok > 0:
-            self._animate_counter(self._ok_count_label)
-        if self._count_nok > 0:
-            self._animate_counter(self._nok_count_label)
+        if hasattr(self, "_panneau_haut"):
+            self._panneau_haut.update_counters(self._count_ok, self._count_nok, total)
 
     # Définition : met à jour l'horloge de l'interface.
     def _update_datetime(self) -> None:
@@ -4379,6 +4774,9 @@ class MainWindow(QMainWindow):
         pm_name = pm.name if pm else f"PM-{pm_id:02d}"
         if hasattr(self, "_pm_btn"):
             self._pm_btn.setToolTip(f"PM-{pm_id:02d}  ·  {pm_name}")
+        if hasattr(self, "_panneau_haut"):
+            self._panneau_haut._btn_pm.setText(f"PM-{pm_id:02d}")
+            self._panneau_haut._lbl_pm_name.setText(pm_name)
         self._refresh_datetime_line()
 
         # Recharger les overlays visuels depuis config.yaml
@@ -4390,8 +4788,9 @@ class MainWindow(QMainWindow):
         # Réinitialiser l'affichage du cycle
         self._cycle_fmax = 0.0
         self._cycle_xmax = 0.0
-        self._fmax_label.setText("0.0 daN")
-        self._xmax_label.setText("0.0 mm")
+        if hasattr(self, "_panneau_haut"):
+            self._panneau_haut.update_fmax("0.0 daN")
+            self._panneau_haut.update_xmax("0.0 mm")
         self._update_result_display("idle")
 
     # Définition : applique le thème graphique de l'IHM.
@@ -4549,7 +4948,7 @@ QPushButton#nav_btn_red:pressed {{
     def apply_language(self) -> None:
         """Applique la langue courante aux chaînes traduisibles de l'IHM."""
         # Bouton Réglages
-        self._settings_btn.setText(f"⚙   {t('btn_settings')}")
+        self._btn_settings.setText(t("btn_settings").upper())
         if hasattr(self, "_pm_title_label"):
             self._pm_title_label.setText(t("app_title"))
 
@@ -4608,7 +5007,8 @@ QPushButton#nav_btn_red:pressed {{
 
         self._update_level_indicator()
 
-        self._result_badge.setText(t("status_idle"))
+        if hasattr(self, "_result_badge"):
+            self._result_badge.setText(t("status_idle"))
 
     # Définition : définit le niveau d'accès actif.
     def set_access_level(self, level: int) -> None:
@@ -4620,33 +5020,34 @@ QPushButton#nav_btn_red:pressed {{
     # Définition : met à jour l'indicateur visuel de niveau d'accès.
     def _update_level_indicator(self) -> None:
         """Met à jour le bouton d'accès (état + action de connexion)."""
-        if not hasattr(self, "_access_btn"):
+        if not hasattr(self, "_btn_access"):
             return
-        if not self._access_enabled:
-            text, fg, bg, border = (t("level_free_icon"), "#6B6860", "#F2F0EB", "#E8E4DC")
-        else:
-            configs = {
-                AccessLevel.NONE:       (f"👤  {t('btn_login')}",   "#4A4844", "#F2F0EB", "#C8C4BC"),
-                AccessLevel.OPERATEUR:  (f"🟢  {t('level_operator')}", "#2E7D32", "#F1F8E9", "#2E7D32"),
-                AccessLevel.TECHNICIEN: (f"🟡  {t('level_tech')}",     "#A07830", "#FFF8E1", "#C49A3C"),
-                AccessLevel.ADMIN:      (f"🔴  {t('level_admin')}",    "#A07830", "#FFF8E1", "#C49A3C"),
-            }
-            text, fg, bg, border = configs.get(
-                self._access_level, (f"👤  {t('btn_login')}", "#4A4844", "#F2F0EB", "#C8C4BC")
-            )
-        self._access_btn.setText(text)
-        self._access_btn.setStyleSheet(
-            f"background-color: {bg}; color: {fg}; "
-            "font-size: 13px; font-weight: bold; border-radius: 6px; padding: 0 10px; "
-            f"border: 1px solid {border};"
-        )
+        badge_map = {
+            AccessLevel.NONE:       "OPÉ",
+            AccessLevel.OPERATEUR:  "OPÉ",
+            AccessLevel.TECHNICIEN: "TECH",
+            AccessLevel.ADMIN:      "ADM",
+        }
+        self.update_access_badge(badge_map.get(self._access_level, "OPÉ"))
+
+    def update_access_badge(self, niveau: str) -> None:
+        """Met à jour le badge de niveau d'accès sous le bouton 👤. niveau = 'OPÉ'|'TECH'|'ADM'"""
+        if not hasattr(self, "_lbl_role"):
+            return
+        styles = {
+            "OPÉ":  "background:#e8eaf6;color:#3949ab;border-radius:3px;padding:1px 4px;font-size:9px;font-weight:bold;",
+            "TECH": "background:#fff3e0;color:#e65100;border-radius:3px;padding:1px 4px;font-size:9px;font-weight:bold;",
+            "ADM":  "background:#fce4ec;color:#c62828;border-radius:3px;padding:1px 4px;font-size:9px;font-weight:bold;",
+        }
+        self._lbl_role.setText(niveau)
+        self._lbl_role.setStyleSheet(styles.get(niveau, styles["OPÉ"]))
 
     # Définition : applique les droits d'accès sur les contrôles UI.
     def _update_ui_for_access_level(self) -> None:
         """Active/désactive les boutons selon le niveau d'accès courant."""
         if not self._access_enabled:
-            self._pm_btn.setEnabled(True)
-            self._settings_btn.setEnabled(True)
+            self._panneau_haut._btn_pm.setEnabled(True)
+            self._btn_settings.setEnabled(True)
             for btn in self.findChildren(QPushButton):
                 if btn.objectName() == "nav_btn_red":
                     btn.setEnabled(True)
@@ -4654,12 +5055,12 @@ QPushButton#nav_btn_red:pressed {{
 
         level = self._access_level
         # PM et RAZ : Technicien et Admin uniquement
-        self._pm_btn.setEnabled(level >= AccessLevel.TECHNICIEN)
+        self._panneau_haut._btn_pm.setEnabled(level >= AccessLevel.TECHNICIEN)
         for btn in self.findChildren(QPushButton):
             if btn.objectName() == "nav_btn_red":
                 btn.setEnabled(level >= AccessLevel.TECHNICIEN)
         # Bouton Réglages : Opérateur et au-dessus
-        self._settings_btn.setEnabled(level >= AccessLevel.OPERATEUR)
+        self._btn_settings.setEnabled(level >= AccessLevel.OPERATEUR)
         # Restrictions interne aux réglages
         self._apply_settings_restrictions()
 

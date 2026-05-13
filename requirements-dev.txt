@@ -1,3 +1,4 @@
 pytest
 pytest-timeout
 numpy
+pymodbus>=3.13,<4.0

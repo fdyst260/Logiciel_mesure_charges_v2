@@ -59,7 +59,7 @@ class SplashScreen(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         screen = QApplication.primaryScreen().size()
-        self.setFixedSize(screen.width(), screen.height())
+        self.setFixedSize(720, 1280)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -203,6 +203,7 @@ def main(use_simulator: bool = False, inject_fault: bool = False, fullscreen: bo
 
     splash.set_progress(70, "Construction de l'interface...")
     window = MainWindow(pm_id=1, tools=tools, fullscreen=fullscreen)
+    window.resize(720, 1280)
 
     splash.set_progress(85, "Connexion des signaux...")
     bridge.new_point.connect(window.on_new_point)

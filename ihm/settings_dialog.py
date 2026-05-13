@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QPointF, Signal
+from PySide6.QtCore import Qt, QPointF, Signal, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF, QPixmap, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -269,12 +269,12 @@ QSpinBox::up-button,       QSpinBox::down-button {
 }
 QPushButton#btn_save {
     background-color: #C49A3C;
-    color: #1A1A18;
-    font-size: 14px;
+    color: #ffffff;
+    font-size: 18px;
     font-weight: bold;
-    border: 1px solid #A07830;
+    border: none;
     border-radius: 8px;
-    min-height: 44px;
+    min-height: 54px;
     min-width: 160px;
 }
 QPushButton#btn_save:pressed { background-color: #A07830; }
@@ -333,6 +333,91 @@ QCheckBox::indicator {
 }
 QCheckBox::indicator:checked { background-color: #F1F8E9; border-color: #2d7a2d; }
 """
+
+
+# ===========================================================================
+# Barre de titre commune — utilisée par toutes les pages de réglages
+# ===========================================================================
+
+def _make_header(
+    titre: str,
+    callback_retour,
+    *,
+    label_ref: list | None = None,
+) -> QWidget:
+    """Barre titre unifiée 56px : ← Retour + label titre."""
+    barre = QWidget()
+    barre.setFixedHeight(56)
+    barre.setStyleSheet("background:#f5f4f0; border-bottom:2px solid #dddddd;")
+    layout = QHBoxLayout(barre)
+    layout.setContentsMargins(8, 0, 8, 0)
+    layout.setSpacing(12)
+
+    btn = QPushButton("← Retour")
+    btn.setFixedSize(130, 40)
+    btn.setStyleSheet(
+        "QPushButton {"
+        "background:#ffffff; border:1.5px solid #dddddd;"
+        "border-radius:8px; color:#333333; font-size:14px; font-weight:bold;}"
+        "QPushButton:pressed { background:#eeeeee; }"
+    )
+    btn.clicked.connect(callback_retour)
+    layout.addWidget(btn)
+
+    lbl = QLabel(titre)
+    lbl.setStyleSheet(
+        "font-size:20px; font-weight:bold; color:#333333; border:none; background:transparent;"
+    )
+    lbl.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+    layout.addWidget(lbl, stretch=1)
+
+    if label_ref is not None:
+        label_ref.append(lbl)
+    return barre
+
+
+def _make_voie_footer(
+    left_text: str,
+    left_callback,
+    right_text: str,
+    right_callback,
+    *,
+    primary: bool,
+) -> QWidget:
+    """Footer commun VoieX/VoieY : bouton gauche stretch=1, bouton droit stretch=2."""
+    w = QWidget()
+    w.setStyleSheet("background-color: #F0EDE6;")
+    h = QHBoxLayout(w)
+    h.setContentsMargins(10, 6, 10, 6)
+    h.setSpacing(10)
+
+    btn_l = QPushButton(left_text)
+    btn_l.setFixedHeight(60)
+    btn_l.setStyleSheet(
+        "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+        " border-radius:8px; color:#333333; font-size:16px; font-weight:bold; }"
+        "QPushButton:pressed { background:#eeeeee; }"
+    )
+    btn_l.clicked.connect(left_callback)
+    h.addWidget(btn_l, stretch=1)
+
+    btn_r = QPushButton(right_text)
+    btn_r.setFixedHeight(60)
+    if primary:
+        btn_r.setStyleSheet(
+            "QPushButton { background:#C49A3C; border:none; border-radius:0px;"
+            " color:#ffffff; font-size:16px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
+    else:
+        btn_r.setStyleSheet(
+            "QPushButton { background:#A07830; border:none; border-radius:8px;"
+            " color:#ffffff; font-size:16px; font-weight:bold; }"
+            "QPushButton:pressed { background:#7a5c24; }"
+        )
+    btn_r.clicked.connect(right_callback)
+    h.addWidget(btn_r, stretch=2)
+    return w
 
 
 # ===========================================================================
@@ -547,27 +632,13 @@ class _PMEditPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         # Header
-        header = QWidget()
-        header.setFixedHeight(55)
-        header.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 16, 0)
-        hh.setSpacing(12)
-        self._title_lbl = QLabel(f"{t('table_col_pm')}-{self._pm_id:02d} — {self._pm_name}")
-        self._title_lbl.setStyleSheet(
-            "font-size: 17px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(self._title_lbl)
-        hh.addStretch()
-        btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        hh.addWidget(btn_save)
-        btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self._cancel)
-        hh.addWidget(btn_cancel)
-        root.addWidget(header)
+        _lbl_ref: list = []
+        root.addWidget(_make_header(
+            f"{t('table_col_pm')}-{self._pm_id:02d} — {self._pm_name}",
+            lambda: self._main_stack.setCurrentIndex(1),
+            label_ref=_lbl_ref,
+        ))
+        self._title_lbl = _lbl_ref[0]
         # Onglets
         tabs = QTabWidget()
         tabs.addTab(self._build_tab_general(),  t("tab_general"))
@@ -623,7 +694,7 @@ class _PMEditPage(QWidget):
                     pts.append([float(xi.text()), float(yi.text())])
                 except ValueError:
                     pass
-        return sorted(pts, key=lambda pt: pt[0])
+        return pts
 
     # ---- Onglet 1 — Général -----------------------------------------------
 
@@ -664,7 +735,7 @@ class _PMEditPage(QWidget):
         hdr_h.setContentsMargins(0, 0, 0, 0)
         hdr_h.setSpacing(8)
         for txt, w_fixed in [("Zone", 60), ("Actif", 50), ("Pos min (mm)", 110),
-                               ("Pos max (mm)", 110), ("Force max (daN)", 110), ("", 28)]:
+                               ("Pos max (mm)", 110), ("Force max (daN)", 110), ("", 28), ("", 28)]:
             lbl = QLabel(txt)
             lbl.setStyleSheet("color: #4A4844; font-size: 11px; font-weight: bold;")
             if w_fixed:
@@ -1121,7 +1192,7 @@ class _Tile(QFrame):
 _DECIMAL_CHOICES  = ["0", "1", "2", "3", "4"]
 _SENSOR_TYPES_X   = ["Linéaire", "Rotatif", "Angulaire", "Impulsion"]
 _UNITS_X          = ["mm", "cm", "°", "pulse", "µm", "in"]
-_UNITS_Y          = ["daN", "kN", "kg", "lbf"]
+_UNITS_Y          = ["daN", "kN", "kg"]
 _FILTER_CHOICES   = ["Aucun", "50 Hz", "100 Hz", "200 Hz", "500 Hz"]
 _SCALE_METHODS    = ["Sensibilité", "2 points"]
 
@@ -1161,7 +1232,7 @@ class _ChoiceDialog(QDialog):
         hdr.setFixedHeight(46)
         hdr.setStyleSheet("background-color: #E8E4DC;")
         hh = QHBoxLayout(hdr)
-        hh.setContentsMargins(16, 0, 16, 0)
+        hh.setContentsMargins(8, 0, 8, 0)
         lbl = QLabel(title)
         lbl.setStyleSheet(
             f"font-size: {title_font_size}px; font-weight: bold; color: #1A1A18;"
@@ -1261,6 +1332,7 @@ class _VoieXPage(QWidget):
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._main_stack = stack
+        self._back_callback = None  # type: ignore[assignment]
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
@@ -1270,7 +1342,10 @@ class _VoieXPage(QWidget):
         super().showEvent(event)
 
     def _cancel(self) -> None:
-        self._main_stack.setCurrentIndex(13)
+        if self._back_callback is not None:
+            self._back_callback()
+        else:
+            self._main_stack.setCurrentIndex(13)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1278,38 +1353,31 @@ class _VoieXPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
-        header = QWidget()
-        header.setFixedHeight(50)
-        header.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 16, 0)
-        self._header_lbl = QLabel(t("hdr_voie_x_decl"))
-        self._header_lbl.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(self._header_lbl)
-        root.addWidget(header)
-
-        # Contenu (2 pages)
-        self._stack = QStackedWidget()
-        self._stack.addWidget(self._build_page0())
-        self._stack.addWidget(self._build_page1())
-        root.addWidget(self._stack, stretch=1)
-
-        # Footer (2 états)
-        self._footer = QStackedWidget()
-        self._footer.setFixedHeight(64)
-        self._footer.addWidget(self._build_footer0())
-        self._footer.addWidget(self._build_footer1())
-        root.addWidget(self._footer)
+        # Page combinée (déclaration + mise à l'échelle) dans un seul scroll
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inner = QWidget()
+        inner.setMaximumWidth(720)
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addWidget(self._build_page0())
+        v.addWidget(self._build_page1())
+        v.addStretch(1)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
 
     def _build_page0(self) -> QWidget:
         w = QWidget()
+        w.setStyleSheet(
+            "QLabel { font-size:20px; color:#555555; background:transparent; }"
+        )
         form = QFormLayout(w)
-        form.setContentsMargins(24, 18, 24, 18)
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(22)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self._name_btn = _make_alpha_btn("", title=t("table_col_name"), parent=self)
         form.addRow(t("lbl_sensor_name"), self._name_btn)
@@ -1330,16 +1398,22 @@ class _VoieXPage(QWidget):
         self._decimal_btn = _make_choice_btn(_DECIMAL_CHOICES, "2", "Décimales", self)
         form.addRow(t("lbl_decimals"), self._decimal_btn)
 
+        for fld in (self._name_btn, self._sensor_type_btn, self._unit_btn,
+                    self._channel_btn, self._decimal_btn):
+            fld.setFixedHeight(64)
+            fld.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            fld.setStyleSheet((fld.styleSheet() or "") +
+                              "QPushButton { font-size:20px; font-weight:bold; min-height:64px; }")
         return w
 
     def _build_page1(self) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
-        v.setContentsMargins(24, 16, 24, 16)
-        v.setSpacing(12)
+        v.setContentsMargins(20, 16, 20, 16)
+        v.setSpacing(16)
 
         lbl = QLabel(t("hdr_scale_2pts"))
-        lbl.setStyleSheet("font-size: 14px; color: #4A4844; font-weight: bold;")
+        lbl.setStyleSheet("font-size: 16px; color: #555555; font-weight: bold;")
         v.addWidget(lbl)
 
         grid = QGridLayout()
@@ -1385,50 +1459,6 @@ class _VoieXPage(QWidget):
         v.addLayout(grid)
         v.addStretch()
         return w
-
-    def _build_footer0(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(16)
-        btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self._cancel)
-        h.addWidget(btn_cancel)
-        h.addStretch()
-        btn_next = QPushButton(t("btn_next"))
-        btn_next.setObjectName("btn_nav")
-        btn_next.clicked.connect(self._go_page1)
-        h.addWidget(btn_next)
-        return w
-
-    def _build_footer1(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(16)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(self._go_page0)
-        h.addWidget(btn_back)
-        h.addStretch()
-        btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        h.addWidget(btn_save)
-        return w
-
-    def _go_page0(self) -> None:
-        self._stack.setCurrentIndex(0)
-        self._footer.setCurrentIndex(0)
-        self._header_lbl.setText(t("hdr_voie_x_decl"))
-
-    def _go_page1(self) -> None:
-        self._stack.setCurrentIndex(1)
-        self._footer.setCurrentIndex(1)
-        self._header_lbl.setText(t("hdr_voie_x_scale"))
 
     # ------------------------------------------------------------------
     def _teach_point(self, point: int) -> None:
@@ -1528,6 +1558,7 @@ class _VoieYPage(QWidget):
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._main_stack = stack
+        self._back_callback = None  # type: ignore[assignment]
         self.setStyleSheet(_DIALOG_STYLE)
         self._build_ui()
         self._load_config()
@@ -1552,7 +1583,10 @@ class _VoieYPage(QWidget):
         }
 
     def _cancel(self) -> None:
-        self._main_stack.setCurrentIndex(13)
+        if self._back_callback is not None:
+            self._back_callback()
+        else:
+            self._main_stack.setCurrentIndex(13)
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -1560,38 +1594,31 @@ class _VoieYPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
-        header = QWidget()
-        header.setFixedHeight(50)
-        header.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 16, 0)
-        self._header_lbl = QLabel(t("hdr_voie_y_decl"))
-        self._header_lbl.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(self._header_lbl)
-        root.addWidget(header)
-
-        # Contenu (2 pages)
-        self._stack = QStackedWidget()
-        self._stack.addWidget(self._build_page0())
-        self._stack.addWidget(self._build_page1())
-        root.addWidget(self._stack, stretch=1)
-
-        # Footer (2 états)
-        self._footer = QStackedWidget()
-        self._footer.setFixedHeight(64)
-        self._footer.addWidget(self._build_footer0())
-        self._footer.addWidget(self._build_footer1())
-        root.addWidget(self._footer)
+        # Page combinée (déclaration + sensibilité) dans un seul scroll
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inner = QWidget()
+        inner.setMaximumWidth(720)
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addWidget(self._build_page0())
+        v.addWidget(self._build_page1())
+        v.addStretch(1)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
 
     def _build_page0(self) -> QWidget:
         w = QWidget()
+        w.setStyleSheet(
+            "QLabel { font-size:20px; color:#555555; background:transparent; }"
+        )
         form = QFormLayout(w)
-        form.setContentsMargins(24, 18, 24, 18)
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(22)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self._name_btn = _make_alpha_btn("", title=t("table_col_name"), parent=self)
         form.addRow(t("lbl_sensor_name"), self._name_btn)
@@ -1618,17 +1645,26 @@ class _VoieYPage(QWidget):
         self._decimal_btn = _make_choice_btn(_DECIMAL_CHOICES, "1", "Décimales", self)
         form.addRow(t("lbl_decimals"), self._decimal_btn)
 
+        for fld in (self._name_btn, btn_piezo, self._unit_btn, self._max_btn,
+                    self._channel_btn, self._decimal_btn):
+            fld.setFixedHeight(64)
+            fld.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            fld.setStyleSheet((fld.styleSheet() or "") +
+                              "QPushButton { font-size:20px; font-weight:bold; min-height:64px; }")
         return w
 
     def _build_page1(self) -> QWidget:
         inner = QWidget()
+        inner.setStyleSheet(
+            "QLabel { font-size:20px; color:#555555; background:transparent; }"
+        )
         v = QVBoxLayout(inner)
-        v.setContentsMargins(24, 16, 24, 16)
-        v.setSpacing(12)
+        v.setContentsMargins(20, 20, 20, 20)
+        v.setSpacing(16)
 
         form = QFormLayout()
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setSpacing(22)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self._scale_method_btn = _make_choice_btn(
             _SCALE_METHODS,
@@ -1698,11 +1734,14 @@ class _VoieYPage(QWidget):
         v.addWidget(self._avance_w)
         v.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidget(inner)
-        return scroll
+        for fld in (self._scale_method_btn, self._sensitivity_btn, self._alarm_btn,
+                    self._filter_btn, self._test_point_btn, self._tolerance_btn):
+            fld.setFixedHeight(54)
+            fld.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            fld.setStyleSheet((fld.styleSheet() or "") +
+                              "QPushButton { font-size:16px; min-height:54px; }")
+
+        return inner
 
     def _toggle_avance(self) -> None:
         vis = self._avance_w.isVisible()
@@ -1710,50 +1749,6 @@ class _VoieYPage(QWidget):
         self._avance_toggle.setText(
             t("btn_advanced_expanded") if not vis else t("btn_advanced_collapsed")
         )
-
-    def _build_footer0(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(16)
-        btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
-        btn_cancel.clicked.connect(self._cancel)
-        h.addWidget(btn_cancel)
-        h.addStretch()
-        btn_next = QPushButton(t("btn_next"))
-        btn_next.setObjectName("btn_nav")
-        btn_next.clicked.connect(self._go_page1)
-        h.addWidget(btn_next)
-        return w
-
-    def _build_footer1(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(16)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(self._go_page0)
-        h.addWidget(btn_back)
-        h.addStretch()
-        btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        h.addWidget(btn_save)
-        return w
-
-    def _go_page0(self) -> None:
-        self._stack.setCurrentIndex(0)
-        self._footer.setCurrentIndex(0)
-        self._header_lbl.setText(t("hdr_voie_y_decl"))
-
-    def _go_page1(self) -> None:
-        self._stack.setCurrentIndex(1)
-        self._footer.setCurrentIndex(1)
-        self._header_lbl.setText(t("hdr_voie_y_piezo"))
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -1843,13 +1838,8 @@ class _VoieYPage(QWidget):
 # ===========================================================================
 
 class _ControleCyclePage(QWidget):
-    """2 pages — p.0 : Mode mesure + Conditions  /  p.1 : ALLER-RETOUR + Traçage
+    """Page unique — Mode mesure + Conditions + ALLER/RETOUR + Traçage
     (intégrée dans _settings_stack)."""
-
-    _TITLES = [
-        "Contrôle cycle — Mode / Conditions",
-        "Contrôle cycle — ALLER / RETOUR / Traçage",
-    ]
 
     def __init__(self, stack: QStackedWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1871,145 +1861,149 @@ class _ControleCyclePage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header avec titre dynamique
-        hdr = QWidget()
-        hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(hdr)
-        hh.setContentsMargins(16, 0, 16, 0)
-        self._header_lbl = QLabel(self._TITLES[0])
-        self._header_lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(self._header_lbl)
-        root.addWidget(hdr)
+        root.addWidget(_make_header("Contrôle cycle", self._cancel))
 
-        # Corps (2 pages)
-        self._stack = QStackedWidget()
-        self._stack.addWidget(self._build_page0())
-        self._stack.addWidget(self._build_page1())
-        root.addWidget(self._stack, stretch=1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background:transparent;")
 
-        # Footer (2 états)
-        self._footer = QStackedWidget()
-        self._footer.setFixedHeight(64)
-        self._footer.addWidget(self._build_footer(0))
-        self._footer.addWidget(self._build_footer(1))
-        root.addWidget(self._footer)
+        inner = QWidget()
+        inner.setMaximumWidth(720)
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(16, 16, 16, 16)
+        v.setSpacing(8)
 
-    def _build_footer(self, page_idx: int) -> QWidget:
+        self._build_page0_content(v)
+        self._build_page1_content(v)
+
+        v.addStretch(1)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
+
+        root.addWidget(self._build_single_footer())
+
+    def _build_single_footer(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
+        w.setFixedHeight(76)
+        w.setStyleSheet("background:#f5f4f0; border-top:1px solid #dddddd;")
         h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
+        h.setContentsMargins(12, 8, 12, 8)
         h.setSpacing(12)
 
-        if page_idx == 1:
-            btn_back = QPushButton(t("btn_back_arrow"))
-            btn_back.setObjectName("btn_cancel")
-            btn_back.clicked.connect(lambda: self._go_page(0))
-            h.addWidget(btn_back)
-
         btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
+        btn_cancel.setFixedHeight(60)
+        btn_cancel.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#333333; font-size:18px; font-weight:bold; }"
+            "QPushButton:pressed { background:#eeeeee; }"
+        )
         btn_cancel.clicked.connect(self._cancel)
-        h.addWidget(btn_cancel)
-        h.addStretch()
+        h.addWidget(btn_cancel, stretch=1)
 
-        if page_idx == 0:
-            btn_next = QPushButton(t("btn_next"))
-            btn_next.setObjectName("btn_nav")
-            btn_next.clicked.connect(lambda: self._go_page(1))
-            h.addWidget(btn_next)
-        else:
-            btn_save = QPushButton(t("btn_save_check"))
-            btn_save.setObjectName("btn_save")
-            btn_save.clicked.connect(self._save)
-            h.addWidget(btn_save)
-
+        btn_save = QPushButton(t("btn_save_check"))
+        btn_save.setFixedHeight(60)
+        btn_save.setStyleSheet(
+            "QPushButton { background:#C49A3C; border:none; border-radius:8px;"
+            " color:#ffffff; font-size:18px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
+        btn_save.clicked.connect(self._save)
+        h.addWidget(btn_save, stretch=2)
         return w
-
-    def _go_page(self, idx: int) -> None:
-        self._stack.setCurrentIndex(idx)
-        self._footer.setCurrentIndex(idx)
-        self._header_lbl.setText(self._TITLES[idx])
-        if idx == 0:
-            self._refresh_mode_indicator()
-            self._refresh_duree_visibility()
-        else:
-            self._refresh_tracage_graph()
 
     # ------------------------------------------------------------------
     # Page 0 — Mode mesure + Conditions début / fin
     # ------------------------------------------------------------------
 
-    def _build_page0(self) -> QWidget:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background-color: transparent;")
-        inner = QWidget()
-        v = QVBoxLayout(inner)
-        v.setContentsMargins(24, 20, 24, 20)
-        v.setSpacing(0)
+    def _build_page0_content(self, v: QVBoxLayout) -> None:
 
-        def _sep() -> QFrame:
-            f = QFrame()
-            f.setFrameShape(QFrame.Shape.HLine)
-            f.setStyleSheet("color: #C8C4BC; margin: 14px 0px;")
-            return f
-
-        def _section_lbl(text: str) -> QLabel:
+        def _section_header(text: str) -> QWidget:
+            hdr = QWidget()
+            hdr.setFixedHeight(48)
+            hdr.setStyleSheet(
+                "background:#f5f0e8; border-left:6px solid #C49A3C;"
+                " border-radius:6px; margin-bottom:8px;"
+            )
+            hl = QHBoxLayout(hdr)
+            hl.setContentsMargins(14, 0, 14, 0)
+            hl.setSpacing(0)
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                "font-size: 13px; font-weight: bold; color: #A07830;"
-                " background: transparent; padding-bottom: 6px;"
+                "font-size:22px; font-weight:bold; color:#8B6520;"
+                " border:none; background:transparent;"
             )
-            return lbl
+            hl.addWidget(lbl)
+            return hdr
+
+        def _field_btn_style(btn: QPushButton) -> None:
+            btn.setFixedHeight(62)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            btn.setStyleSheet(
+                (btn.styleSheet() or "") +
+                "QPushButton { font-size:20px; font-weight:bold; }"
+            )
+
+        def _make_form() -> QFormLayout:
+            f = QFormLayout()
+            f.setSpacing(16)
+            f.setContentsMargins(0, 8, 0, 8)
+            f.setLabelAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            f.setFormAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+            )
+            f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+            return f
 
         # ── Section 1 : Mode mesure ──────────────────────────────────
-        v.addWidget(_section_lbl("Mode mesure"))
-        form0 = QFormLayout()
-        form0.setSpacing(14)
-        form0.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        v.addSpacing(12)
+        v.addWidget(_section_header("Mode mesure"))
+        v.addSpacing(8)
+
+        form0 = _make_form()
 
         self._mode_btn = _make_choice_btn(
             ["Y (x)", "Y (t)", "X (t)", "Y (x, t)"], "Y (x)", "Mode mesure", self
         )
+        _field_btn_style(self._mode_btn)
         form0.addRow(t("lbl_measure_mode"), self._mode_btn)
 
         self._nb_samples_btn = _make_numpad_btn(
             "1000", suffix="", title="Nombre d'échantillons", parent=self
         )
+        _field_btn_style(self._nb_samples_btn)
         form0.addRow(t("lbl_samples_count"), self._nb_samples_btn)
 
         self._delta_x_btn = _make_choice_btn(
             ["Automatique", "Manuel"], "Automatique", "Delta X", self
         )
+        _field_btn_style(self._delta_x_btn)
         form0.addRow(t("lbl_delta_x"), self._delta_x_btn)
 
         v.addLayout(form0)
 
         self._mode_indicator = QLabel()
         self._mode_indicator.setStyleSheet(
-            "background-color: #E8E4DC; color: #A07830; font-size: 13px;"
+            "background-color: #E8E4DC; color: #A07830; font-size: 18px;"
             " padding: 10px 16px; border-radius: 6px; border: 1px solid #C8C4BC;"
         )
         self._mode_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._mode_indicator.setFixedHeight(42)
-        v.addSpacing(10)
+        self._mode_indicator.setFixedHeight(50)
         v.addWidget(self._mode_indicator)
 
-        v.addWidget(_sep())
-
         # ── Section 2 : Conditions début / fin ──────────────────────
-        v.addWidget(_section_lbl("Conditions début / fin"))
+        v.addSpacing(12)
+        v.addWidget(_section_header("Conditions début / fin"))
+        v.addSpacing(8)
 
         cond_hdr = QHBoxLayout()
         for txt in ["  Début", "", "  Fin"]:
             lbl2 = QLabel(txt)
             if txt:
-                lbl2.setStyleSheet("font-size: 14px; font-weight: bold; color: #1A1A18;")
+                lbl2.setStyleSheet("font-size:20px; font-weight:bold; color:#1A1A18;")
             cond_hdr.addWidget(lbl2, 0 if not txt else 1)
         v.addLayout(cond_hdr)
         v.addSpacing(6)
@@ -2021,7 +2015,7 @@ class _ControleCyclePage(QWidget):
             ["E-TOR 1 / Bus", "Seuil-X", "Seuil-Y", "Manuel"],
             "E-TOR 1 / Bus", "Condition début", self,
         )
-        self._condition_debut_btn.setMinimumHeight(54)
+        _field_btn_style(self._condition_debut_btn)
         cols.addWidget(self._condition_debut_btn, stretch=1)
 
         arrow = QLabel(t("symbol_arrow_right"))
@@ -2034,69 +2028,83 @@ class _ControleCyclePage(QWidget):
             ["E-TOR 1 / Bus", "Manuel", "Seuil-X", "Seuil-Y", "Retour-X", "Temps"],
             "E-TOR 1 / Bus", "Condition fin", self,
         )
-        self._condition_fin_btn.setMinimumHeight(54)
+        _field_btn_style(self._condition_fin_btn)
         cols.addWidget(self._condition_fin_btn, stretch=1)
 
         v.addLayout(cols)
-        v.addSpacing(10)
 
-        form1 = QFormLayout()
-        form1.setSpacing(14)
-        form1.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form1 = _make_form()
         self._duree_btn = _make_numpad_btn(
             "20.0", suffix=" s", title="Durée du cycle (s)", parent=self
         )
+        _field_btn_style(self._duree_btn)
         form1.addRow(t("lbl_cycle_duration"), self._duree_btn)
         v.addLayout(form1)
-
-        v.addStretch()
-        scroll.setWidget(inner)
-        return scroll
 
     # ------------------------------------------------------------------
     # Page 1 — Parties ALLER / RETOUR + Traçage
     # ------------------------------------------------------------------
 
-    def _build_page1(self) -> QWidget:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background-color: transparent;")
-        inner = QWidget()
-        v = QVBoxLayout(inner)
-        v.setContentsMargins(24, 20, 24, 20)
-        v.setSpacing(0)
+    def _build_page1_content(self, v: QVBoxLayout) -> None:
 
-        def _sep() -> QFrame:
-            f = QFrame()
-            f.setFrameShape(QFrame.Shape.HLine)
-            f.setStyleSheet("color: #C8C4BC; margin: 14px 0px;")
-            return f
-
-        def _section_lbl(text: str) -> QLabel:
+        def _section_header(text: str) -> QWidget:
+            hdr = QWidget()
+            hdr.setFixedHeight(48)
+            hdr.setStyleSheet(
+                "background:#f5f0e8; border-left:6px solid #C49A3C;"
+                " border-radius:6px; margin-bottom:8px;"
+            )
+            hl = QHBoxLayout(hdr)
+            hl.setContentsMargins(14, 0, 14, 0)
+            hl.setSpacing(0)
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                "font-size: 13px; font-weight: bold; color: #A07830;"
-                " background: transparent; padding-bottom: 6px;"
+                "font-size:22px; font-weight:bold; color:#8B6520;"
+                " border:none; background:transparent;"
             )
-            return lbl
+            hl.addWidget(lbl)
+            return hdr
+
+        def _field_btn_style(btn: QPushButton) -> None:
+            btn.setFixedHeight(62)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            btn.setStyleSheet(
+                (btn.styleSheet() or "") +
+                "QPushButton { font-size:20px; font-weight:bold; }"
+            )
+
+        def _make_form() -> QFormLayout:
+            f = QFormLayout()
+            f.setSpacing(16)
+            f.setContentsMargins(0, 8, 0, 8)
+            f.setLabelAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            f.setFormAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+            )
+            f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+            return f
 
         # ── Section 3 : Parties ALLER / RETOUR ──────────────────────
-        v.addWidget(_section_lbl("Parties ALLER / RETOUR"))
-        form2 = QFormLayout()
-        form2.setSpacing(14)
-        form2.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        v.addSpacing(12)
+        v.addWidget(_section_header("Parties ALLER / RETOUR"))
+        v.addSpacing(8)
+
+        form2 = _make_form()
 
         self._aller_btn = _make_choice_btn(
             ["Non défini", "Xmax", "Ymax", "Ymin"], "Xmax",
             "Partie ALLER jusqu'à", self,
         )
+        _field_btn_style(self._aller_btn)
         form2.addRow(t("lbl_part_forward_until"), self._aller_btn)
 
         self._retour_btn = _make_choice_btn(
             ["Non défini", "Xmin", "Ymax", "Ymin"], "Non défini",
             "Partie RETOUR jusqu'à", self,
         )
+        _field_btn_style(self._retour_btn)
         form2.addRow(t("lbl_part_return_until"), self._retour_btn)
 
         v.addLayout(form2)
@@ -2107,26 +2115,25 @@ class _ControleCyclePage(QWidget):
         for txt, color in [("↗  ALLER", "#E24B4A"), ("↘  RETOUR", "#A07830")]:
             lbl3 = QLabel(txt)
             lbl3.setStyleSheet(
-                f"color: {color}; font-size: 18px; font-weight: bold; background: transparent;"
+                f"color: {color}; font-size: 20px; font-weight: bold; background: transparent;"
             )
             lbl3.setAlignment(Qt.AlignmentFlag.AlignCenter)
             ind_row.addWidget(lbl3)
         ind_row.addStretch()
-        v.addSpacing(10)
         v.addLayout(ind_row)
 
-        v.addWidget(_sep())
-
         # ── Section 4 : Traçage ──────────────────────────────────────
-        v.addWidget(_section_lbl("Traçage de la courbe"))
-        form3 = QFormLayout()
-        form3.setSpacing(14)
-        form3.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        v.addSpacing(12)
+        v.addWidget(_section_header("Traçage de la courbe"))
+        v.addSpacing(8)
+
+        form3 = _make_form()
 
         self._tracage_btn = _make_choice_btn(
             ["ALLER-RETOUR", "ALLER", "RETOUR"], "ALLER",
             "Traçage de la courbe", self,
         )
+        _field_btn_style(self._tracage_btn)
         form3.addRow(t("lbl_curve_tracing"), self._tracage_btn)
         v.addLayout(form3)
 
@@ -2134,18 +2141,19 @@ class _ControleCyclePage(QWidget):
         ind_row2.setSpacing(32)
         ind_row2.addStretch()
         self._tracage_lbl_aller = QLabel(t("lbl_stroke_forward"))
+        self._tracage_lbl_aller.setStyleSheet(
+            "font-size:20px; font-weight:bold; background:transparent;"
+        )
         self._tracage_lbl_aller.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ind_row2.addWidget(self._tracage_lbl_aller)
         self._tracage_lbl_retour = QLabel(t("lbl_stroke_return"))
+        self._tracage_lbl_retour.setStyleSheet(
+            "font-size:20px; font-weight:bold; background:transparent;"
+        )
         self._tracage_lbl_retour.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ind_row2.addWidget(self._tracage_lbl_retour)
         ind_row2.addStretch()
-        v.addSpacing(10)
         v.addLayout(ind_row2)
-
-        v.addStretch()
-        scroll.setWidget(inner)
-        return scroll
 
     # ------------------------------------------------------------------
     # Refresh helpers
@@ -2256,9 +2264,9 @@ class _DroitsAccesPage(QWidget):
     """Page droits d'accès — page unique fusionnée."""
 
     _LEVELS = [
-        ("pin_operateur",  "🟢", "level_operator", "#2E7D32"),
-        ("pin_technicien", "🟡", "level_tech",     "#FF9800"),
-        ("pin_admin",      "🔴", "level_admin",    "#C62828"),
+        ("pin_operateur",  "", "level_operator", "#2E7D32"),
+        ("pin_technicien", "", "level_tech",     "#FF9800"),
+        ("pin_admin",      "", "level_admin",    "#C62828"),
     ]
     _AUTO_LOGOUT_CHOICES = ["Jamais", "5 minutes", "15 minutes", "1 heure"]
     _AUTO_LOGOUT_DEFAULT = "Jamais"
@@ -2288,37 +2296,37 @@ class _DroitsAccesPage(QWidget):
         root.setSpacing(0)
 
         # Header
-        hdr = QWidget()
-        hdr.setFixedHeight(76)
-        hdr.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(hdr)
-        hh.setContentsMargins(16, 0, 16, 0)
-        lbl_hdr = QLabel(t("hdr_access_rights"))
-        lbl_hdr.setStyleSheet(
-            "font-size: 34px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(lbl_hdr)
-        root.addWidget(hdr)
+        root.addWidget(_make_header(
+            t("hdr_access_rights"),
+            lambda: self._main_stack.setCurrentIndex(1),
+        ))
 
         # Contenu unique scrollable
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         inner = QWidget()
+        inner.setMaximumWidth(720)
+        inner.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         v = QVBoxLayout(inner)
-        v.setContentsMargins(24, 18, 24, 18)
+        v.setContentsMargins(10, 10, 10, 10)
         v.setSpacing(16)
 
         # Activation des droits
         self._enabled_chk = QCheckBox(t("lbl_access_rights_enable"))
-        self._enabled_chk.setStyleSheet("color: #1A1A18; font-size: 24px;")
+        self._enabled_chk.setStyleSheet(
+            "QCheckBox { font-size:17px; color:#1A1A18; }"
+            "QCheckBox::indicator { width:26px; height:26px; }"
+        )
         v.addWidget(self._enabled_chk)
 
         # Déconnexion auto
         row_logout = QHBoxLayout()
         row_logout.setSpacing(12)
         lbl_logout = QLabel(t("lbl_auto_logout"))
-        lbl_logout.setStyleSheet("color: #1A1A18; font-size: 24px;")
+        lbl_logout.setStyleSheet("color: #1A1A18; font-size:17px;")
         self._auto_logout_btn = _make_choice_btn(
             self._AUTO_LOGOUT_CHOICES,
             self._AUTO_LOGOUT_DEFAULT,
@@ -2330,13 +2338,13 @@ class _DroitsAccesPage(QWidget):
             dialog_item_font_size=24,
             dialog_item_height=70,
         )
-        self._auto_logout_btn.setFixedSize(320, 70)
+        self._auto_logout_btn.setFixedHeight(52)
+        self._auto_logout_btn.setMinimumWidth(200)
         auto_logout_font = self._auto_logout_btn.font()
-        auto_logout_font.setPointSize(24)
+        auto_logout_font.setPixelSize(17)
         self._auto_logout_btn.setFont(auto_logout_font)
         row_logout.addWidget(lbl_logout)
         row_logout.addWidget(self._auto_logout_btn)
-        row_logout.addStretch()
         v.addLayout(row_logout)
 
         # Séparateur + titre PIN
@@ -2345,7 +2353,7 @@ class _DroitsAccesPage(QWidget):
         sep1.setStyleSheet("color: #C8C4BC;")
         v.addWidget(sep1)
         lbl_pin_title = QLabel(t("lbl_modify_pin"))
-        lbl_pin_title.setStyleSheet("color: #4A4844; font-size: 24px; font-weight: bold;")
+        lbl_pin_title.setStyleSheet("color: #4A4844; font-size:17px; font-weight: bold;")
         v.addWidget(lbl_pin_title)
 
         # 3 lignes PIN
@@ -2389,7 +2397,7 @@ class _DroitsAccesPage(QWidget):
         sep2.setStyleSheet("color: #C8C4BC;")
         v.addWidget(sep2)
         lbl_table = QLabel(t("lbl_access_levels_table"))
-        lbl_table.setStyleSheet("color: #4A4844; font-size: 24px; font-weight: bold;")
+        lbl_table.setStyleSheet("color: #4A4844; font-size:17px; font-weight: bold;")
         v.addWidget(lbl_table)
 
         table = QTableWidget(3, 3)
@@ -2401,62 +2409,56 @@ class _DroitsAccesPage(QWidget):
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        tbl_font = QFont()
-        tbl_font.setPixelSize(21)
-        table.setFont(tbl_font)
-        table.horizontalHeader().setFont(tbl_font)
-        table.verticalHeader().setDefaultSectionSize(56)
+        table.setStyleSheet(
+            "QTableWidget { font-size:16px; border:1.5px solid #dddddd; }"
+            "QHeaderView::section { font-size:16px; font-weight:bold;"
+            " padding:10px; background:#f5f4f0; border-bottom:2px solid #dddddd; }"
+        )
+        table.horizontalHeader().setFixedHeight(52)
+        table.verticalHeader().setDefaultSectionSize(90)
+        table.setMinimumHeight(400)
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        table.setMaximumWidth(700)
+        table.horizontalHeader().setStretchLastSection(True)
 
         _ROWS = [
-            ("1", f"🟢 {t('level_operator')}", t("access_rights_row_operator")),
-            ("2", f"🟡 {t('level_tech')}",     t("access_rights_row_technician")),
-            ("3", f"🔴 {t('level_admin')}",    t("access_rights_row_admin")),
+            ("1", t('level_operator'), t("access_rights_row_operator"),   "#2e7d32"),
+            ("2", t('level_tech'),     t("access_rights_row_technician"), "#e65100"),
+            ("3", t('level_admin'),    t("access_rights_row_admin"),      "#c62828"),
         ]
-        for row, (niv, nom, droits) in enumerate(_ROWS):
-            for col, txt in enumerate([niv, nom, droits]):
-                item = QTableWidgetItem(txt)
-                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-                table.setItem(row, col, item)
+        for row, (niv, nom, droits, color) in enumerate(_ROWS):
+            item0 = QTableWidgetItem(niv)
+            item0.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter)
+            table.setItem(row, 0, item0)
+            item1 = QTableWidgetItem(nom)
+            item1.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            item1.setForeground(QColor(color))
+            table.setItem(row, 1, item1)
+            item2 = QTableWidgetItem(droits)
+            item2.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            table.setItem(row, 2, item2)
 
         v.addWidget(table)
-        v.addStretch()
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
 
-        # Footer unique
-        _BTN_BACK_STYLE = (
-            "QPushButton {"
-            "  background-color: #FAFAF8; color: #4A4844;"
-            "  font-size: 22px; font-weight: bold;"
-            "  border: 1px solid #C8C4BC; border-radius: 8px;"
-            "  min-height: 58px; min-width: 220px;"
-            "}"
-            "QPushButton:pressed { background-color: #E8E4DC; }"
-        )
-        _BTN_SAVE_STYLE = (
-            "QPushButton {"
-            "  background-color: #C49A3C; color: #1A1A18;"
-            "  font-size: 22px; font-weight: bold;"
-            "  border: 1px solid #A07830; border-radius: 8px;"
-            "  min-height: 58px; min-width: 220px;"
-            "}"
-            "QPushButton:pressed { background-color: #A07830; }"
-        )
+        # Footer unique — pleine largeur
         footer = QWidget()
-        footer.setFixedHeight(90)
+        footer.setFixedHeight(64)
         footer.setStyleSheet("background-color: #F0EDE6;")
         h = QHBoxLayout(footer)
-        h.setContentsMargins(24, 14, 24, 14)
-        h.setSpacing(12)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setStyleSheet(_BTN_BACK_STYLE)
-        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
-        h.addWidget(btn_back)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
         btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setStyleSheet(_BTN_SAVE_STYLE)
+        btn_save.setFixedHeight(64)
+        btn_save.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        btn_save.setStyleSheet(
+            "QPushButton { background:#C49A3C; border:none; border-radius:0px;"
+            " color:#ffffff; font-size:18px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
         btn_save.clicked.connect(self._save)
         h.addWidget(btn_save)
-        h.addStretch()
         root.addWidget(footer)
 
     # ------------------------------------------------------------------
@@ -2569,59 +2571,57 @@ class _DateHeurePage(QWidget):
         root.setSpacing(0)
 
         # Header
-        hdr = QWidget()
-        hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(hdr)
-        hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel(t("hdr_datetime"))
-        lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(lbl)
-        root.addWidget(hdr)
+        root.addWidget(_make_header(
+            t("hdr_datetime"),
+            lambda: self._main_stack.setCurrentIndex(1),
+        ))
 
         # Corps
         body = QWidget()
         form_v = QVBoxLayout(body)
-        form_v.setContentsMargins(28, 22, 28, 22)
-        form_v.setSpacing(22)
+        form_v.setContentsMargins(20, 20, 20, 20)
+        form_v.setSpacing(24)
 
         # ---- NTP ----
-        ntp_grp = QWidget()
-        ntp_v = QVBoxLayout(ntp_grp)
-        ntp_v.setContentsMargins(0, 0, 0, 0)
-        ntp_v.setSpacing(10)
-
         self._ntp_check = QCheckBox("Utiliser l'horloge serveur pour horodatage auto.")
-        self._ntp_check.setStyleSheet("color: #1A1A18; font-size: 14px;")
-        ntp_v.addWidget(self._ntp_check)
+        self._ntp_check.setStyleSheet(
+            "QCheckBox { font-size:22px; color:#1A1A18; }"
+            "QCheckBox::indicator { width:30px; height:30px; }"
+        )
+        self._ntp_check.setFixedHeight(50)
+        form_v.addWidget(self._ntp_check)
 
-        ntp_row = QHBoxLayout()
         ntp_lbl = QLabel(t("lbl_ntp_server"))
-        ntp_lbl.setStyleSheet("color: #4A4844; font-size: 13px;")
-        ntp_row.addWidget(ntp_lbl)
+        ntp_lbl.setStyleSheet("color:#4A4844; font-size:22px;")
+        ntp_lbl.setFixedHeight(40)
+        form_v.addWidget(ntp_lbl)
+
         self._btn_ntp = _make_alpha_btn("pool.ntp.org", title="Serveur NTP", parent=self)
-        ntp_row.addWidget(self._btn_ntp, stretch=1)
-        ntp_v.addLayout(ntp_row)
+        self._btn_ntp.setFixedHeight(64)
+        self._btn_ntp.setStyleSheet(
+            (self._btn_ntp.styleSheet() or "") +
+            "QPushButton { border:1.5px solid #dddddd; border-radius:8px;"
+            " padding:0 12px; font-size:22px; }"
+        )
+        form_v.addWidget(self._btn_ntp)
 
         self._ntp_check.stateChanged.connect(
             lambda state: self._btn_ntp.setEnabled(bool(state))
         )
-        # état initial : chargé depuis config dans showEvent
         self._btn_ntp.setEnabled(False)
 
-        form_v.addWidget(ntp_grp)
+        form_v.addSpacing(10)
 
         # Séparateur
         sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #C8C4BC;")
+        sep.setFixedHeight(2)
+        sep.setStyleSheet("background:#dddddd; border:none;")
         form_v.addWidget(sep)
 
         # ---- Date ----
         date_lbl = QLabel(t("lbl_date"))
-        date_lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
+        date_lbl.setStyleSheet("font-size:24px; font-weight:bold; color:#1A1A18;")
+        date_lbl.setFixedHeight(50)
         form_v.addWidget(date_lbl)
 
         date_row = QHBoxLayout()
@@ -2634,18 +2634,29 @@ class _DateHeurePage(QWidget):
             col = QVBoxLayout()
             col.setSpacing(4)
             lbl_u = QLabel(unit_lbl)
-            lbl_u.setStyleSheet("color: #4A4844; font-size: 12px;")
+            lbl_u.setStyleSheet("color:#888888; font-size:18px;")
             lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_u.setFixedHeight(36)
             col.addWidget(lbl_u)
             btn = _make_numpad_btn(default, suffix="", title=title, parent=self)
+            btn.setFixedHeight(110)
+            btn.setStyleSheet(
+                "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+                " border-radius:10px; color:#333333;"
+                " font-size:36px; font-weight:bold; }"
+                "QPushButton:pressed { background:#eeeeee; }"
+            )
             setattr(self, attr, btn)
             col.addWidget(btn)
             date_row.addLayout(col)
         form_v.addLayout(date_row)
 
+        form_v.addSpacing(20)
+
         # ---- Heure ----
         heure_lbl = QLabel(t("lbl_time"))
-        heure_lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
+        heure_lbl.setStyleSheet("font-size:24px; font-weight:bold; color:#1A1A18;")
+        heure_lbl.setFixedHeight(50)
         form_v.addWidget(heure_lbl)
 
         heure_row = QHBoxLayout()
@@ -2658,38 +2669,38 @@ class _DateHeurePage(QWidget):
             col = QVBoxLayout()
             col.setSpacing(4)
             lbl_u = QLabel(unit_lbl)
-            lbl_u.setStyleSheet("color: #4A4844; font-size: 12px;")
+            lbl_u.setStyleSheet("color:#888888; font-size:18px;")
             lbl_u.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_u.setFixedHeight(36)
             col.addWidget(lbl_u)
             btn = _make_numpad_btn(default, suffix="", title=title, parent=self)
+            btn.setFixedHeight(110)
+            btn.setStyleSheet(
+                "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+                " border-radius:10px; color:#333333;"
+                " font-size:36px; font-weight:bold; }"
+                "QPushButton:pressed { background:#eeeeee; }"
+            )
             setattr(self, attr, btn)
             col.addWidget(btn)
             heure_row.addLayout(col)
         form_v.addLayout(heure_row)
 
-        form_v.addStretch()
+        form_v.addStretch(1)
         root.addWidget(body, stretch=1)
 
-        # Footer
-        footer = QWidget()
-        footer.setFixedHeight(64)
-        footer.setStyleSheet("background-color: #F0EDE6;")
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(24, 10, 24, 10)
-        fh.setSpacing(12)
-
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
-        fh.addWidget(btn_back)
-        fh.addStretch()
-
+        # Bouton Appliquer
         btn_apply = QPushButton(t("btn_apply"))
         btn_apply.setObjectName("btn_save")
+        btn_apply.setFixedHeight(64)
+        btn_apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        btn_apply.setStyleSheet(
+            "QPushButton { background:#C49A3C; border:none; border-radius:0px;"
+            " color:#ffffff; font-size:20px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
         btn_apply.clicked.connect(self._apply)
-        fh.addWidget(btn_apply)
-
-        root.addWidget(footer)
+        root.addWidget(btn_apply)
 
     # ------------------------------------------------------------------
     def _load_current_datetime(self) -> None:
@@ -2806,48 +2817,60 @@ class _AffichageProdPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
-        hdr = QWidget()
-        hdr.setFixedHeight(50)
-        hdr.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(hdr)
-        hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel(t("hdr_display"))
-        lbl.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(lbl)
-        root.addWidget(hdr)
+        root.addWidget(_make_header(
+            t("hdr_display"),
+            lambda: self._main_stack.setCurrentIndex(1),
+        ))
 
-        # Contenu (2 pages)
-        self._inner_stack = QStackedWidget()
-        self._inner_stack.addWidget(self._build_page0())
-        self._inner_stack.addWidget(self._build_page1())
-        root.addWidget(self._inner_stack, stretch=1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background:transparent;")
 
-        # Footer (2 états)
-        self._footer_stack = QStackedWidget()
-        self._footer_stack.setFixedHeight(64)
-        self._footer_stack.addWidget(self._build_footer0())
-        self._footer_stack.addWidget(self._build_footer1())
-        root.addWidget(self._footer_stack)
-
-    # ------------------------------------------------------------------
-    def _build_page0(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 14)
+        inner = QWidget()
+        inner.setMaximumWidth(720)
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(16, 16, 16, 16)
         v.setSpacing(16)
 
-        # ---- Histogramme ----
-        lbl_h = QLabel(t("lbl_histogram"))
-        lbl_h.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
-        v.addWidget(lbl_h)
+        self._build_section_histo(v)
+        self._build_section_outil(v)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFixedHeight(2)
+        sep.setStyleSheet("background:#dddddd; border:none;")
+        v.addWidget(sep)
+
+        self._build_section_feu(v)
+
+        v.addStretch(1)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
+        root.addWidget(self._build_single_footer())
+
+    # ------------------------------------------------------------------
+    def _build_section_histo(self, v: QVBoxLayout) -> None:
+        hdr = QWidget()
+        hdr.setFixedHeight(60)
+        hdr.setStyleSheet(
+            "background:#f5f0e8; border-left:6px solid #C49A3C; border-radius:6px;"
+        )
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(14, 0, 14, 0)
+        lbl_hdr = QLabel(t("lbl_histogram"))
+        lbl_hdr.setStyleSheet(
+            "font-size:26px; font-weight:bold; color:#8B6520;"
+            " border:none; background:transparent;"
+        )
+        hl.addWidget(lbl_hdr)
+        v.addWidget(hdr)
 
         _PB_STYLE = (
-            "QProgressBar { border: 1px solid #444; border-radius: 4px;"
-            " background: #FAFAF8; height: 22px; }"
-            "QProgressBar::chunk { background-color: #E24B4A; border-radius: 4px; }"
+            "QProgressBar { border: 1px solid #444; border-radius: 6px;"
+            " background: #FAFAF8; }"
+            "QProgressBar::chunk { background-color: #E24B4A; border-radius: 6px; }"
         )
         self._histo_group = QButtonGroup(self)
         self._histo_btns: list = []
@@ -2855,163 +2878,163 @@ class _AffichageProdPage(QWidget):
         for idx, (val, suffix) in enumerate(
             [("OK-NOK en %", " %"), ("Nb de pièce NOK", " pcs")]
         ):
-            row = QHBoxLayout()
-            row.setSpacing(10)
+            row_w = QWidget()
+            row_w.setFixedHeight(72)
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(4, 0, 4, 0)
+            row_h.setSpacing(12)
             rb = QRadioButton(val)
-            rb.setStyleSheet("color: #1A1A18; font-size: 13px; min-width: 160px;")
+            rb.setStyleSheet(
+                "QRadioButton { color:#1A1A18; font-size:22px; }"
+                "QRadioButton::indicator { width:28px; height:28px; }"
+            )
             self._histo_group.addButton(rb, idx)
             self._histo_btns.append(rb)
-            row.addWidget(rb)
+            row_h.addWidget(rb)
             pb = QProgressBar()
             pb.setRange(0, 100)
             pb.setValue(65)
             pb.setTextVisible(False)
-            pb.setFixedHeight(22)
+            pb.setFixedHeight(36)
             pb.setStyleSheet(_PB_STYLE)
-            row.addWidget(pb, stretch=1)
+            row_h.addWidget(pb, stretch=1)
             lbl_val = QLabel(f"65{suffix}")
-            lbl_val.setStyleSheet("color: #4A4844; font-size: 12px; min-width: 50px;")
-            row.addWidget(lbl_val)
-            v.addLayout(row)
+            lbl_val.setStyleSheet("color:#4A4844; font-size:20px; min-width:65px;")
+            row_h.addWidget(lbl_val)
+            v.addWidget(row_w)
 
         self._histo_btns[0].setChecked(True)
 
-        # ---- Séparateur ----
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #C8C4BC;")
-        v.addWidget(sep)
+    # ------------------------------------------------------------------
+    def _build_section_outil(self, v: QVBoxLayout) -> None:
+        hdr = QWidget()
+        hdr.setFixedHeight(60)
+        hdr.setStyleSheet(
+            "background:#f5f0e8; border-left:6px solid #C49A3C; border-radius:6px;"
+        )
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(14, 0, 14, 0)
+        lbl_hdr = QLabel(t("lbl_eval_tool"))
+        lbl_hdr.setStyleSheet(
+            "font-size:26px; font-weight:bold; color:#8B6520;"
+            " border:none; background:transparent;"
+        )
+        hl.addWidget(lbl_hdr)
+        v.addWidget(hdr)
 
-        # ---- Outil d'évaluation ----
-        lbl_outil = QLabel(t("lbl_eval_tool"))
-        lbl_outil.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
-        v.addWidget(lbl_outil)
-
+        _CHK_STYLE = (
+            "QCheckBox { font-size:22px; color:#1A1A18; }"
+            "QCheckBox::indicator { width:30px; height:30px; }"
+        )
         _APE_STYLE = (
-            "background: #FAFAF8; border: 2px solid #C49A3C;"
-            " border-radius: 4px; padding: 2px 8px;"
+            "background:#FAFAF8; border:2px solid #C49A3C;"
+            " border-radius:4px; padding:4px 12px;"
         )
 
-        # Fenêtre pleine
-        row_fp = QHBoxLayout()
-        row_fp.setSpacing(14)
-        self._fenetre_pleine_chk = QCheckBox("Fenêtre pleine")
-        self._fenetre_pleine_chk.setStyleSheet("color: #1A1A18; font-size: 13px;")
-        self._fenetre_pleine_chk.setChecked(True)
-        row_fp.addWidget(self._fenetre_pleine_chk)
-        row_fp.addStretch()
-        lbl_fp = QLabel(t("preview_full_block"))
-        lbl_fp.setStyleSheet(f"color: #A07830; font-size: 16px; {_APE_STYLE}")
-        row_fp.addWidget(lbl_fp)
-        v.addLayout(row_fp)
-
-        # Indication E/S
-        row_es = QHBoxLayout()
-        row_es.setSpacing(14)
-        self._indication_es_chk = QCheckBox("Indication E/S")
-        self._indication_es_chk.setStyleSheet("color: #1A1A18; font-size: 13px;")
-        self._indication_es_chk.setChecked(True)
-        row_es.addWidget(self._indication_es_chk)
-        row_es.addStretch()
-        lbl_es = QLabel(t("preview_io_arrow"))
-        lbl_es.setStyleSheet(f"color: #A07830; font-size: 14px; {_APE_STYLE}")
-        row_es.addWidget(lbl_es)
-        v.addLayout(row_es)
-
-        v.addStretch()
-        return w
+        for chk_text, preview_key, chk_attr in [
+            ("Fenêtre pleine",  "preview_full_block", "_fenetre_pleine_chk"),
+            ("Indication E/S",  "preview_io_arrow",   "_indication_es_chk"),
+        ]:
+            row_w = QWidget()
+            row_w.setFixedHeight(64)
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(4, 0, 4, 0)
+            row_h.setSpacing(14)
+            chk = QCheckBox(chk_text)
+            chk.setStyleSheet(_CHK_STYLE)
+            chk.setChecked(True)
+            setattr(self, chk_attr, chk)
+            row_h.addWidget(chk)
+            row_h.addStretch()
+            lbl = QLabel(t(preview_key))
+            lbl.setStyleSheet(f"color:#A07830; font-size:18px; {_APE_STYLE}")
+            row_h.addWidget(lbl)
+            v.addWidget(row_w)
 
     # ------------------------------------------------------------------
-    def _build_page1(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 14)
-        v.setSpacing(10)
-
-        lbl = QLabel(t("hdr_led_style"))
-        lbl.setStyleSheet("color: #4A4844; font-size: 13px; font-weight: bold;")
-        v.addWidget(lbl)
+    def _build_section_feu(self, v: QVBoxLayout) -> None:
+        hdr = QWidget()
+        hdr.setFixedHeight(60)
+        hdr.setStyleSheet(
+            "background:#f5f0e8; border-left:6px solid #C49A3C; border-radius:6px;"
+        )
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(14, 0, 14, 0)
+        lbl_hdr = QLabel(t("hdr_led_style"))
+        lbl_hdr.setStyleSheet(
+            "font-size:26px; font-weight:bold; color:#8B6520;"
+            " border:none; background:transparent;"
+        )
+        hl.addWidget(lbl_hdr)
+        v.addWidget(hdr)
 
         self._feu_group = QButtonGroup(self)
         self._feu_btns: list = []
 
-        _OK_STYLE  = (
-            "background-color: #F1F8E9; color: #2E7D32; border: 1px solid #2E7D32; border-radius: 6px;"
-            " font-size: 18px; font-weight: bold;"
+        _OK_STYLE = (
+            "background-color:#F1F8E9; color:#2E7D32; border:1px solid #2E7D32;"
+            " border-radius:6px; font-size:26px; font-weight:bold;"
         )
         _NOK_STYLE = (
-            "background-color: #FDECEC; color: #C62828; border: 1px solid #C62828; border-radius: 6px;"
-            " font-size: 18px; font-weight: bold;"
+            "background-color:#FDECEC; color:#C62828; border:1px solid #C62828;"
+            " border-radius:6px; font-size:26px; font-weight:bold;"
         )
 
         for idx, val in enumerate(self._FEU_VALS):
             ok_txt, nok_txt = self._FEU_CONTENT[val]
-            row = QHBoxLayout()
-            row.setSpacing(12)
+            row_w = QWidget()
+            row_w.setFixedHeight(80)
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(4, 0, 4, 0)
+            row_h.setSpacing(12)
             rb = QRadioButton(val)
-            rb.setStyleSheet("color: #1A1A18; font-size: 13px; min-width: 120px;")
+            rb.setStyleSheet(
+                "QRadioButton { color:#1A1A18; font-size:22px; min-width:160px; }"
+                "QRadioButton::indicator { width:28px; height:28px; }"
+            )
             self._feu_group.addButton(rb, idx)
             self._feu_btns.append(rb)
-            row.addWidget(rb)
-            row.addStretch()
+            row_h.addWidget(rb)
+            row_h.addStretch()
             for txt, style in [(ok_txt, _OK_STYLE), (nok_txt, _NOK_STYLE)]:
                 lbl_ap = QLabel(txt)
-                lbl_ap.setFixedSize(80, 40)
+                lbl_ap.setFixedSize(110, 62)
                 lbl_ap.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 lbl_ap.setStyleSheet(style)
-                row.addWidget(lbl_ap)
-            v.addLayout(row)
+                row_h.addWidget(lbl_ap)
+            v.addWidget(row_w)
 
         self._feu_btns[0].setChecked(True)
-        v.addStretch()
-        return w
 
     # ------------------------------------------------------------------
-    def _build_footer0(self) -> QWidget:
+    def _build_single_footer(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
+        w.setFixedHeight(76)
+        w.setStyleSheet("background:#f5f4f0; border-top:1px solid #dddddd;")
         h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
+        h.setContentsMargins(16, 10, 16, 10)
         h.setSpacing(12)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
-        h.addWidget(btn_back)
+
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
+        btn_cancel.setFixedHeight(54)
+        btn_cancel.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#333333; font-size:17px; font-weight:bold; }"
+            "QPushButton:pressed { background:#eeeeee; }"
+        )
+        btn_cancel.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
+        h.addWidget(btn_cancel, stretch=1)
+
         btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
+        btn_save.setFixedHeight(54)
+        btn_save.setStyleSheet(
+            "QPushButton { background:#C49A3C; border:none; border-radius:8px;"
+            " color:#ffffff; font-size:17px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
         btn_save.clicked.connect(self._save)
-        h.addWidget(btn_save)
-        h.addStretch()
-        btn_feu = QPushButton(t("btn_bicolor_next"))
-        btn_feu.setObjectName("btn_nav")
-        btn_feu.clicked.connect(self._go_page1)
-        h.addWidget(btn_feu)
+        h.addWidget(btn_save, stretch=2)
         return w
-
-    def _build_footer1(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #F0EDE6;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(24, 10, 24, 10)
-        h.setSpacing(12)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(self._go_page0)
-        h.addWidget(btn_back)
-        h.addStretch()
-        btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        h.addWidget(btn_save)
-        return w
-
-    def _go_page0(self) -> None:
-        self._inner_stack.setCurrentIndex(0)
-        self._footer_stack.setCurrentIndex(0)
-
-    def _go_page1(self) -> None:
-        self._inner_stack.setCurrentIndex(1)
-        self._footer_stack.setCurrentIndex(1)
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -3109,17 +3132,7 @@ class _ExportationPage(QWidget):
         root.setSpacing(0)
 
         # Header commun
-        header = QWidget()
-        header.setFixedHeight(50)
-        header.setStyleSheet("background-color: #E8E4DC;")
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel(t("hdr_export"))
-        lbl.setStyleSheet(
-            "font-size: 17px; font-weight: bold; color: #1A1A18; background: transparent;"
-        )
-        hh.addWidget(lbl)
-        root.addWidget(header)
+        root.addWidget(_make_header(t("hdr_export"), self._cancel))
 
         # Stack interne (2 pages)
         self._stack = QStackedWidget()
@@ -3309,7 +3322,7 @@ class _ExportationPage(QWidget):
         h.setContentsMargins(16, 8, 16, 8)
         h.setSpacing(12)
 
-        btn_cancel = QPushButton(t("btn_back_arrow"))
+        btn_cancel = QPushButton(t("btn_cancel_cross"))
         btn_cancel.setObjectName("btn_cancel")
         btn_cancel.clicked.connect(self._cancel)
         h.addWidget(btn_cancel)
@@ -3335,7 +3348,7 @@ class _ExportationPage(QWidget):
         h.setContentsMargins(16, 8, 16, 8)
         h.setSpacing(12)
 
-        btn_back = QPushButton(t("btn_back_arrow"))
+        btn_back = QPushButton("Précédent")
         btn_back.setObjectName("btn_cancel")
         btn_back.clicked.connect(self._go_page0)
         h.addWidget(btn_back)
@@ -3665,13 +3678,11 @@ class _ExtrasPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header ──────────────────────────────────────────────────
-        hdr = QLabel(t("hdr_extras"))
-        hdr.setStyleSheet(
-            f"background-color: {_C['header_bg']}; color: {_C['text']}; "
-            "font-size: 20px; font-weight: bold; padding: 14px 20px;"
-        )
-        root.addWidget(hdr)
+        # Header
+        root.addWidget(_make_header(
+            t("hdr_extras"),
+            lambda: self._main_stack.setCurrentIndex(1),
+        ))
 
         # ── Scroll ───────────────────────────────────────────────────
         scroll = QScrollArea()
@@ -3808,22 +3819,7 @@ class _ExtrasPage(QWidget):
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
 
-        # ── Footer ───────────────────────────────────────────────────
-        footer = QFrame()
-        footer.setObjectName("footer_bar")
-        footer.setStyleSheet(
-            f"background-color: {_C['header_bg']}; border-top: 1px solid {_C['border']};"
-        )
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(16, 8, 16, 8)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(
-            lambda: self._main_stack.setCurrentIndex(1)
-        )
-        fh.addWidget(btn_back)
-        fh.addStretch()
-        root.addWidget(footer)
+        # Footer supprimé : retour déplacé dans l'en-tête.
 
     # ------------------------------------------------------------------
     def _load_all(self) -> None:
@@ -4034,12 +4030,10 @@ class _InfoSystemePage(QWidget):
         root.setSpacing(0)
 
         # Header
-        hdr = QLabel("ℹ️  " + t("lbl_sw_version").split(":")[0].strip() if False else "ℹ️  Informations système")
-        hdr.setStyleSheet(
-            f"background-color: {_C['header_bg']}; color: {_C['text']}; "
-            "font-size: 20px; font-weight: bold; padding: 14px 20px;"
-        )
-        root.addWidget(hdr)
+        root.addWidget(_make_header(
+            "ℹ️  Informations système",
+            lambda: self._main_stack.setCurrentIndex(1),
+        ))
 
         # Contenu
         scroll = QScrollArea()
@@ -4086,19 +4080,7 @@ class _InfoSystemePage(QWidget):
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
 
-        # Footer : retour Paramètres généraux (index 1)
-        footer = QFrame()
-        footer.setStyleSheet(
-            f"background-color: {_C['header_bg']}; border-top: 1px solid {_C['border']};"
-        )
-        fh = QHBoxLayout(footer)
-        fh.setContentsMargins(16, 8, 16, 8)
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
-        fh.addWidget(btn_back)
-        fh.addStretch()
-        root.addWidget(footer)
+        # Footer supprimé : retour déplacé dans l'en-tête.
 
     def _refresh_sysinfo(self) -> None:
         import shutil
@@ -4287,6 +4269,7 @@ class _FlagTile(QWidget):
         self._name = name
         self._flag_pixmap = pixmap
         self._selected = False
+        self._pressed = False
         self.setMinimumSize(180, 110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4330,13 +4313,20 @@ class _FlagTile(QWidget):
             painter.fillRect(rect, QColor("#C8C4BC"))
 
         # Overlay semi-transparent (plus léger si sélectionné)
-        overlay_alpha = 38 if self._selected else 89   # ~0.15 / ~0.35
+        if self._pressed:
+            overlay_alpha = 110
+        else:
+            overlay_alpha = 38 if self._selected else 89   # ~0.15 / ~0.35
         painter.fillRect(rect, QColor(0, 0, 0, overlay_alpha))
 
         painter.setClipping(False)
 
         # Bordure
-        pen_color = QColor("#C49A3C") if self._selected else QColor("#888888")
+        if self._pressed:
+            pen_color = QColor("#444444")
+            pen_width = max(4, pen_width)
+        else:
+            pen_color = QColor("#C49A3C") if self._selected else QColor("#888888")
         painter.setPen(QPen(pen_color, pen_width))
         border_rect = QRectF(rect).adjusted(
             pen_width / 2, pen_width / 2, -pen_width / 2, -pen_width / 2
@@ -4346,8 +4336,26 @@ class _FlagTile(QWidget):
         painter.end()
 
     def mousePressEvent(self, event) -> None:  # noqa: ANN001
-        self.clicked.emit(self._code)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = True
+            # visual nudge: push contents 2px down
+            if self.layout() is not None:
+                self.layout().setContentsMargins(0, 2, 0, 0)
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: ANN001
+        if event.button() == Qt.MouseButton.LeftButton:
+            was_pressed = self._pressed
+            self._pressed = False
+            # restore layout margins
+            if self.layout() is not None:
+                self.layout().setContentsMargins(0, 0, 0, 0)
+            self.update()
+            if was_pressed:
+                # emit on release to match button behaviour
+                self.clicked.emit(self._code)
+        super().mouseReleaseEvent(event)
 
 
 # ===========================================================================
@@ -4355,7 +4363,7 @@ class _FlagTile(QWidget):
 # ===========================================================================
 
 class _LanguePage(QWidget):
-    """Page de sélection de la langue — grille 2×3 de tuiles drapeau."""
+    """Page de sélection de la langue — grille 1×6 (une colonne) de tuiles drapeau."""
 
     def __init__(self, stack: QStackedWidget, parent=None) -> None:
         super().__init__(parent)
@@ -4382,40 +4390,21 @@ class _LanguePage(QWidget):
         layout.setSpacing(0)
 
         # Header
-        header = QWidget()
-        header.setFixedHeight(80)
-        header.setStyleSheet(
-            f"background-color: {_C['header_bg']}; "
-            f"border-bottom: 1px solid {_C['border']};"
-        )
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 16, 0)
-        lbl = QLabel(t("hdr_language"))
-        lbl.setStyleSheet(
-            f"color: {_C['text']}; font-size: 25px; font-weight: bold;"
-        )
-        hh.addWidget(lbl)
-        hh.addStretch()
-        btn_back = QPushButton(t("btn_back_arrow"))
-        btn_back.setStyleSheet(
-            "QPushButton { background-color: #FAFAF8; color: #4A4844; font-size: 22px;"
-            " font-weight: bold; border: 1px solid #C8C4BC; border-radius: 8px;"
-            " min-height: 44px; min-width: 200px; padding: 0 16px; }"
-            "QPushButton:pressed { background-color: #E8E4DC; }"
-        )
-        btn_back.clicked.connect(lambda: self._main_stack.setCurrentIndex(1))
-        hh.addWidget(btn_back)
-        layout.addWidget(header)
+        layout.addWidget(_make_header(
+            t("hdr_language"),
+            lambda: self._main_stack.setCurrentIndex(1),
+        ))
 
-        # Grille 2×3 de tuiles
+        # Grille 1×6 (une colonne) de tuiles
         body = QWidget()
         body.setStyleSheet(f"background-color: {_C['bg']};")
         grid = QGridLayout(body)
         grid.setContentsMargins(8, 8, 8, 8)
-        grid.setSpacing(16)
+        grid.setSpacing(12)
 
         for idx, (code, name) in enumerate(LANGUAGES.items()):
-            row, col = divmod(idx, 2)
+            row = idx
+            col = 0
             pixmap = QPixmap(FLAG_PATHS.get(code, ""))
             tile = _FlagTile(code, name, pixmap, self)
             tile.clicked.connect(self._select_lang)
@@ -4423,8 +4412,8 @@ class _LanguePage(QWidget):
             grid.setRowStretch(row, 1)
             self._tiles[code] = tile
 
+        # Single column stretch
         grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
 
         layout.addWidget(body, stretch=1)
 
@@ -4535,34 +4524,13 @@ class SettingsPage(QWidget):
     # ------------------------------------------------------------------
 
     def _make_header(self, title: str, back_to_home: bool = True) -> QWidget:
-        """Header 50px : titre à gauche + bouton ← Retour à droite."""
-        header = QWidget()
-        header.setFixedHeight(50)
-        header.setStyleSheet(
-            f"background-color: {_C['header_bg']}; "
-            f"border-bottom: 5px solid {_C['border']};"
+        """Délègue à la fonction module-level _make_header."""
+        cb = (
+            (lambda: self._settings_stack.setCurrentIndex(0))
+            if back_to_home
+            else self._go_to_production
         )
-        h = QHBoxLayout(header)
-        h.setContentsMargins(16, 0, 0, 0)
-        h.setSpacing(0)
-
-        lbl = QLabel(title)
-        lbl.setStyleSheet(
-            f"color: {_C['text']}; font-size: 18px; font-weight: bold;"
-        )
-        h.addWidget(lbl)
-        h.addStretch()
-
-        btn = QPushButton(
-            t("btn_back_arrow") if back_to_home else f"{t('btn_back_arrow')} Production"
-        )
-        btn.setObjectName("btn_back")
-        if back_to_home:
-            btn.clicked.connect(lambda: self._settings_stack.setCurrentIndex(0))
-        else:
-            btn.clicked.connect(self._go_to_production)
-        h.addWidget(btn)
-        return header
+        return _make_header(title, cb)
 
     def _go_to_production(self) -> None:
         """Retourne à la page Production (index 0 du stack principal)."""
@@ -4596,7 +4564,7 @@ class SettingsPage(QWidget):
         hh.addWidget(lbl_title)
         hh.addStretch()
 
-        btn_prod = QPushButton(f"{t('btn_back_arrow')} Production")
+        btn_prod = QPushButton(t("btn_back"))
         btn_prod.setObjectName("btn_back")
         btn_prod.setMinimumHeight(54)
         btn_prod.setMinimumWidth(200)
@@ -4613,29 +4581,20 @@ class SettingsPage(QWidget):
         # Corps — 2 tuiles en grille plein écran
         body = QWidget()
         body.setStyleSheet(f"background-color: {_C['bg']};")
-        grid = QGridLayout(body)
-        grid.setContentsMargins(16, 16, 16, 16)
-        grid.setSpacing(16)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setRowStretch(0, 1)
+        grid_layout = QVBoxLayout(body)
+        grid_layout.setContentsMargins(20, 20, 20, 20)
+        grid_layout.setSpacing(16)
 
         tiles_def = [
             ("assets/icon/settings/Image_kistler/parametre_généraux .png", t("settings_tile_general"),    "#A07830", 1),
             ("assets/icon/settings/Image_kistler/Getion_pm.png", "Gestion PM", "#1565C0", 2),
         ]
-        for col, (icon, label, border, page_idx) in enumerate(tiles_def):
+        for (icon, label, border, page_idx) in tiles_def:
             tile = _Tile(icon, label, border)
-            # Libérer la taille fixe pour que les tuiles s'étendent
-            tile.setFixedSize(16_777_215, 16_777_215)
-            tile.setMinimumSize(160, 140)
-            tile.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-            )
-            tile.clicked.connect(
-                lambda idx=page_idx: self._settings_stack.setCurrentIndex(idx)
-            )
-            grid.addWidget(tile, 0, col)
+            tile.setFixedSize(680, 560)
+            tile.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            tile.clicked.connect(lambda idx=page_idx: self._settings_stack.setCurrentIndex(idx))
+            grid_layout.addWidget(tile, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         v.addWidget(body, stretch=1)
         v.addWidget(self._build_footer())
@@ -4651,40 +4610,16 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # Header custom (titre 22px + bouton Retour agrandi)
-        header = QWidget()
-        header.setFixedHeight(64)
-        header.setStyleSheet(
-            f"background-color: {_C['header_bg']}; "
-            f"border-bottom: 1px solid {_C['border']};"
-        )
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 0, 0)
-        hh.setSpacing(0)
-        title_lbl = QLabel(t("settings_general_title_icon"))
-        title_lbl.setStyleSheet(
-            f"color: {_C['text']}; font-size: 22px; font-weight: bold;"
-        )
-        hh.addWidget(title_lbl)
-        hh.addStretch()
-        back_btn = QPushButton(t("btn_back_arrow"))
-        back_btn.setObjectName("btn_back")
-        back_btn.setMinimumHeight(48)
-        back_btn.setStyleSheet(
-            f"background-color: {_C['btn_bg']}; color: {_C['text']};"
-            f" font-size: 16px; font-weight: 600;"
-            f" border: 1px solid {_C['btn_border']}; border-radius: 0px;"
-            f" padding: 0 24px; min-height: 48px;"
-        )
-        back_btn.clicked.connect(lambda: self._settings_stack.setCurrentIndex(0))
-        hh.addWidget(back_btn)
-        v.addWidget(header)
+        v.addWidget(self._make_header(t("settings_general_title_icon")))
 
         grid_w = QWidget()
         grid_w.setStyleSheet(f"background-color: {_C['bg']};")
         grid = QGridLayout(grid_w)
-        grid.setContentsMargins(16, 16, 16, 16)
-        grid.setSpacing(12)
+        grid.setContentsMargins(10, 10, 10, 10)
+        grid.setSpacing(10)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+        grid_w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         _BTN_STYLE = f"""
             QPushButton {{
@@ -4707,22 +4642,24 @@ class SettingsPage(QWidget):
         coord_label = "Coordonnées" if get_language() == "fr" else "Coordinates"
         info_label = "Informations système" if get_language() == "fr" else "System information"
         buttons = [
-            ("assets/icon/settings/Image_kistler/langages.png", t("dlg_language_title"), 0, 0, "langue"),
-            ("assets/icon/settings/Image_kistler/Droit_acces.png", t("dlg_access_rights_saved_title"), 0, 1, "droits"),
-            ("assets/icon/settings/Image_kistler/date_heure.png", t("dlg_datetime_title"),0, 2, "date_heure"),
-            ("assets/icon/settings/Image_kistler/graphe_x_y.png",  coord_label,  1, 0, "coordonnees"),
-            ("assets/icon/settings/Image_kistler/Controle_cycle.png",  t("dlg_cycle_ctrl_title"), 1, 1, "cycle"),
-            ("assets/icon/settings/Image_kistler/pinceau.png", t("dlg_display_title"), 1, 2, "affichage"),
-            ("assets/icon/settings/Image_kistler/Exportation.png", t("hdr_export"), 2, 0, "exportation"),
-            ("assets/icon/settings/Image_kistler/Point_acces.png",  t("hdr_extras"),  2, 1, "extras"),
-            ("assets/icon/settings/Image_kistler/System_info.png",  info_label, 2, 2, "info_systeme"),
+            ("assets/icon/settings/Image_kistler/langages.png", t("dlg_language_title"), "langue"),
+            ("assets/icon/settings/Image_kistler/Droit_acces.png", t("dlg_access_rights_saved_title"), "droits"),
+            ("assets/icon/settings/Image_kistler/date_heure.png", t("dlg_datetime_title"), "date_heure"),
+            ("assets/icon/settings/Image_kistler/graphe_x_y.png",  coord_label, "coordonnees"),
+            ("assets/icon/settings/Image_kistler/Controle_cycle.png",  t("dlg_cycle_ctrl_title"), "cycle"),
+            ("assets/icon/settings/Image_kistler/pinceau.png", t("dlg_display_title"), "affichage"),
+            ("assets/icon/settings/Image_kistler/Exportation.png", t("hdr_export"), "exportation"),
+            ("assets/icon/settings/Image_kistler/Point_acces.png",  t("hdr_extras"), "extras"),
+            ("assets/icon/settings/Image_kistler/System_info.png",  info_label, "info_systeme"),
         ]
-        for icon, label, row, col, action in buttons:
+        for index, (icon, label, action) in enumerate(buttons):
+            row = index // 2
+            col = index % 2
             btn = QPushButton()
             btn.setProperty("settings_action", action)
             btn.setObjectName(f"settings_btn_{action}")
+            btn.setMinimumHeight(160)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            btn.setMinimumHeight(120)
             btn.setStyleSheet(_BTN_STYLE)
             tile_layout = QVBoxLayout(btn)
             tile_layout.setContentsMargins(8, 8, 8, 8)
@@ -4788,14 +4725,25 @@ class SettingsPage(QWidget):
                         self, "Réglages", f"{lbl} — À implémenter."
                     )
                 )
-            grid.addWidget(btn, row, col)
+            # If it's the last tile (Informations système), span two columns
+            if action == "info_systeme":
+                grid.addWidget(btn, 4, 0, 1, 2)
+                btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+                btn.setMinimumHeight(160)
+            else:
+                grid.addWidget(btn, row, col)
 
-        for c in range(3):
+        for c in range(2):
             grid.setColumnStretch(c, 1)
-        for r in range(3):
+        # Ensure rows stretch evenly (5 rows for 9 tiles)
+        for r in range(5):
             grid.setRowStretch(r, 1)
 
-        v.addWidget(grid_w, stretch=1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        scroll.setWidget(grid_w)
+        v.addWidget(scroll, stretch=1)
         return page
 
     # ------------------------------------------------------------------
@@ -4810,63 +4758,123 @@ class SettingsPage(QWidget):
 
         coord_label = "Coordonnées" if get_language() == "fr" else "Coordinates"
 
-        # Header custom
-        header = QWidget()
-        header.setFixedHeight(64)
-        header.setStyleSheet(
-            f"background-color: {_C['header_bg']}; "
-            f"border-bottom: 1px solid {_C['border']};"
+        # Barre titre principale
+        v.addWidget(_make_header(
+            f"⇄  {coord_label}",
+            lambda: self._settings_stack.setCurrentIndex(1),
+        ))
+
+        # QStackedWidget interne : 0=Voie X, 1=Voie Y
+        self._coord_pages = QStackedWidget()
+
+        # Page Voie X : titre section bleu + contenu voie X
+        page_x = QWidget()
+        px_v = QVBoxLayout(page_x)
+        px_v.setContentsMargins(0, 0, 0, 0)
+        px_v.setSpacing(0)
+        sec_x = QLabel(" Voie X — Capteur de position")
+        sec_x.setFixedHeight(54)
+        sec_x.setStyleSheet(
+            "background:#e8f0fe; border-bottom:1px solid #c5d5f5;"
+            " color:#1a56a0; font-size:22px; font-weight:bold;"
+            " padding-left:12px;"
         )
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(16, 0, 0, 0)
-        hh.setSpacing(0)
-        title_lbl = QLabel(f"⇄  {coord_label}")
-        title_lbl.setStyleSheet(
-            f"color: {_C['text']}; font-size: 22px; font-weight: bold;"
+        px_v.addWidget(sec_x)
+        px_v.addWidget(self._voie_x_page, stretch=1)
+        self._coord_pages.addWidget(page_x)
+
+        # Page Voie Y : titre section orange + contenu voie Y
+        page_y = QWidget()
+        py_v = QVBoxLayout(page_y)
+        py_v.setContentsMargins(0, 0, 0, 0)
+        py_v.setSpacing(0)
+        sec_y = QLabel(" Voie Y — Capteur de force")
+        sec_y.setFixedHeight(54)
+        sec_y.setStyleSheet(
+            "background:#fff3f3; border-bottom:1px solid #ffe0b2;"
+            " color:#c62828; font-size:22px; font-weight:bold;"
+            " padding-left:12px;"
         )
-        hh.addWidget(title_lbl)
-        hh.addStretch()
-        back_btn = QPushButton(t("btn_back_arrow"))
-        back_btn.setObjectName("btn_back")
-        back_btn.setMinimumHeight(48)
-        back_btn.setStyleSheet(
-            f"background-color: {_C['btn_bg']}; color: {_C['text']};"
-            f" font-size: 16px; font-weight: 600;"
-            f" border: 1px solid {_C['btn_border']}; border-radius: 0px;"
-            f" padding: 0 24px; min-height: 48px;"
+        py_v.addWidget(sec_y)
+        py_v.addWidget(self._voie_y_page, stretch=1)
+        self._coord_pages.addWidget(page_y)
+
+        v.addWidget(self._coord_pages, stretch=1)
+
+        # Boutons globaux Annuler / Sauvegarder
+        save_bar = QWidget()
+        save_bar.setFixedHeight(64)
+        save_bar.setStyleSheet("background:#F0EDE6;")
+        sh = QHBoxLayout(save_bar)
+        sh.setContentsMargins(10, 6, 10, 6)
+        sh.setSpacing(10)
+        btn_cancel = QPushButton("✗ Annuler")
+        btn_cancel.setFixedHeight(64)
+        btn_cancel.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#333333; font-size:20px; font-weight:bold; }"
+            "QPushButton:pressed { background:#eeeeee; }"
         )
-        back_btn.clicked.connect(lambda: self._settings_stack.setCurrentIndex(1))
-        hh.addWidget(back_btn)
-        v.addWidget(header)
+        btn_cancel.clicked.connect(lambda: self._settings_stack.setCurrentIndex(1))
+        sh.addWidget(btn_cancel, stretch=1)
+        btn_save = QPushButton("✓ Sauvegarder")
+        btn_save.setFixedHeight(64)
+        btn_save.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd; border-radius:8px;"
+            " color:#333333; font-size:20px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
+        btn_save.clicked.connect(self._coord_save_current)
+        sh.addWidget(btn_save, stretch=2)
+        v.addWidget(save_bar)
 
-        # Corps : 2 colonnes scrollables → Voie X à gauche, Voie Y à droite
-        body = QWidget()
-        body.setStyleSheet(f"background-color: {_C['bg']};")
-        bh = QHBoxLayout(body)
-        bh.setContentsMargins(0, 0, 0, 0)
-        bh.setSpacing(0)
+        # Barre navigation Voie X / Voie Y
+        nav_bar = QWidget()
+        nav_bar.setFixedHeight(70)
+        nav_bar.setStyleSheet("background:#F0EDE6;")
+        nh = QHBoxLayout(nav_bar)
+        nh.setContentsMargins(10, 8, 10, 8)
+        nh.setSpacing(10)
+        self._btn_coord_prev = QPushButton("← Voie X")
+        self._btn_coord_prev.setFixedHeight(60)
+        self._btn_coord_prev.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#333333; font-size:18px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
+        self._btn_coord_prev.clicked.connect(self._coord_go_prev)
+        self._btn_coord_prev.setVisible(False)
+        nh.addWidget(self._btn_coord_prev, stretch=1)
+        self._btn_coord_next = QPushButton("Voie Y →")
+        self._btn_coord_next.setFixedHeight(60)
+        self._btn_coord_next.setStyleSheet(
+            "QPushButton { background:#FFFFFF; border:none; border-radius:8px;"
+            " color:#333333; font-size:18px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
+        self._btn_coord_next.clicked.connect(self._coord_go_next)
+        nh.addWidget(self._btn_coord_next, stretch=1)
+        v.addWidget(nav_bar)
 
-        # Séparateur vertical entre les deux colonnes
-        def _make_column(inner_widget: QWidget) -> QScrollArea:
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setFrameShape(QFrame.Shape.NoFrame)
-            scroll.setStyleSheet("background-color: transparent;")
-            scroll.setWidget(inner_widget)
-            return scroll
-
-        bh.addWidget(_make_column(self._voie_x_page), stretch=1)
-
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setStyleSheet(f"color: {_C['border']};")
-        sep.setFixedWidth(1)
-        bh.addWidget(sep)
-
-        bh.addWidget(_make_column(self._voie_y_page), stretch=1)
-
-        v.addWidget(body, stretch=1)
+        # État initial : Voie X
+        self._coord_pages.setCurrentIndex(0)
         return page
+
+    def _coord_go_next(self) -> None:
+        self._coord_pages.setCurrentIndex(1)
+        self._btn_coord_prev.setVisible(True)
+        self._btn_coord_next.setVisible(False)
+
+    def _coord_go_prev(self) -> None:
+        self._coord_pages.setCurrentIndex(0)
+        self._btn_coord_prev.setVisible(False)
+        self._btn_coord_next.setVisible(True)
+
+    def _coord_save_current(self) -> None:
+        if self._coord_pages.currentIndex() == 0:
+            self._voie_x_page._save()
+        else:
+            self._voie_y_page._save()
 
     # ------------------------------------------------------------------
     # Page 2 — Gestion PM
