@@ -3131,245 +3131,212 @@ class _ExportationPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header commun
         root.addWidget(_make_header(t("hdr_export"), self._cancel))
 
-        # Stack interne (2 pages)
-        self._stack = QStackedWidget()
-        self._stack.addWidget(self._build_page0())
-        self._stack.addWidget(self._build_page1())
-        root.addWidget(self._stack, stretch=1)
-
-        # Footer (2 états)
-        self._footer = QStackedWidget()
-        self._footer.setFixedHeight(64)
-        self._footer.addWidget(self._build_footer0())
-        self._footer.addWidget(self._build_footer1())
-        root.addWidget(self._footer)
-
-    # ------------------------------------------------------------------
-    def _build_page0(self) -> QWidget:
-        outer = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background:transparent;")
 
+        inner = QWidget()
+        inner.setMaximumWidth(720)
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(20, 20, 20, 20)
+        v.setSpacing(16)
+
+        self._build_section_folder(v)
+        self._add_section_sep(v)
+        self._build_section_usb(v)
+        self._add_section_sep(v)
+        self._build_section_pdf(v)
+        self._add_section_sep(v)
+        self._build_section_advanced(v)
+
+        v.addStretch(1)
+        scroll.setWidget(inner)
+        root.addWidget(scroll, stretch=1)
+        root.addWidget(self._build_single_footer())
+
+    def _add_section_sep(self, v: QVBoxLayout) -> None:
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFixedHeight(2)
+        sep.setStyleSheet("background:#dddddd; border:none;")
+        v.addWidget(sep)
+
+    def _section_header(self, text: str) -> QWidget:
         w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(18)
+        w.setFixedHeight(48)
+        w.setStyleSheet(
+            "background:#f5f0e8; border-left:6px solid #C49A3C; border-radius:6px;"
+        )
+        h = QHBoxLayout(w)
+        h.setContentsMargins(14, 0, 14, 0)
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            "font-size:22px; font-weight:bold; color:#8B6520;"
+            " border:none; background:transparent;"
+        )
+        h.addWidget(lbl)
+        return w
 
-        # ---- Section : Dossier local ----
-        sec0 = QLabel(t("lbl_local_folder"))
-        sec0.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A4844;")
-        v.addWidget(sec0)
+    def _make_field_form(self) -> QFormLayout:
+        f = QFormLayout()
+        f.setSpacing(16)
+        f.setContentsMargins(0, 8, 0, 8)
+        f.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        f.setFormAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        return f
+
+    def _style_field_btn(self, btn: QPushButton, height: int = 58) -> None:
+        btn.setFixedHeight(height)
+        btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        btn.setStyleSheet(
+            (btn.styleSheet() or "") +
+            f"QPushButton {{ font-size:18px; font-weight:bold; }}"
+        )
+
+    # ------------------------------------------------------------------
+    def _build_section_folder(self, v: QVBoxLayout) -> None:
+        v.addWidget(self._section_header(t("lbl_local_folder")))
 
         cfg = _load_cfg_safe()
         data_dir = cfg.get("storage", {}).get("data_dir", "./data")
         self._data_dir_lbl = QLabel(str(Path(data_dir).resolve()))
         self._data_dir_lbl.setStyleSheet(
-            "background-color: #E8E4DC; color: #4A4844; border: 1px solid #C8C4BC;"
-            " border-radius: 6px; padding: 8px 12px; font-size: 14px;"
+            "background-color:#E8E4DC; color:#4A4844; border:1px solid #C8C4BC;"
+            " border-radius:6px; padding:10px 14px; font-size:18px;"
         )
         self._data_dir_lbl.setWordWrap(True)
         v.addWidget(self._data_dir_lbl)
 
-        sep0 = QFrame()
-        sep0.setObjectName("separator")
-        sep0.setFrameShape(QFrame.Shape.HLine)
-        v.addWidget(sep0)
-
-        # ---- Section : Clé USB ----
-        sec1 = QLabel(t("lbl_usb_key"))
-        sec1.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A4844;")
-        v.addWidget(sec1)
+    # ------------------------------------------------------------------
+    def _build_section_usb(self, v: QVBoxLayout) -> None:
+        v.addWidget(self._section_header(t("lbl_usb_key")))
 
         self._btn_detect = QPushButton(t("btn_detect_usb"))
-        self._btn_detect.setObjectName("btn_nav")
+        self._style_field_btn(self._btn_detect, height=60)
         self._btn_detect.clicked.connect(self._detect_usb)
         v.addWidget(self._btn_detect)
 
         self._usb_status_lbl = QLabel(t("lbl_no_usb"))
-        self._usb_status_lbl.setStyleSheet("color: #4A4844; font-size: 14px;")
+        self._usb_status_lbl.setStyleSheet("color:#4A4844; font-size:18px;")
         v.addWidget(self._usb_status_lbl)
 
-        form_usb = QFormLayout()
-        form_usb.setSpacing(10)
-        form_usb.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form_usb = self._make_field_form()
+
         self._filtre_btn = _make_choice_btn(
             ["OK+NOK", "OK uniquement", "NOK uniquement"],
-            "OK+NOK",
-            "Filtre export",
-            self,
+            "OK+NOK", "Filtre export", self,
         )
+        self._style_field_btn(self._filtre_btn)
         form_usb.addRow("Filtre export :", self._filtre_btn)
 
         self._periode_export_btn = _make_choice_btn(
             ["Aujourd'hui", "7 derniers jours", "30 derniers jours", "Tout l'historique"],
-            "Aujourd'hui",
-            "Période export",
-            self,
+            "Aujourd'hui", "Période export", self,
         )
+        self._style_field_btn(self._periode_export_btn)
         form_usb.addRow("Période :", self._periode_export_btn)
 
-        fw_usb = QWidget()
-        fw_usb.setLayout(form_usb)
-        v.addWidget(fw_usb)
+        v.addLayout(form_usb)
 
         self._btn_export = QPushButton(t("btn_export_usb"))
-        self._btn_export.setObjectName("btn_save")
+        self._style_field_btn(self._btn_export, height=62)
         self._btn_export.clicked.connect(self._do_export_usb)
         v.addWidget(self._btn_export)
 
-        sep1 = QFrame()
-        sep1.setObjectName("separator")
-        sep1.setFrameShape(QFrame.Shape.HLine)
-        v.addWidget(sep1)
+    # ------------------------------------------------------------------
+    def _build_section_pdf(self, v: QVBoxLayout) -> None:
+        v.addWidget(self._section_header(t("lbl_pdf_report")))
 
-        # ---- Section : Rapport PDF ----
-        sec2 = QLabel(t("lbl_pdf_report"))
-        sec2.setStyleSheet("font-size: 14px; font-weight: bold; color: #4A4844;")
-        v.addWidget(sec2)
+        form_pdf = self._make_field_form()
 
-        form_pdf = QFormLayout()
-        form_pdf.setSpacing(10)
-        form_pdf.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self._contenu_btn = _make_choice_btn(
             ["Tous les cycles", "Cycles NOK uniquement", "Session courante"],
-            "Tous les cycles",
-            "Contenu rapport",
-            self,
+            "Tous les cycles", "Contenu rapport", self,
         )
+        self._style_field_btn(self._contenu_btn)
+        form_pdf.addRow("Contenu rapport :", self._contenu_btn)
+
         self._periode_btn = _make_choice_btn(
             ["Aujourd'hui", "7 derniers jours", "30 derniers jours", "Tout l'historique"],
-            "Aujourd'hui",
-            "Période",
-            self,
+            "Aujourd'hui", "Période", self,
         )
-        form_pdf.addRow("Contenu rapport :", self._contenu_btn)
+        self._style_field_btn(self._periode_btn)
         form_pdf.addRow("Période :", self._periode_btn)
-        fw_pdf = QWidget()
-        fw_pdf.setLayout(form_pdf)
-        v.addWidget(fw_pdf)
+
+        v.addLayout(form_pdf)
 
         self._btn_pdf = QPushButton(t("btn_generate_pdf"))
-        self._btn_pdf.setObjectName("btn_nav")
+        self._style_field_btn(self._btn_pdf, height=62)
         self._btn_pdf.clicked.connect(self._do_generate_pdf)
         v.addWidget(self._btn_pdf)
 
-        v.addStretch()
-        scroll.setWidget(w)
-        out_v = QVBoxLayout(outer)
-        out_v.setContentsMargins(0, 0, 0, 0)
-        out_v.addWidget(scroll)
-        return outer
-
     # ------------------------------------------------------------------
-    def _build_page1(self) -> QWidget:
-        outer = QWidget()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
+    def _build_section_advanced(self, v: QVBoxLayout) -> None:
+        v.addWidget(self._section_header("⚙  Paramètres avancés"))
 
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 18, 24, 18)
-        v.setSpacing(18)
-
-        form = QFormLayout()
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = self._make_field_form()
 
         self._nommage_btn = _make_choice_btn(
-            [
-                "PM_date_heure_résultat",
-                "Numéro séquentiel",
-                "PM_numéro_résultat",
-            ],
-            "PM_date_heure_résultat",
-            "Nommage fichier",
-            self,
+            ["PM_date_heure_résultat", "Numéro séquentiel", "PM_numéro_résultat"],
+            "PM_date_heure_résultat", "Nommage fichier", self,
         )
+        self._style_field_btn(self._nommage_btn)
         form.addRow(t("lbl_file_naming"), self._nommage_btn)
 
         self._auto_export_chk = QCheckBox("Exporter automatiquement à chaque cycle")
+        self._auto_export_chk.setStyleSheet(
+            "QCheckBox { font-size:18px; color:#1A1A18; }"
+            "QCheckBox::indicator { width:26px; height:26px; }"
+        )
         form.addRow(t("lbl_auto_export"), self._auto_export_chk)
 
         self._dest_auto_btn = _make_choice_btn(
             ["Dossier local", "Clé USB si présente"],
-            "Dossier local",
-            "Destination auto",
-            self,
+            "Dossier local", "Destination auto", self,
         )
+        self._style_field_btn(self._dest_auto_btn)
         form.addRow(t("lbl_auto_destination"), self._dest_auto_btn)
 
-        fw = QWidget()
-        fw.setLayout(form)
-        v.addWidget(fw)
-        v.addStretch()
-        scroll.setWidget(w)
-
-        out_v = QVBoxLayout(outer)
-        out_v.setContentsMargins(0, 0, 0, 0)
-        out_v.addWidget(scroll)
-        return outer
+        v.addLayout(form)
 
     # ------------------------------------------------------------------
-    def _build_footer0(self) -> QWidget:
+    def _build_single_footer(self) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background-color: #FAFAF8; border-top: 1px solid #C8C4BC;")
+        w.setFixedHeight(76)
+        w.setStyleSheet("background:#f5f4f0; border-top:1px solid #dddddd;")
         h = QHBoxLayout(w)
-        h.setContentsMargins(16, 8, 16, 8)
+        h.setContentsMargins(16, 10, 16, 10)
         h.setSpacing(12)
 
         btn_cancel = QPushButton(t("btn_cancel_cross"))
-        btn_cancel.setObjectName("btn_cancel")
+        btn_cancel.setFixedHeight(54)
+        btn_cancel.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#333333; font-size:17px; font-weight:bold; }"
+            "QPushButton:pressed { background:#eeeeee; }"
+        )
         btn_cancel.clicked.connect(self._cancel)
-        h.addWidget(btn_cancel)
-
-        h.addStretch()
+        h.addWidget(btn_cancel, stretch=1)
 
         btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
+        btn_save.setFixedHeight(54)
+        btn_save.setStyleSheet(
+            "QPushButton { background:#C49A3C; border:none; border-radius:8px;"
+            " color:#ffffff; font-size:17px; font-weight:bold; }"
+            "QPushButton:pressed { background:#A07830; }"
+        )
         btn_save.clicked.connect(self._save)
-        h.addWidget(btn_save)
-
-        btn_next = QPushButton(t("btn_advanced_next"))
-        btn_next.setObjectName("btn_nav")
-        btn_next.clicked.connect(self._go_page1)
-        h.addWidget(btn_next)
-
+        h.addWidget(btn_save, stretch=2)
         return w
-
-    def _build_footer1(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background-color: #FAFAF8; border-top: 1px solid #C8C4BC;")
-        h = QHBoxLayout(w)
-        h.setContentsMargins(16, 8, 16, 8)
-        h.setSpacing(12)
-
-        btn_back = QPushButton("Précédent")
-        btn_back.setObjectName("btn_cancel")
-        btn_back.clicked.connect(self._go_page0)
-        h.addWidget(btn_back)
-
-        h.addStretch()
-
-        btn_save = QPushButton(t("btn_save_check"))
-        btn_save.setObjectName("btn_save")
-        btn_save.clicked.connect(self._save)
-        h.addWidget(btn_save)
-
-        return w
-
-    # ------------------------------------------------------------------
-    def _go_page0(self) -> None:
-        self._stack.setCurrentIndex(0)
-        self._footer.setCurrentIndex(0)
-
-    def _go_page1(self) -> None:
-        self._stack.setCurrentIndex(1)
-        self._footer.setCurrentIndex(1)
 
     # ------------------------------------------------------------------
     def _load_config(self) -> None:
@@ -4029,58 +3996,86 @@ class _InfoSystemePage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
         root.addWidget(_make_header(
-            "ℹ️  Informations système",
+            "  Informations système",
             lambda: self._main_stack.setCurrentIndex(1),
         ))
 
-        # Contenu
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background-color: transparent;")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background:transparent;")
 
         content = QWidget()
-        content.setStyleSheet(f"background-color: {_C['bg']};")
+        content.setMaximumWidth(720)
         v = QVBoxLayout(content)
-        v.setContentsMargins(20, 16, 20, 20)
-        v.setSpacing(8)
+        v.setContentsMargins(16, 16, 16, 16)
+        v.setSpacing(16)
 
-        fw_sys = QFrame()
-        fw_sys.setStyleSheet(
-            f"background-color: {_C['panel']}; border-radius: 8px; padding: 4px;"
+        # ── Carte info système ───────────────────────────────────────
+        card = QWidget()
+        card.setStyleSheet(
+            "background:#ffffff; border:1.5px solid #dddddd; border-radius:10px;"
         )
-        form_sys = QFormLayout(fw_sys)
-        form_sys.setContentsMargins(12, 10, 12, 10)
-        form_sys.setSpacing(10)
-        form_sys.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(20)
+
+        _LBL_STYLE = (
+            "font-size:20px; font-weight:bold; color:#888888; background:transparent;"
+        )
+        _VAL_STYLE = "font-size:20px; color:#333333; background:transparent;"
 
         self._sys_labels: dict[str, QLabel] = {}
-        for key in ("version", "modele", "os", "uptime", "disque", "ram", "temp"):
-            lbl = QLabel("—")
-            lbl.setWordWrap(True)
-            self._sys_labels[key] = lbl
+        rows = [
+            ("version", t("lbl_sw_version")),
+            ("modele",  t("lbl_pi_model")),
+            ("os",      t("lbl_os")),
+            ("uptime",  t("lbl_uptime")),
+            ("disque",  t("lbl_disk_space")),
+            ("ram",     t("lbl_ram_used")),
+            ("temp",    t("lbl_cpu_temp")),
+        ]
+        for key, label_txt in rows:
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent; border:none;")
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(0, 0, 0, 0)
+            row_h.setSpacing(12)
 
-        form_sys.addRow(QLabel(t("lbl_sw_version")), self._sys_labels["version"])
-        form_sys.addRow(QLabel(t("lbl_pi_model")), self._sys_labels["modele"])
-        form_sys.addRow(QLabel(t("lbl_os")), self._sys_labels["os"])
-        form_sys.addRow(QLabel(t("lbl_uptime")), self._sys_labels["uptime"])
-        form_sys.addRow(QLabel(t("lbl_disk_space")), self._sys_labels["disque"])
-        form_sys.addRow(QLabel(t("lbl_ram_used")), self._sys_labels["ram"])
-        form_sys.addRow(QLabel(t("lbl_cpu_temp")), self._sys_labels["temp"])
+            lbl_key = QLabel(label_txt)
+            lbl_key.setStyleSheet(_LBL_STYLE)
+            lbl_key.setFixedWidth(200)
+            lbl_key.setWordWrap(False)
+            row_h.addWidget(lbl_key)
 
-        btn_refresh = QPushButton(t("btn_refresh_info"))
-        btn_refresh.setObjectName("btn_nav")
+            lbl_val = QLabel("—")
+            lbl_val.setStyleSheet(_VAL_STYLE)
+            lbl_val.setWordWrap(True)
+            self._sys_labels[key] = lbl_val
+            row_h.addWidget(lbl_val, stretch=1)
+
+            card_layout.addWidget(row_w)
+
+        v.addWidget(card)
+
+        # ── Bouton Actualiser ────────────────────────────────────────
+        btn_refresh = QPushButton("↺  Actualiser")
+        btn_refresh.setFixedHeight(64)
+        btn_refresh.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        btn_refresh.setStyleSheet(
+            "QPushButton { background:#ffffff; border:1.5px solid #C49A3C;"
+            " border-radius:8px; color:#C49A3C;"
+            " font-size:20px; font-weight:bold; }"
+            "QPushButton:pressed { background:#fff8ee; }"
+        )
         btn_refresh.clicked.connect(self._refresh_sysinfo)
-        form_sys.addRow("", btn_refresh)
+        v.addWidget(btn_refresh)
 
-        v.addWidget(fw_sys)
-        v.addStretch()
+        v.addStretch(1)
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
-
-        # Footer supprimé : retour déplacé dans l'en-tête.
 
     def _refresh_sysinfo(self) -> None:
         import shutil
@@ -4150,7 +4145,9 @@ class _InfoSystemePage(QWidget):
             temp = raw / 1000.0
             color = "#2E7D32" if temp < 60 else ("#A07830" if temp < 70 else "#C62828")
             self._sys_labels["temp"].setText(f"{temp:.1f} °C")
-            self._sys_labels["temp"].setStyleSheet(f"color: {color};")
+            self._sys_labels["temp"].setStyleSheet(
+                f"font-size:20px; color:{color}; background:transparent;"
+            )
         except Exception:
             self._sys_labels["temp"].setText("—")
 
@@ -4546,37 +4543,7 @@ class SettingsPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # Header agrandi pour la page d'accueil
-        header = QWidget()
-        header.setFixedHeight(70)
-        header.setStyleSheet(
-            f"background-color: {_C['header_bg']}; "
-            f"border-bottom: 1px solid {_C['border']};"
-        )
-        hh = QHBoxLayout(header)
-        hh.setContentsMargins(20, 0, 0, 0)
-        hh.setSpacing(0)
-
-        lbl_title = QLabel(t("settings_home_title_icon"))
-        lbl_title.setStyleSheet(
-            f"color: {_C['text']}; font-size: 26px; font-weight: bold;"
-        )
-        hh.addWidget(lbl_title)
-        hh.addStretch()
-
-        btn_prod = QPushButton(t("btn_back"))
-        btn_prod.setObjectName("btn_back")
-        btn_prod.setMinimumHeight(54)
-        btn_prod.setMinimumWidth(200)
-        btn_prod.setStyleSheet(
-            f"background-color: {_C['btn_bg']}; color: {_C['text']};"
-            f" font-size: 18px; font-weight: 700;"
-            f" border: 1px solid {_C['btn_border']}; border-radius: 0px;"
-            f" padding: 0 28px; min-height: 54px;"
-        )
-        btn_prod.clicked.connect(self._go_to_production)
-        hh.addWidget(btn_prod)
-        v.addWidget(header)
+        v.addWidget(_make_header(t("settings_home_title_icon"), self._go_to_production))
 
         # Corps — 2 tuiles en grille plein écran
         body = QWidget()
@@ -4889,56 +4856,109 @@ class SettingsPage(QWidget):
 
         v.addWidget(self._make_header("Gestion PM"))
 
-        # Corps : tableau à gauche + actions à droite
-        body = QWidget()
-        body_h = QHBoxLayout(body)
-        body_h.setContentsMargins(8, 8, 8, 8)
-        body_h.setSpacing(10)
-
-        # ── Tableau PM ──────────────────────────────────────────────
+        # ── Tableau PM pleine largeur ────────────────────────────────
         self._pm_table = QTableWidget(0, 3)
         self._pm_table.setHorizontalHeaderLabels(["N°", "Nom", "Outils actifs"])
+
         self._pm_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch
-        )
-        self._pm_table.horizontalHeader().setDefaultSectionSize(50)
-        self._pm_table.setColumnWidth(0, 50)
+            0, QHeaderView.ResizeMode.Fixed)
+        self._pm_table.setColumnWidth(0, 52)
+        self._pm_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch)
+        self._pm_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Fixed)
         self._pm_table.setColumnWidth(2, 200)
+
+        self._pm_table.verticalHeader().setDefaultSectionSize(64)
         self._pm_table.verticalHeader().setVisible(False)
+        self._pm_table.horizontalHeader().setFixedHeight(52)
+        self._pm_table.horizontalHeader().setStretchLastSection(True)
+
         self._pm_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._pm_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._pm_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._pm_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._pm_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._pm_table.setStyleSheet(
+            "QTableWidget {"
+            "  font-size:18px; border:none;"
+            "}"
+            "QTableWidget::item {"
+            "  padding:8px; border-bottom:1px solid #eeeeee;"
+            "}"
+            "QTableWidget::item:selected {"
+            "  background:#fff3e0; color:#333333;"
+            "}"
+            "QHeaderView::section {"
+            "  font-size:18px; font-weight:bold;"
+            "  background:#f5f4f0;"
+            "  border-bottom:2px solid #dddddd;"
+            "  padding:10px;"
+            "}"
+        )
         self._pm_table.itemSelectionChanged.connect(self._on_pm_table_selection)
         self._pm_table.itemDoubleClicked.connect(self._on_pm_table_double_click)
-        body_h.addWidget(self._pm_table, stretch=1)
+        v.addWidget(self._pm_table, stretch=1)
 
-        # ── Panneau d'actions ────────────────────────────────────────
-        actions = QWidget()
-        actions.setFixedWidth(180)
-        av = QVBoxLayout(actions)
-        av.setContentsMargins(0, 0, 0, 0)
-        av.setSpacing(6)
-
-        self._btn_rename = QPushButton("Renommer")
-        self._btn_copy   = QPushButton("Copier vers...")
-        self._btn_raz    = QPushButton("RAZ")
-        for btn in (self._btn_rename, self._btn_copy, self._btn_raz):
-            btn.setFixedHeight(44)
-            btn.setObjectName("action_btn")
-            btn.setEnabled(False)
-            av.addWidget(btn)
-        av.addStretch()
-        body_h.addWidget(actions)
-
-        v.addWidget(body, stretch=1)
-
-        # Connexions actions
-        self._btn_rename.clicked.connect(self._pm_manager_rename)
-        self._btn_copy.clicked.connect(self._pm_manager_copy)
-        self._btn_raz.clicked.connect(self._pm_manager_raz)
+        # ── Barre d'actions en bas ───────────────────────────────────
+        v.addWidget(self._build_pm_action_bar())
 
         self._load_pm_table()
         return page
+
+    def _build_pm_action_bar(self) -> QWidget:
+        w = QWidget()
+        w.setFixedHeight(150)
+        w.setStyleSheet("background:#f5f4f0; border-top:2px solid #dddddd;")
+        vl = QVBoxLayout(w)
+        vl.setContentsMargins(12, 10, 12, 10)
+        vl.setSpacing(8)
+
+        _STYLE_ENABLED = (
+            "QPushButton { background:#ffffff; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#333333; font-size:17px; font-weight:bold; }"
+            "QPushButton:pressed { background:#eeeeee; }"
+        )
+        _STYLE_DISABLED = (
+            "QPushButton { background:#f0f0f0; border:1.5px solid #dddddd;"
+            " border-radius:8px; color:#bbbbbb; font-size:17px; font-weight:bold; }"
+        )
+        _STYLE_RAZ = (
+            "QPushButton { background:#fff5f5; border:1.5px solid #ef9a9a;"
+            " border-radius:8px; color:#c62828; font-size:17px; font-weight:bold; }"
+            "QPushButton:pressed { background:#ffebee; }"
+            "QPushButton:disabled { background:#f5f5f5; border-color:#dddddd; color:#bbbbbb; }"
+        )
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        self._btn_rename = QPushButton("✏  Renommer")
+        self._btn_rename.setFixedHeight(56)
+        self._btn_rename.setStyleSheet(_STYLE_DISABLED)
+        self._btn_rename.setEnabled(False)
+        self._btn_rename.clicked.connect(self._pm_manager_rename)
+        row1.addWidget(self._btn_rename, stretch=1)
+
+        self._btn_copy = QPushButton("⎘  Copier vers...")
+        self._btn_copy.setFixedHeight(56)
+        self._btn_copy.setStyleSheet(_STYLE_DISABLED)
+        self._btn_copy.setEnabled(False)
+        self._btn_copy.clicked.connect(self._pm_manager_copy)
+        row1.addWidget(self._btn_copy, stretch=1)
+        vl.addLayout(row1)
+
+        self._btn_raz = QPushButton("⚠  RAZ")
+        self._btn_raz.setFixedHeight(56)
+        self._btn_raz.setStyleSheet(_STYLE_RAZ)
+        self._btn_raz.setEnabled(False)
+        self._btn_raz.clicked.connect(self._pm_manager_raz)
+        vl.addWidget(self._btn_raz)
+
+        # Stocker les styles pour _on_pm_table_selection
+        self._pm_btn_style_enabled  = _STYLE_ENABLED
+        self._pm_btn_style_disabled = _STYLE_DISABLED
+
+        return w
 
     def _on_pm_saved(self, pm_id: int) -> None:
         self._load_pm_table()
@@ -5007,8 +5027,11 @@ class SettingsPage(QWidget):
 
     def _on_pm_table_selection(self) -> None:
         enabled = self._pm_manager_selected_id() is not None
-        self._btn_rename.setEnabled(enabled)
-        self._btn_copy.setEnabled(enabled)
+        for btn in (self._btn_rename, self._btn_copy):
+            btn.setEnabled(enabled)
+            btn.setStyleSheet(
+                self._pm_btn_style_enabled if enabled else self._pm_btn_style_disabled
+            )
         self._btn_raz.setEnabled(enabled)
 
     def _pm_manager_rename(self) -> None:
